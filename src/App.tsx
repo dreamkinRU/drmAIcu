@@ -875,7 +875,7 @@ JSON:`;
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/20">AI</div>
             <div>
               <h1 className="text-lg font-bold tracking-tight">drmAIcu</h1>
-              <p className="text-[10px] text-gray-500">ЦУ v3.0 FORTRESS • dreamkin</p>
+              <p className="text-[10px] text-gray-500">v3.0.3 FORTRESS • dreamkin • 2026</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -924,17 +924,26 @@ JSON:`;
           <div className="flex items-center gap-3">
             <span className="text-3xl">📦</span>
             <div>
-              <p className="text-white font-bold text-sm sm:text-base">Исправленный код: 4 файла • 18 исправлений</p>
-              <p className="text-emerald-100 text-xs">settings.json + launcher.bat + agent_engine.py + main.py</p>
+              <p className="text-white font-bold text-sm sm:text-base">drmAIcu v3.0.3 FORTRESS — Исправленный код</p>
+              <p className="text-emerald-100 text-xs">4 файла • 18 исправлений • Контекст-менеджер для AI</p>
             </div>
           </div>
-          <a
-            href="/fixed-code.html"
-            target="_blank"
-            className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-lg whitespace-nowrap"
-          >
-            📋 Открыть и скопировать →
-          </a>
+          <div className="flex gap-2">
+            <a
+              href="/context.html"
+              target="_blank"
+              className="px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white font-bold text-sm hover:bg-white/20 transition-all whitespace-nowrap"
+            >
+              🔧 Контекст
+            </a>
+            <a
+              href="/fixed-code.html"
+              target="_blank"
+              className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-lg whitespace-nowrap"
+            >
+              📋 Код →
+            </a>
+          </div>
         </div>
       </div>
 
@@ -1493,7 +1502,7 @@ JSON:`;
       {/* Footer */}
       <footer className="border-t border-gray-800 bg-gray-900/50 mt-8">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between text-[10px] text-gray-600">
-          <span>drmAIcu v2.0 • dreamkin • 2026</span>
+          <span>drmAIcu v3.0.3 FORTRESS • dreamkin • 2026</span>
           <span>Агент №1 активен • Агенты №2, №3 заморожены</span>
         </div>
       </footer>

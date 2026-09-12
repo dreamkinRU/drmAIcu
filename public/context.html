@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>drmAIcu v3.0.3 — Контекст менеджер</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0a0a0a;color:#e5e5e5;padding:20px;line-height:1.6}
+.container{max-width:900px;margin:0 auto}
+h1{color:#10b981;margin-bottom:8px}
+.sub{color:#6b7280;margin-bottom:20px;font-size:0.9rem}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:20px}
+.card h2{color:#10b981;margin-bottom:12px;font-size:1.1rem}
+.cmd{background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:12px;font-family:monospace;font-size:0.85rem;margin:8px 0;color:#06b6d4;position:relative}
+.cmd button{position:absolute;right:8px;top:8px;background:#10b981;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.75rem}
+.cmd button:hover{background:#059669}
+.warn{background:#7f1d1d;border:1px solid #991b1b;border-radius:8px;padding:12px;margin:10px 0;color:#fecaca;font-size:0.9rem}
+.ok{background:#064e3b;border:1px solid #065f46;border-radius:8px;padding:12px;margin:10px 0;color:#a7f3d0;font-size:0.9rem}
+.step{display:flex;gap:12px;margin:10px 0}
+.step-num{background:#10b981;color:#000;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:0.85rem;flex-shrink:0}
+pre{background:#0d0d0d;padding:16px;border-radius:8px;overflow:auto;font-family:monospace;font-size:0.8rem;max-height:400px}
+.btn{display:inline-block;background:#10b981;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.9rem;margin:5px 5px 5px 0}
+.btn:hover{background:#059669}
+.btn-sec{background:#374151}
+.btn-sec:hover{background:#4b5563}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔧 drmAIcu v3.0.3 FORTRESS</h1>
+<p class="sub">Универсальный экспорт/импорт контекста для работы с AI</p>
+
+<div class="card">
+<h2>📦 Что это?</h2>
+<p style="color:#d1d5db;font-size:0.9rem">
+<b>context_manager.py</b> — скрипт для экспорта всего состояния проекта в один JSON-файл. 
+Этот файл ты передаёшь AI в следующем диалоге, и AI сразу понимает что делать — без объяснений.
+</p>
+</div>
+
+<div class="card">
+<h2>📥 Шаг 1: Скачай context_manager.py</h2>
+<a href="/context_manager.py" download class="btn">📥 Скачать context_manager.py</a>
+<p style="color:#6b7280;font-size:0.85rem;margin-top:10px">Помести файл в папку drmAIcu рядом с main.py</p>
+</div>
+
+<div class="card">
+<h2>📤 Шаг 2: Экспорт контекста</h2>
+<div class="step"><div class="step-num">1</div><div>Открой cmd в папке drmAIcu</div></div>
+<div class="step"><div class="step-num">2</div><div>Выполни команду:</div></div>
+<div class="cmd">python context_manager.py export<button onclick="copy('cmd1')">Copy</button></div>
+<pre id="cmd1">python context_manager.py export</pre>
+
+<div class="step"><div class="step-num">3</div><div>Получишь файл <b>context_export.json</b></div></div>
+
+<div class="ok">
+<b>Что экспортируется:</b><br>
+✓ main.py<br>
+✓ agent_engine.py<br>
+✓ settings.json<br>
+✓ launcher.bat<br>
+✓ context_manager.py<br>
+✓ Список файлов в backups/ и logs/<br>
+✓ Метаданные (Python версия, платформа, хеши)
+</div>
+</div>
+
+<div class="card">
+<h2>📥 Шаг 3: Передай AI</h2>
+<div class="step"><div class="step-num">1</div><div>Открой <b>context_export.json</b> в блокноте</div></div>
+<div class="step"><div class="step-num">2</div><div>Скопируй ВСЁ содержимое</div></div>
+<div class="step"><div class="step-num">3</div><div>Вставь в новый диалог с AI и напиши задачу</div></div>
+
+<div class="warn">
+<b>Пример сообщения AI:</b><br>
+<code style="color:#fca5a5">"Вот контекст проекта drmAIcu v3.0.3. [вставь JSON]. Задача: исправить ошибку X в main.py"</code>
+</div>
+</div>
+
+<div class="card">
+<h2>🔄 Шаг 4: Импорт изменений от AI</h2>
+<p style="color:#d1d5db;font-size:0.9rem;margin-bottom:10px">
+Когда AI даст тебе исправленный код — он вернёт его в формате context_export.json. 
+Импортируй так:
+</p>
+
+<div class="cmd">python context_manager.py import context_from_ai.json<button onclick="copy('cmd2')">Copy</button></div>
+<pre id="cmd2">python context_manager.py import context_from_ai.json</pre>
+
+<div class="ok">
+<b>Что делает импорт:</b><br>
+✓ Создаёт бэкап текущих файлов в backup_before_import_*/<br>
+✓ Проверяет хеши файлов<br>
+✓ Восстанавливает файлы из контекста<br>
+✓ Показывает что изменилось
+</div>
+</div>
+
+<div class="card">
+<h2>🛡️ Безопасность</h2>
+<ul style="color:#d1d5db;font-size:0.9rem;margin-left:20px">
+<li>Перед каждым импортом создаётся бэкап</li>
+<li>Проверяются SHA256 хеши файлов</li>
+<li>AI-Guardian в main.py работает параллельно для agent_engine.py</li>
+<li>Если что-то пошло не так — восстанови из backup_before_import_*/</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>📋 Все команды</h2>
+<div class="cmd">python context_manager.py export<button onclick="copy('cmd3')">Copy</button></div>
+<pre id="cmd3">python context_manager.py export</pre>
+<p style="color:#6b7280;font-size:0.85rem">Экспорт в JSON</p>
+
+<div class="cmd">python context_manager.py export-zip<button onclick="copy('cmd4')">Copy</button></div>
+<pre id="cmd4">python context_manager.py export-zip</pre>
+<p style="color:#6b7280;font-size:0.85rem">Экспорт в ZIP (с файлами)</p>
+
+<div class="cmd">python context_manager.py import [file]<button onclick="copy('cmd5')">Copy</button></div>
+<pre id="cmd5">python context_manager.py import context_export.json</pre>
+<p style="color:#6b7280;font-size:0.85rem">Импорт из JSON (с бэкапом)</p>
+
+<div class="cmd">python context_manager.py info [file]<button onclick="copy('cmd6')">Copy</button></div>
+<pre id="cmd6">python context_manager.py info</pre>
+<p style="color:#6b7280;font-size:0.85rem">Показать информацию о контексте</p>
+</div>
+
+<div class="card">
+<h2>🔗 Ссылки</h2>
+<a href="/fixed-code.html" target="_blank" class="btn btn-sec">📦 Исправленный код v3.0.3</a>
+<a href="/patches.html" target="_blank" class="btn btn-sec">🔧 Патчи для AI-Guardian</a>
+</div>
+
+<div style="text-align:center;color:#6b7280;font-size:0.8rem;margin-top:30px">
+drmAIcu v3.0.3 FORTRESS • dreamkin • 2026
+</div>
+</div>
+
+<script>
+function copy(id) {
+    const el = document.getElementById(id);
+    navigator.clipboard.writeText(el.textContent).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = el.textContent;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    });
+}
+</script>
+</body>
+</html>
