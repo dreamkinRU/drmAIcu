@@ -806,33 +806,32 @@ export default function App() {
         </div>
       </nav>
 
+      {/* MEGA DOWNLOAD BANNER — always visible */}
+      <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 py-4 px-4 shadow-lg shadow-emerald-500/20">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">📦</span>
+            <div>
+              <p className="text-white font-bold text-sm sm:text-base">Исправленный код: 4 файла • 18 исправлений</p>
+              <p className="text-emerald-100 text-xs">settings.json + launcher.bat + agent_engine.py + main.py</p>
+            </div>
+          </div>
+          <a
+            href="/fixed-code.html"
+            target="_blank"
+            className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-lg whitespace-nowrap"
+          >
+            📋 Открыть и скопировать →
+          </a>
+        </div>
+      </div>
+
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
 
         {/* ===== DASHBOARD ===== */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            {/* Top banner */}
-            <a
-              href="/fixed-code.html"
-              target="_blank"
-              className="block rounded-xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-emerald-500/10 p-5 hover:border-emerald-500/60 transition-all group"
-            >
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    📦 Исправленный код готов к скачиванию
-                    <span className="text-emerald-400 group-hover:translate-x-1 transition-transform">→</span>
-                  </h3>
-                  <p className="text-sm text-gray-400 mt-1">
-                    4 файла • 18 исправлений • settings.json + launcher.bat + main.py + agent_engine.py
-                  </p>
-                </div>
-                <div className="px-6 py-3 rounded-xl bg-emerald-500 group-hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 whitespace-nowrap">
-                  📋 Открыть и скопировать
-                </div>
-              </div>
-            </a>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
