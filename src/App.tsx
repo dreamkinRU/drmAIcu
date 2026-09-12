@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-// Типы
+// ===== ТИПЫ =====
 interface Agent {
   id: number;
   name: string;
@@ -31,35 +31,29 @@ interface VBAModule {
   description: string;
 }
 
-// Данные
+interface CodeIssue {
+  id: number;
+  severity: 'critical' | 'warning' | 'info';
+  line: string;
+  title: string;
+  description: string;
+  fix: string;
+  before: string;
+  after: string;
+}
+
+interface Task {
+  id: number;
+  text: string;
+  done: boolean;
+  priority: 'high' | 'medium' | 'low';
+}
+
+// ===== ДАННЫЕ =====
 const agents: Agent[] = [
-  {
-    id: 1,
-    name: 'Агент №1 — Развитие системы',
-    status: 'active',
-    task: 'Исправление ошибок компиляции и импорта модулей',
-    stack: ['Java', 'Python', 'VBA/Excel'],
-    progress: 45,
-    lastActivity: '2 мин назад',
-  },
-  {
-    id: 2,
-    name: 'Агент №2 — Аналитика данных',
-    status: 'frozen',
-    task: 'На паузе',
-    stack: ['Python', 'Pandas', 'SQL'],
-    progress: 0,
-    lastActivity: '—',
-  },
-  {
-    id: 3,
-    name: 'Агент №3 — Автоматизация отчётов',
-    status: 'frozen',
-    task: 'На паузе',
-    stack: ['Python', 'Excel VBA', 'TTS'],
-    progress: 0,
-    lastActivity: '—',
-  },
+  { id: 1, name: 'Агент №1 — Развитие системы', status: 'active', task: 'Исправление ошибок компиляции и импорта модулей', stack: ['Java', 'Python', 'VBA/Excel'], progress: 45, lastActivity: '2 мин назад' },
+  { id: 2, name: 'Агент №2 — Аналитика данных', status: 'frozen', task: 'На паузе', stack: ['Python', 'Pandas', 'SQL'], progress: 0, lastActivity: '—' },
+  { id: 3, name: 'Агент №3 — Автоматизация отчётов', status: 'frozen', task: 'На паузе', stack: ['Python', 'Excel VBA', 'TTS'], progress: 0, lastActivity: '—' },
 ];
 
 const providers: Provider[] = [
@@ -94,7 +88,7 @@ const vbaModules: VBAModule[] = [
   { name: 'drm_Distribution_DP_EdgeControl', status: 'pending', description: 'Контроль граничных условий' },
 ];
 
-const tasks = [
+const initialTasks: Task[] = [
   { id: 1, text: 'Исправить py_compile ошибку в main.py (строка ~160)', done: false, priority: 'high' },
   { id: 2, text: 'Исправить импорт VBA-модулей в mod_Core', done: false, priority: 'high' },
   { id: 3, text: 'Реализовать модуль TTS для голосовых отчётов', done: false, priority: 'medium' },
@@ -102,7 +96,157 @@ const tasks = [
   { id: 5, text: 'Документация API агентов', done: false, priority: 'low' },
 ];
 
-// Компоненты
+// Анализ agent_engine.py
+const codeIssues: CodeIssue[] = [
+  {
+    id: 1,
+    severity: 'critical',
+    line: '113',
+    title: 'asyncio.get_event_loop() — deprecated',
+    description: 'В Python 3.10+ get_event_loop() вызывает DeprecationWarning, а в 3.12+ может выбросить RuntimeError если нет running loop.',
+    fix: 'Заменить на asyncio.get_running_loop()',
+    before: `    async def _query_ollama(self, model: str, messages: List[Dict], timeout: float = 120.0) -> str:
+        loop = asyncio.get_event_loop()
+        def do_request():`,
+    after: `    async def _query_ollama(self, model: str, messages: List[Dict], timeout: float = 120.0) -> str:
+        loop = asyncio.get_running_loop()
+        def do_request():`,
+  },
+  {
+    id: 2,
+    severity: 'critical',
+    line: '126-145',
+    title: 'Gemini: потеря контекста диалога',
+    description: 'Берётся только messages[-1] — весь системный промпт и история игнорируются. Судья и многораундовые запросы ломаются.',
+    fix: 'Конвертировать все messages в формат Gemini contents[]',
+    before: `        # Конвертируем сообщения в формат Gemini
+        prompt_text = messages[-1]['content']  # Берем последний user message
+        
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt_text}]
+            }],`,
+    after: `        # Конвертируем ВСЕ сообщения в формат Gemini
+        contents = []
+        for msg in messages:
+            role = "model" if msg["role"] == "assistant" else "user"
+            contents.append({
+                "role": role,
+                "parts": [{"text": msg["content"]}]
+            })
+        
+        payload = {
+            "contents": contents,`,
+  },
+  {
+    id: 3,
+    severity: 'warning',
+    line: '83-93',
+    title: 'HuggingFace: клиент есть, метода запроса нет',
+    description: 'HF инициализирован как dict с api_key, но в _query_model нет ветки для huggingface. Модели HF не добавлены в _get_candidates.',
+    fix: 'Добавить _query_huggingface и модели в _get_candidates',
+    before: `    async def _query_model(self, candidate: Dict, messages: List[Dict], timeout: float = 120.0) -> str:
+        """Универсальный диспетчер запросов"""
+        provider = candidate['provider']
+        model = candidate['model']
+        
+        if provider == 'ollama':`,
+    after: `    async def _query_huggingface(self, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        """Запрос к HuggingFace Inference API"""
+        import aiohttp
+        api_key = self.config.get('hf_api_key', '')
+        url = f"https://api-inference.huggingface.co/models/{model}"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        prompt = messages[-1]['content']
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json={"inputs": prompt}, timeout=timeout) as resp:
+                result = await resp.json()
+                return result[0]['generated_text']
+
+    async def _query_model(self, candidate: Dict, messages: List[Dict], timeout: float = 120.0) -> str:
+        """Универсальный диспетчер запросов"""
+        provider = candidate['provider']
+        model = candidate['model']
+        
+        if provider == 'ollama':`,
+  },
+  {
+    id: 4,
+    severity: 'warning',
+    line: '139',
+    title: 'Gemini: нет обработки ошибок aiohttp',
+    description: 'Если API вернёт 4xx/5xx, response.json() может вернуть неожиданный формат. Нет проверки status_code.',
+    fix: 'Добавить проверку response.status',
+    before: `        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=timeout) as response:
+                result = await response.json()
+                return result['candidates'][0]['content']['parts'][0]['text']`,
+    after: `        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"Gemini API error {response.status}: {error_text[:100]}")
+                result = await response.json()
+                return result['candidates'][0]['content']['parts'][0]['text']`,
+  },
+  {
+    id: 5,
+    severity: 'warning',
+    line: '170',
+    title: 'Нет retry-логики при сбоях',
+    description: 'Один таймаут = модель исключена. Для нестабильных API (Together, HF) нужен retry.',
+    fix: 'Обернуть запрос в retry-цикл (2-3 попытки)',
+    before: `        try:
+            code = await self._query_model(candidate, messages, timeout=120.0)
+            self.log(f"✅ [{provider}] {model_name}: {len(code)} симв.", "SUCCESS")
+            return {"candidate": candidate, "code": code, "error": None}
+        except asyncio.TimeoutError:`,
+    after: `        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                code = await self._query_model(candidate, messages, timeout=120.0)
+                self.log(f"✅ [{provider}] {model_name}: {len(code)} симв.", "SUCCESS")
+                return {"candidate": candidate, "code": code, "error": None}
+            except asyncio.TimeoutError:
+                if attempt < max_retries:
+                    self.log(f"⏳ [{provider}] Попытка {attempt+2}/{max_retries+1}...", "WARN")
+                    await asyncio.sleep(2)
+                    continue`,
+  },
+  {
+    id: 6,
+    severity: 'info',
+    line: '47-65',
+    title: 'Дублирование импорта AsyncOpenAI',
+    description: 'from openai import AsyncOpenAI повторяется 3 раза. Можно вынести в начало _init_clients.',
+    fix: 'Импортировать один раз в начале метода',
+    before: `    def _init_clients(self):
+        """Ленивая инициализация клиентов"""
+        if self.providers['groq']:
+            from openai import AsyncOpenAI
+            self._clients['groq'] = AsyncOpenAI(`,
+    after: `    def _init_clients(self):
+        """Ленивая инициализация клиентов"""
+        from openai import AsyncOpenAI
+        
+        if self.providers['groq']:
+            self._clients['groq'] = AsyncOpenAI(`,
+  },
+  {
+    id: 7,
+    severity: 'info',
+    line: '155',
+    title: 'Статус WARNING не обрабатывается в логе',
+    description: 'В get_code_response используется уровень "WARNING", но в log-колбэке обрабатываются только INFO/SUCCESS/ERROR.',
+    fix: 'Унифицировать уровни логирования',
+    before: `            elif isinstance(res, dict):
+                self.log(f"⚠️ {res['candidate']['name']}: {res.get('error')}", "WARNING")`,
+    after: `            elif isinstance(res, dict):
+                self.log(f"⚠️ {res['candidate']['name']}: {res.get('error')}", "WARN")`,
+  },
+];
+
+// ===== КОМПОНЕНТЫ =====
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -114,29 +258,34 @@ function StatusBadge({ status }: { status: string }) {
     pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   };
   const labels: Record<string, string> = {
-    active: 'АКТИВЕН',
-    frozen: 'ЗАМОРОЖЕН',
-    offline: 'ОФФЛАЙН',
-    online: 'ОНЛАЙН',
-    error: 'ОШИБКА',
-    loaded: 'ЗАГРУЖЕН',
-    pending: 'ОЖИДАНИЕ',
+    active: 'АКТИВЕН', frozen: 'ЗАМОРОЖЕН', offline: 'ОФФЛАЙН',
+    online: 'ОНЛАЙН', error: 'ОШИБКА', loaded: 'ЗАГРУЖЕН', pending: 'ОЖИДАНИЕ',
   };
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${colors[status] || colors.offline}`}>
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${colors[status] || colors.offline}`}>
       {labels[status] || status.toUpperCase()}
     </span>
   );
 }
 
+function SeverityBadge({ severity }: { severity: string }) {
+  const config: Record<string, { bg: string; label: string }> = {
+    critical: { bg: 'bg-red-500/20 text-red-400 border-red-500/30', label: 'КРИТИЧНО' },
+    warning: { bg: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', label: 'ВНИМАНИЕ' },
+    info: { bg: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: 'ИНФО' },
+  };
+  const c = config[severity] || config.info;
+  return (
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${c.bg}`}>{c.label}</span>
+  );
+}
+
 function AgentCard({ agent }: { agent: Agent }) {
   return (
-    <div className={`rounded-xl border p-4 transition-all hover:scale-[1.02] ${
-      agent.status === 'active'
-        ? 'border-emerald-500/30 bg-emerald-500/5 shadow-lg shadow-emerald-500/5'
-        : agent.status === 'frozen'
-        ? 'border-blue-500/20 bg-blue-500/5 opacity-70'
-        : 'border-gray-700 bg-gray-800/50 opacity-50'
+    <div className={`rounded-xl border p-4 transition-all hover:scale-[1.01] ${
+      agent.status === 'active' ? 'border-emerald-500/30 bg-emerald-500/5' :
+      agent.status === 'frozen' ? 'border-blue-500/20 bg-blue-500/5 opacity-70' :
+      'border-gray-700 bg-gray-800/50 opacity-50'
     }`}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-bold text-white">{agent.name}</h3>
@@ -145,9 +294,7 @@ function AgentCard({ agent }: { agent: Agent }) {
       <p className="text-xs text-gray-400 mb-3">{agent.task}</p>
       <div className="flex flex-wrap gap-1 mb-3">
         {agent.stack.map((s) => (
-          <span key={s} className="px-1.5 py-0.5 bg-gray-700/50 rounded text-[10px] text-gray-300">
-            {s}
-          </span>
+          <span key={s} className="px-1.5 py-0.5 bg-gray-700/50 rounded text-[10px] text-gray-300">{s}</span>
         ))}
       </div>
       <div className="flex items-center justify-between text-[10px] text-gray-500">
@@ -155,12 +302,7 @@ function AgentCard({ agent }: { agent: Agent }) {
         <span>Активность: {agent.lastActivity}</span>
       </div>
       <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${
-            agent.status === 'active' ? 'bg-emerald-500' : 'bg-blue-500/50'
-          }`}
-          style={{ width: `${agent.progress}%` }}
-        />
+        <div className={`h-full rounded-full transition-all ${agent.status === 'active' ? 'bg-emerald-500' : 'bg-blue-500/50'}`} style={{ width: `${agent.progress}%` }} />
       </div>
     </div>
   );
@@ -186,18 +328,8 @@ function ProviderRow({ provider }: { provider: Provider }) {
 }
 
 function LogLine({ entry }: { entry: LogEntry }) {
-  const colors: Record<string, string> = {
-    info: 'text-blue-400',
-    warn: 'text-yellow-400',
-    error: 'text-red-400',
-    success: 'text-emerald-400',
-  };
-  const icons: Record<string, string> = {
-    info: 'ℹ',
-    warn: '⚠',
-    error: '✕',
-    success: '✓',
-  };
+  const colors: Record<string, string> = { info: 'text-blue-400', warn: 'text-yellow-400', error: 'text-red-400', success: 'text-emerald-400' };
+  const icons: Record<string, string> = { info: 'ℹ', warn: '⚠', error: '✕', success: '✓' };
   return (
     <div className="flex items-start gap-2 py-1 font-mono text-xs">
       <span className="text-gray-600 shrink-0">[{entry.time}]</span>
@@ -220,44 +352,83 @@ function VBAModuleRow({ module }: { module: VBAModule }) {
   );
 }
 
-function TaskItem({ task, onToggle }: { task: typeof tasks[0]; onToggle: () => void }) {
-  const priorityColors: Record<string, string> = {
-    high: 'bg-red-500/20 text-red-400',
-    medium: 'bg-yellow-500/20 text-yellow-400',
-    low: 'bg-gray-500/20 text-gray-400',
-  };
-  const priorityLabels: Record<string, string> = {
-    high: 'ВЫСОКИЙ',
-    medium: 'СРЕДНИЙ',
-    low: 'НИЗКИЙ',
-  };
+function TaskItem({ task, onToggle }: { task: Task; onToggle: () => void }) {
+  const priorityColors: Record<string, string> = { high: 'bg-red-500/20 text-red-400', medium: 'bg-yellow-500/20 text-yellow-400', low: 'bg-gray-500/20 text-gray-400' };
+  const priorityLabels: Record<string, string> = { high: 'ВЫСОКИЙ', medium: 'СРЕДНИЙ', low: 'НИЗКИЙ' };
   return (
     <div className="flex items-center gap-3 py-2 border-b border-gray-800/50 last:border-0">
-      <button
-        onClick={onToggle}
-        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-          task.done
-            ? 'bg-emerald-500 border-emerald-500 text-white'
-            : 'border-gray-600 hover:border-gray-400'
-        }`}
-      >
+      <button onClick={onToggle} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${task.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-600 hover:border-gray-400'}`}>
         {task.done && <span className="text-xs">✓</span>}
       </button>
-      <span className={`text-sm flex-1 ${task.done ? 'text-gray-500 line-through' : 'text-gray-200'}`}>
-        {task.text}
-      </span>
-      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${priorityColors[task.priority]}`}>
-        {priorityLabels[task.priority]}
-      </span>
+      <span className={`text-sm flex-1 ${task.done ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{task.text}</span>
+      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${priorityColors[task.priority]}`}>{priorityLabels[task.priority]}</span>
     </div>
   );
 }
 
+function CodeBlock({ code, highlight }: { code: string; highlight?: boolean }) {
+  return (
+    <pre className={`text-xs font-mono p-3 rounded-lg overflow-x-auto leading-relaxed ${
+      highlight === false ? 'bg-red-500/5 border border-red-500/20 text-red-300' :
+      highlight === true ? 'bg-emerald-500/5 border border-emerald-500/20 text-emerald-300' :
+      'bg-gray-800/50 border border-gray-700/50 text-gray-300'
+    }`}>
+      {code}
+    </pre>
+  );
+}
+
+function IssueCard({ issue, isExpanded, onToggle }: { issue: CodeIssue; isExpanded: boolean; onToggle: () => void }) {
+  const severityBorder: Record<string, string> = {
+    critical: 'border-red-500/30',
+    warning: 'border-yellow-500/30',
+    info: 'border-blue-500/30',
+  };
+  return (
+    <div className={`rounded-xl border ${severityBorder[issue.severity]} bg-gray-900/50 overflow-hidden`}>
+      <button onClick={onToggle} className="w-full p-4 text-left flex items-start gap-3 hover:bg-gray-800/30 transition-all">
+        <span className={`text-lg mt-0.5 ${issue.severity === 'critical' ? 'text-red-400' : issue.severity === 'warning' ? 'text-yellow-400' : 'text-blue-400'}`}>
+          {issue.severity === 'critical' ? '🔴' : issue.severity === 'warning' ? '🟡' : '🔵'}
+        </span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <SeverityBadge severity={issue.severity} />
+            <span className="text-[10px] text-gray-500 font-mono">строка {issue.line}</span>
+          </div>
+          <h4 className="text-sm font-bold text-gray-200">{issue.title}</h4>
+          <p className="text-xs text-gray-400 mt-1">{issue.description}</p>
+        </div>
+        <span className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+      {isExpanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-800/50 pt-3">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-emerald-400">💡</span>
+            <span className="text-gray-300">{issue.fix}</span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-1">❌ Было</p>
+              <CodeBlock code={issue.before} highlight={false} />
+            </div>
+            <div>
+              <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider mb-1">✅ Стало</p>
+              <CodeBlock code={issue.after} highlight={true} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== ГЛАВНЫЙ КОМПОНЕНТ =====
 export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
-  const [taskList, setTaskList] = useState(tasks);
+  const [taskList, setTaskList] = useState<Task[]>(initialTasks);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'logs' | 'vba' | 'tasks'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'code' | 'logs' | 'vba' | 'tasks'>('dashboard');
+  const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set([1]));
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -268,7 +439,25 @@ export default function App() {
     setTaskList(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
   };
 
+  const toggleIssue = (id: number) => {
+    setExpandedIssues(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const completedTasks = taskList.filter(t => t.done).length;
+  const criticalCount = codeIssues.filter(i => i.severity === 'critical').length;
+  const warningCount = codeIssues.filter(i => i.severity === 'warning').length;
+
+  const tabs = [
+    { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
+    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length },
+    { id: 'logs' as const, label: 'Логи', icon: '▤' },
+    { id: 'vba' as const, label: 'VBA', icon: '⧉' },
+    { id: 'tasks' as const, label: 'Задачи', icon: '☑' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -276,9 +465,7 @@ export default function App() {
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm">
-              AI
-            </div>
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/20">AI</div>
             <div>
               <h1 className="text-lg font-bold tracking-tight">drmAIcu</h1>
               <p className="text-[10px] text-gray-500">ЦУ v3.0 FORTRESS • dreamkin</p>
@@ -289,43 +476,38 @@ export default function App() {
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>Система активна</span>
             </div>
-            <div className="font-mono text-sm text-gray-300">
-              {currentTime.toLocaleTimeString('ru-RU')}
-            </div>
+            <div className="font-mono text-sm text-gray-300">{currentTime.toLocaleTimeString('ru-RU')}</div>
           </div>
         </div>
       </header>
 
       {/* Navigation */}
-      <nav className="border-b border-gray-800 bg-gray-900/50">
-        <div className="max-w-7xl mx-auto px-4 flex gap-1">
-          {[
-            { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
-            { id: 'logs' as const, label: 'Логи', icon: '▤' },
-            { id: 'vba' as const, label: 'VBA Модули', icon: '⧉' },
-            { id: 'tasks' as const, label: 'Задачи', icon: '☑' },
-          ].map((tab) => (
+      <nav className="border-b border-gray-800 bg-gray-900/50 sticky top-[61px] z-40">
+        <div className="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto">
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                activeTab === tab.id
-                  ? 'border-emerald-500 text-emerald-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === tab.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'
               }`}
             >
-              <span className="mr-1.5">{tab.icon}</span>
+              <span>{tab.icon}</span>
               {tab.label}
+              {tab.badge && (
+                <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">{tab.badge}</span>
+              )}
             </button>
           ))}
         </div>
       </nav>
 
-      {/* Main Content */}
+      {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
+
+        {/* ===== DASHBOARD ===== */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            {/* Stats Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Агенты</p>
@@ -340,61 +522,59 @@ export default function App() {
                 <p className="text-2xl font-bold text-yellow-400">{completedTasks}<span className="text-sm text-gray-500">/{taskList.length}</span></p>
               </div>
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Ошибки</p>
-                <p className="text-2xl font-bold text-red-400">2</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Баги в коде</p>
+                <p className="text-2xl font-bold text-red-400">{codeIssues.length}</p>
               </div>
             </div>
 
-            {/* Agents Section */}
             <section>
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Агенты
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Агенты
               </h2>
               <div className="grid md:grid-cols-3 gap-3">
-                {agents.map((agent) => (
-                  <AgentCard key={agent.id} agent={agent} />
-                ))}
+                {agents.map((a) => <AgentCard key={a.id} agent={a} />)}
               </div>
             </section>
 
-            {/* Providers Section */}
             <section>
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                Провайдеры LLM
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />Провайдеры LLM
               </h2>
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-                {providers.map((provider) => (
-                  <ProviderRow key={provider.name} provider={provider} />
-                ))}
+                {providers.map((p) => <ProviderRow key={p.name} provider={p} />)}
               </div>
             </section>
 
-            {/* Recent Logs */}
+            {/* Code Issues Summary */}
             <section>
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                Последние события
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Найдено в agent_engine.py
               </h2>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 max-h-48 overflow-y-auto">
-                {logs.slice(-5).map((entry, i) => (
-                  <LogLine key={i} entry={entry} />
-                ))}
+              <div className="grid grid-cols-3 gap-3">
+                <button onClick={() => setActiveTab('code')} className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-left hover:bg-red-500/10 transition-all">
+                  <p className="text-2xl font-bold text-red-400">{criticalCount}</p>
+                  <p className="text-xs text-gray-400 mt-1">Критических</p>
+                </button>
+                <button onClick={() => setActiveTab('code')} className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-left hover:bg-yellow-500/10 transition-all">
+                  <p className="text-2xl font-bold text-yellow-400">{warningCount}</p>
+                  <p className="text-xs text-gray-400 mt-1">Предупреждений</p>
+                </button>
+                <button onClick={() => setActiveTab('code')} className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-left hover:bg-blue-500/10 transition-all">
+                  <p className="text-2xl font-bold text-blue-400">{codeIssues.length - criticalCount - warningCount}</p>
+                  <p className="text-xs text-gray-400 mt-1">Рекомендаций</p>
+                </button>
               </div>
             </section>
 
-            {/* Voice Report */}
             <section>
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                Голосовой отчёт (TTS)
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />Голосовой отчёт (TTS)
               </h2>
               <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
                 <p className="text-sm text-gray-300 leading-relaxed italic">
-                  "Отчёт по проекту drmAIcu. Агент номер один: первая часть задач выполнена. 
-                  Система ЦУ v3.0 FORTRESS запущена. Текущая задача: исправить ошибки компиляции 
-                  и импорта модулей. Агенты номер два и три: на паузе, не трогаем. 
+                  "Отчёт по проекту drmAIcu. Агент номер один: первая часть задач выполнена.
+                  Система ЦУ v3.0 FORTRESS запущена. Текущая задача: исправить ошибки компиляции
+                  и импорта модулей. Агенты номер два и три: на паузе, не трогаем.
                   Жду ваших указаний по коду."
                 </p>
                 <div className="mt-3 flex items-center gap-2">
@@ -408,63 +588,132 @@ export default function App() {
           </div>
         )}
 
+        {/* ===== CODE ANALYSIS ===== */}
+        {activeTab === 'code' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-white">Анализ agent_engine.py v2.2</h2>
+                <p className="text-xs text-gray-500 mt-1">Мульти-провайдеры • Детальный лог • Async/await</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setExpandedIssues(new Set(codeIssues.map(i => i.id)))}
+                  className="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-all"
+                >
+                  Раскрыть все
+                </button>
+                <button
+                  onClick={() => setExpandedIssues(new Set())}
+                  className="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-all"
+                >
+                  Свернуть все
+                </button>
+              </div>
+            </div>
+
+            {/* Summary bar */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  <span className="text-gray-300">{criticalCount} критических</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                  <span className="text-gray-300">{warningCount} предупреждений</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span className="text-gray-300">{codeIssues.length - criticalCount - warningCount} рекомендаций</span>
+                </div>
+                <div className="ml-auto text-gray-500">
+                  Файл: ~230 строк • Python 3.10+
+                </div>
+              </div>
+            </div>
+
+            {/* Issues */}
+            <div className="space-y-3">
+              {codeIssues.map((issue) => (
+                <IssueCard
+                  key={issue.id}
+                  issue={issue}
+                  isExpanded={expandedIssues.has(issue.id)}
+                  onToggle={() => toggleIssue(issue.id)}
+                />
+              ))}
+            </div>
+
+            {/* Architecture diagram */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Архитектура запросов</h3>
+              <div className="flex flex-col items-center gap-2">
+                <div className="px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                  run_task(prompt)
+                </div>
+                <div className="text-gray-600">↓</div>
+                <div className="px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold">
+                  _get_candidates() → {providers.filter(p => p.status === 'online').length} провайдеров
+                </div>
+                <div className="text-gray-600">↓</div>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full">
+                  {['Ollama', 'Groq', 'HF', 'OpenRouter', 'Gemini', 'Together'].map((p) => (
+                    <div key={p} className="px-2 py-1.5 rounded bg-gray-800/50 border border-gray-700/50 text-center text-[10px] text-gray-400">
+                      {p}
+                    </div>
+                  ))}
+                </div>
+                <div className="text-gray-600">↓ asyncio.gather</div>
+                <div className="px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs font-bold">
+                  judge_responses() → лучший код
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== LOGS ===== */}
         {activeTab === 'logs' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Системный лог</h2>
               <button
-                onClick={() => setLogs(prev => [...prev, {
-                  time: new Date().toLocaleTimeString('ru-RU'),
-                  level: 'info',
-                  message: 'Ручная проверка системы оператором',
-                  source: 'operator'
-                }])}
+                onClick={() => setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'info', message: 'Ручная проверка системы оператором', source: 'operator' }])}
                 className="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-all"
               >
                 + Добавить запись
               </button>
             </div>
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 max-h-[70vh] overflow-y-auto">
-              {logs.map((entry, i) => (
-                <LogLine key={i} entry={entry} />
-              ))}
+              {logs.map((entry, i) => <LogLine key={i} entry={entry} />)}
             </div>
           </div>
         )}
 
+        {/* ===== VBA ===== */}
         {activeTab === 'vba' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">VBA Модули</h2>
-              <div className="text-xs text-gray-500">
-                Загружено: {vbaModules.filter(m => m.status === 'loaded').length}/{vbaModules.length}
-              </div>
+              <div className="text-xs text-gray-500">Загружено: {vbaModules.filter(m => m.status === 'loaded').length}/{vbaModules.length}</div>
             </div>
-            
-            {/* Error Alert */}
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
               <div className="flex items-start gap-3">
                 <span className="text-red-400 text-lg">⚠</span>
                 <div>
                   <p className="text-sm font-medium text-red-400">Известные проблемы импорта</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Ошибки: <code className="text-red-300 bg-red-500/10 px-1 rounded">drm.cls could not be loaded</code>, 
+                    Ошибки: <code className="text-red-300 bg-red-500/10 px-1 rounded">drm.cls could not be loaded</code>,
                     <code className="text-red-300 bg-red-500/10 px-1 rounded ml-1">Bad file name or number</code>
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Скрипт находит маркеры, создаёт временные файлы, но не может загрузить их обратно в проект.
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Скрипт находит маркеры, создаёт временные файлы, но не может загрузить их обратно в проект.</p>
                 </div>
               </div>
             </div>
-
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              {vbaModules.map((module) => (
-                <VBAModuleRow key={module.name} module={module} />
-              ))}
+              {vbaModules.map((m) => <VBAModuleRow key={m.name} module={m} />)}
             </div>
-
-            {/* Architecture */}
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Архитектура</h3>
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -481,55 +730,27 @@ export default function App() {
           </div>
         )}
 
+        {/* ===== TASKS ===== */}
         {activeTab === 'tasks' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
-                Задачи Агента №1
-              </h2>
-              <div className="text-xs text-gray-500">
-                Выполнено: {completedTasks}/{taskList.length}
-              </div>
+              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Задачи Агента №1</h2>
+              <div className="text-xs text-gray-500">Выполнено: {completedTasks}/{taskList.length}</div>
             </div>
-
-            {/* Progress bar */}
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full transition-all"
-                style={{ width: `${(completedTasks / taskList.length) * 100}%` }}
-              />
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full transition-all" style={{ width: `${(completedTasks / taskList.length) * 100}%` }} />
             </div>
-
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              {taskList.map((task) => (
-                <TaskItem key={task.id} task={task} onToggle={() => toggleTask(task.id)} />
-              ))}
+              {taskList.map((t) => <TaskItem key={t.id} task={t} onToggle={() => toggleTask(t.id)} />)}
             </div>
-
-            {/* Rules */}
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Правила работы</h3>
               <ul className="space-y-2 text-xs text-gray-400">
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-400">▸</span>
-                  Правило "3 строк": ВСЕГДА показывать 3 строки кода ДО и 3 ПОСЛЕ места вставки
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-400">▸</span>
-                  Целостность: код модулей выдавать ЦЕЛИКОМ и без ошибок
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-400">▸</span>
-                  Краткость: никаких "вод". Только суть
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-400">▸</span>
-                  Голосовой формат: короткие фразы для TTS
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-400">▸</span>
-                  Агенты №2 и №3: на паузе, не трогаем
-                </li>
+                <li className="flex items-start gap-2"><span className="text-emerald-400">▸</span>Правило "3 строк": 3 строки ДО и 3 ПОСЛЕ места вставки</li>
+                <li className="flex items-start gap-2"><span className="text-emerald-400">▸</span>Код модулей — ЦЕЛИКОМ и без ошибок</li>
+                <li className="flex items-start gap-2"><span className="text-emerald-400">▸</span>Краткость: никаких "вод"</li>
+                <li className="flex items-start gap-2"><span className="text-emerald-400">▸</span>Голосовой формат: короткие фразы для TTS</li>
+                <li className="flex items-start gap-2"><span className="text-emerald-400">▸</span>Агенты №2 и №3: на паузе</li>
               </ul>
             </div>
           </div>
