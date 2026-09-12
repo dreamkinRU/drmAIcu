@@ -778,7 +778,7 @@ export default function App() {
 
       {/* Navigation */}
       <nav className="border-b border-gray-800 bg-gray-900/50 sticky top-[61px] z-40">
-        <div className="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -794,6 +794,15 @@ export default function App() {
               )}
             </button>
           ))}
+          <div className="ml-auto">
+            <a
+              href="/fixed-code.html"
+              target="_blank"
+              className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 whitespace-nowrap inline-flex items-center gap-1.5"
+            >
+              📦 Скачать код
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -803,6 +812,28 @@ export default function App() {
         {/* ===== DASHBOARD ===== */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
+            {/* Top banner */}
+            <a
+              href="/fixed-code.html"
+              target="_blank"
+              className="block rounded-xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-emerald-500/10 p-5 hover:border-emerald-500/60 transition-all group"
+            >
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    📦 Исправленный код готов к скачиванию
+                    <span className="text-emerald-400 group-hover:translate-x-1 transition-transform">→</span>
+                  </h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    4 файла • 18 исправлений • settings.json + launcher.bat + main.py + agent_engine.py
+                  </p>
+                </div>
+                <div className="px-6 py-3 rounded-xl bg-emerald-500 group-hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 whitespace-nowrap">
+                  📋 Открыть и скопировать
+                </div>
+              </div>
+            </a>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Агенты</p>
@@ -1163,29 +1194,6 @@ export default function App() {
           </div>
         )}
       </main>
-
-      {/* Download Section */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 p-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                📦 Исправленный код готов
-              </h3>
-              <p className="text-sm text-gray-400 mt-1">
-                4 файла с исправлениями • 18 проблем решено • Копируй и заменяй
-              </p>
-            </div>
-            <a
-              href="/fixed-code.html"
-              target="_blank"
-              className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 hover:scale-105"
-            >
-              📋 Открыть код →
-            </a>
-          </div>
-        </div>
-      </div>
 
       {/* Footer */}
       <footer className="border-t border-gray-800 bg-gray-900/50 mt-8">
