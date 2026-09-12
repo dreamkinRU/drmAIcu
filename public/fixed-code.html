@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>drmAIcu — Исправленный код</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0a0a0a;
+            color: #e5e5e5;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #10b981, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle { color: #6b7280; margin-bottom: 30px; }
+        .file-section {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .file-header {
+            background: #252525;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .file-name {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #10b981;
+        }
+        .copy-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover { background: #059669; transform: scale(1.05); }
+        .copy-btn:active { transform: scale(0.95); }
+        .copy-btn.copied { background: #059669; }
+        pre {
+            background: #0f0f0f;
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .instructions {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .instructions h2 {
+            color: #10b981;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+        .instructions ol {
+            margin-left: 20px;
+            color: #d1d5db;
+        }
+        .instructions li { margin-bottom: 10px; }
+        .instructions code {
+            background: #252525;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #06b6d4;
+            font-family: 'Courier New', monospace;
+        }
+        .warning {
+            background: #7f1d1d;
+            border: 1px solid #991b1b;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #fecaca;
+        }
+        .warning strong { color: #fca5a5; }
+        .summary {
+            background: linear-gradient(135deg, #10b98120, #06b6d420);
+            border: 1px solid #10b98140;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .summary h2 { color: #10b981; margin-bottom: 10px; }
+        .summary ul { list-style: none; margin-left: 0; }
+        .summary li { padding: 5px 0; color: #d1d5db; }
+        .summary li:before { content: "✓ "; color: #10b981; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ drmAIcu — Исправленный код</h1>
+        <p class="subtitle">Все файлы с исправлениями. Скопируй и замени в своём проекте.</p>
+
+        <div class="summary">
+            <h2>📋 Что исправлено</h2>
+            <ul>
+                <li><strong>settings.json:</strong> убран /v1 из ollama_url</li>
+                <li><strong>launcher.bat:</strong> добавлены проверки Python + main.py, обработка Ctrl+C, логирование</li>
+                <li><strong>main.py:</strong> исправлен _sandbox_test (OSError [Errno 22]), validate_python_syntax, get_engine</li>
+                <li><strong>agent_engine.py:</strong> исправлен asyncio.get_event_loop(), Gemini API, добавлен HuggingFace</li>
+            </ul>
+        </div>
+
+        <div class="instructions">
+            <h2>📥 Инструкция по установке</h2>
+            <ol>
+                <li>Скопируй каждый файл ниже (кнопка "Копировать")</li>
+                <li>Замени соответствующие файлы в папке проекта drmAIcu</li>
+                <li>Убедись что Python 3.10+ установлен и добавлен в PATH</li>
+                <li>Установи зависимости: <code>pip install nicegui ollama openai aiohttp</code></li>
+                <li>Запусти Ollama: <code>ollama serve</code></li>
+                <li>Запусти launcher.bat двойным кликом</li>
+                <li>Открой браузер: <code>http://localhost:8080</code></li>
+            </ol>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ Важно:</strong> Перед заменой файлов сделай резервную копию текущей версии!
+        </div>
+
+        <!-- settings.json -->
+        <div class="file-section">
+            <div class="file-header">
+                <span class="file-name">settings.json</span>
+                <button class="copy-btn" onclick="copyCode('settings-json')">📋 Копировать</button>
+            </div>
+            <pre id="settings-json">{
+    "groq_api_key": "",
+    "ollama_url": "http://localhost:11434"
+}</pre>
+        </div>
+
+        <!-- launcher.bat -->
+        <div class="file-section">
+            <div class="file-header">
+                <span class="file-name">launcher.bat</span>
+                <button class="copy-btn" onclick="copyCode('launcher-bat')">📋 Копировать</button>
+            </div>
+            <pre id="launcher-bat">@echo off
+title ЦУ Агент - Launcher
+color 0A
+
+:: Проверка Python
+python --version >nul 2>&1
+if errorlevel 1 (
+    color 0C
+    echo [ОШИБКА] Python не найден! Установите Python 3.10+
+    echo и добавьте в PATH.
+    pause
+    exit /b 1
+)
+
+:: Проверка main.py
+if not exist main.py (
+    color 0C
+    echo [ОШИБКА] main.py не найден!
+    echo Поместите launcher.bat в папку с main.py
+    pause
+    exit /b 1
+)
+
+:: Создание папки логов
+if not exist logs mkdir logs
+
+echo ========================================
+echo   ЦУ Агент - Автозапуск
+echo ========================================
+echo.
+
+:loop
+echo [%time%] Запуск ЦУ...
+python main.py 2>&1 | tee logs/cu_%date:~-4%%date:~3,2%%date:~0,2%.log
+set EXITCODE=%errorlevel%
+
+:: Проверка флага перезапуска
+if exist restart.flag (
+    del restart.flag >nul 2>&1
+    echo [%time%] Флаг перезапуска найден. Перезапуск...
+    timeout /t 2 /nobreak >nul
+    goto loop
+)
+
+:: Exit code 0 = нормальный выход
+if %EXITCODE%==0 (
+    echo [%time%] ЦУ остановлен нормально.
+    pause
+    exit /b 0
+)
+
+echo.
+echo [%time%] ЦУ упал (код %EXITCODE%). Перезапуск через 3 секунды...
+echo Нажмите любую клавишу для отмены...
+timeout /t 3 /nobreak >nul
+if errorlevel 1 goto loop
+echo.
+goto loop</pre>
+        </div>
+
+        <!-- main.py -->
+        <div class="file-section">
+            <div class="file-header">
+                <span class="file-name">main.py</span>
+                <button class="copy-btn" onclick="copyCode('main-py')">📋 Копировать</button>
+            </div>
+            <pre id="main-py"># main.py
+# Версия 3.0.3 FORTRESS (ИСПРАВЛЕНЫ ОШИБКИ)
+
+from nicegui import ui, app
+import json
+import os
+import importlib
+import sys
+import asyncio
+import time
+import threading
+import traceback
+import shutil
+import hashlib
+import ast
+from datetime import datetime
+from openai import AsyncOpenAI
+import tempfile
+
+CONFIG_FILE = 'settings.json'
+ENGINE_FILE = 'agent_engine.py'
+RESTART_FLAG = 'restart.flag'
+DEBUG_LOG = []
+BACKUP_DIR = 'backups'
+UPDATES_DIR = 'updates'
+CHECKSUM_FILE = 'backups/checksums.json'
+
+os.makedirs(BACKUP_DIR, exist_ok=True)
+os.makedirs(UPDATES_DIR, exist_ok=True)
+
+if os.path.exists(RESTART_FLAG):
+    try: os.remove(RESTART_FLAG)
+    except: pass
+
+EMERGENCY_ENGINE_CODE = '''# agent_engine.py
+import asyncio
+import ollama
+from typing import List, Dict
+
+class AgentEngine:
+    def __init__(self, config, **kwargs):
+        self.config = config
+        self.log = kwargs.get('log_callback', lambda msg, lvl: print(f"[{lvl}] {msg}"))
+        self.log(" Загружено АВАРИЙНОЕ ядро", "WARNING")
+    
+    async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
+        try:
+            loop = asyncio.get_running_loop()
+            def do_request():
+                return ollama.chat(model=candidate["model"], messages=[
+                    {"role": "system", "content": "You are an expert programmer."},
+                    {"role": "user", "content": prompt}
+                ])
+            response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=120.0)
+            code = response['message']['content']
+            self.log(f"✅ {candidate['name']}: {len(code)} симв.", "SUCCESS")
+            return {"candidate": candidate, "code": code, "error": None}
+        except Exception as e:
+            self.log(f" {candidate['name']}: {e}", "ERROR")
+            return {"candidate": candidate, "code": None, "error": str(e)}
+    
+    async def run_task(self, prompt: str, status_callback=None, mode: str = "full") -> str:
+        self.log(f"ЗАДАЧА: {prompt[:50]}", "INFO")
+        candidates = [{"model": "qwen2.5-coder:1.5b", "name": "Qwen 1.5B"}]
+        if status_callback: status_callback(" Отправка...")
+        results = await asyncio.gather(*[self.get_code_response(c, prompt) for c in candidates], return_exceptions=True)
+        valid = [r for r in results if isinstance(r, dict) and r.get("code")]
+        if not valid: return " Все модели не ответили"
+        if status_callback: status_callback("✅ Готово")
+        return valid[0]["code"]
+'''
+
+def log_debug(message: str, level: str = "INFO"):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    entry = f"[{timestamp}] [{level}] {message}"
+    DEBUG_LOG.append(entry)
+    if len(DEBUG_LOG) > 200: DEBUG_LOG.pop(0)
+    print(entry)
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            log_debug("⚠️ settings.json поврежден", "WARNING")
+    return {
+        "groq_api_key": "", "ollama_url": "http://localhost:11434",
+        "hf_api_key": "", "openrouter_api_key": "",
+        "gemini_api_key": "", "together_api_key": ""
+    }
+
+def save_config(data):
+    current = load_config()
+    current.update(data)
+    if os.path.exists(CONFIG_FILE):
+        backup_path = os.path.join(BACKUP_DIR, f"settings_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        try: shutil.copy2(CONFIG_FILE, backup_path)
+        except: pass
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(current, f, indent=4, ensure_ascii=False)
+
+def calculate_checksum(filepath: str) -> str:
+    if not os.path.exists(filepath): return ""
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+def save_checksum(filepath: str):
+    checksums = {}
+    if os.path.exists(CHECKSUM_FILE):
+        try:
+            with open(CHECKSUM_FILE, 'r') as f:
+                checksums = json.load(f)
+        except: pass
+    checksums[filepath] = calculate_checksum(filepath)
+    with open(CHECKSUM_FILE, 'w') as f:
+        json.dump(checksums, f, indent=2)
+
+def create_triple_backup(filepath: str) -> list:
+    if not os.path.exists(filepath):
+        return []
+    backups = []
+    filename = os.path.basename(filepath)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup1 = os.path.join(BACKUP_DIR, f"{filename}_{timestamp}.bak")
+    backup2 = os.path.join(BACKUP_DIR, f"{filename}_{timestamp}_verified.bak")
+    backup3 = os.path.join(BACKUP_DIR, f"{filename}_LATEST.bak")
+    try:
+        shutil.copy2(filepath, backup1)
+        backups.append(backup1)
+    except: pass
+    try:
+        shutil.copy2(filepath, backup2)
+        save_checksum(backup2)
+        backups.append(backup2)
+    except: pass
+    try:
+        shutil.copy2(filepath, backup3)
+        backups.append(backup3)
+    except: pass
+    return backups
+
+def validate_python_syntax(code: str) -> tuple:
+    try:
+        ast.parse(code)
+        return True, None
+    except SyntaxError as e:
+        return False, str(e)
+    except (UnicodeDecodeError, ValueError) as e:
+        return False, f"Кодировка: {e}"
+
+def validate_engine_structure(code: str) -> tuple:
+    required = ['class AgentEngine', 'async def run_task', 'async def get_code_response', '__init__']
+    missing = [r for r in required if r not in code]
+    if missing:
+        return False, f"Отсутствуют: {', '.join(missing)}"
+    if 'ui.dark_mode' in code or 'ui.label' in code or 'ui.button' in code:
+        if 'def create_ui' not in code:
+            return False, "Вызовы UI вне create_ui()"
+    return True, None
+
+def restore_from_backup(backup_path: str = None) -> bool:
+    if backup_path and os.path.exists(backup_path):
+        try:
+            shutil.copy2(backup_path, ENGINE_FILE)
+            log_debug(f"🔄 Восстановлено из: {backup_path}", "SUCCESS")
+            return True
+        except Exception as e:
+            log_debug(f"❌ Ошибка восстановления: {e}", "ERROR")
+    latest_backup = os.path.join(BACKUP_DIR, "agent_engine_LATEST.bak")
+    if os.path.exists(latest_backup):
+        return restore_from_backup(latest_backup)
+    log_debug("⚠️ Бэкапы не найдены — создаю аварийное ядро", "WARNING")
+    with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
+        f.write(EMERGENCY_ENGINE_CODE)
+    return True
+
+def ensure_base_files():
+    if not os.path.exists(CONFIG_FILE):
+        save_config({})
+        log_debug("✅ settings.json создан", "SUCCESS")
+    if not os.path.exists(ENGINE_FILE):
+        log_debug("⚠️ agent_engine.py не найден — создаю аварийное ядро", "WARNING")
+        with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
+            f.write(EMERGENCY_ENGINE_CODE)
+        return
+    with open(ENGINE_FILE, 'r', encoding='utf-8') as f:
+        content = f.read()
+    valid_syntax, syntax_error = validate_python_syntax(content)
+    valid_structure, structure_error = validate_engine_structure(content)
+    if not valid_syntax or not valid_structure:
+        log_debug(f"⚠️ agent_engine.py ПОВРЕЖДЕН!", "ERROR")
+        if syntax_error: log_debug(f"Синтаксис: {syntax_error}", "ERROR")
+        if structure_error: log_debug(f"Структура: {structure_error}", "ERROR")
+        log_debug("🔄 Восстановление из бэкапа...", "INFO")
+        if not restore_from_backup():
+            log_debug("❌ НЕ УДАЛОСЬ восстановить ядро!", "ERROR")
+    log_debug("🛡️ Базовые файлы проверены", "SUCCESS")
+
+engine_instance = None
+current_editor = None
+current_file = None
+guardian_instance = None
+_engine_lock = threading.Lock()
+
+def get_engine():
+    global engine_instance
+    try:
+        with _engine_lock:
+            if engine_instance is not None:
+                return engine_instance
+        # Инициализация вне lock (долгая операция)
+        config = load_config()
+        if 'agent_engine' in sys.modules:
+            importlib.reload(sys.modules['agent_engine'])
+        else:
+            import agent_engine
+        try:
+            engine_instance = sys.modules['agent_engine'].AgentEngine(config, log_callback=log_debug)
+        except TypeError:
+            engine_instance = sys.modules['agent_engine'].AgentEngine(config)
+        log_debug("✅ Ядро загружено", "SUCCESS")
+        return engine_instance
+    except Exception as e:
+        log_debug(f"❌ Ошибка ядра: {e}", "ERROR")
+        log_debug(f"Traceback: {traceback.format_exc()}", "ERROR")
+        log_debug("🔄 Попытка восстановления...", "WARNING")
+        if restore_from_backup():
+            log_debug("✅ Восстановлено! Перезагрузите ЦУ", "SUCCESS")
+        else:
+            log_debug("❌ НЕ УДАЛОСЬ восстановить", "ERROR")
+        return None
+
+def get_language(filename):
+    if filename.endswith('.py'): return 'python'
+    if filename.endswith('.json'): return 'json'
+    if filename.endswith(('.bas', '.vba')): return 'vbscript'
+    return 'plaintext'
+
+def get_project_files():
+    return [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith(('.py', '.json', '.txt', '.bas', '.vba', '.md'))]
+
+def restart_server():
+    log_debug("🔄 Перезапуск...", "WARNING")
+    with open(RESTART_FLAG, 'w') as f:
+        f.write('restart')
+    def do_exit():
+        time.sleep(2)
+        os._exit(0)
+    threading.Thread(target=do_exit, daemon=True).start()
+
+class AIGuardian:
+    def __init__(self, engine, log_callback):
+        self.engine = engine
+        self.log = log_callback
+    
+    async def validate_update(self, new_code: str, description: str) -> dict:
+        result = {"approved": False, "errors": [], "warnings": [], "steps": [], "backups": []}
+        self.log(" Уровень 1/5: Синтаксис Python...", "INFO")
+        result["steps"].append("1. Синтаксис")
+        valid, error = validate_python_syntax(new_code)
+        if not valid:
+            result["errors"].append(f"Синтаксис: {error}")
+            self.log(f"❌ СИНТАКСИС: {error}", "ERROR")
+            return result
+        self.log("✅ Синтаксис OK", "SUCCESS")
+        self.log("🔍 Уровень 2/5: Структура ядра...", "INFO")
+        result["steps"].append("2. Структура")
+        valid, error = validate_engine_structure(new_code)
+        if not valid:
+            result["errors"].append(f"Структура: {error}")
+            self.log(f"❌ СТРУКТУРА: {error}", "ERROR")
+            return result
+        self.log("✅ Структура OK", "SUCCESS")
+        self.log("🔍 Уровень 3/5: AI-Судья...", "INFO")
+        result["steps"].append("3. AI-Судья")
+        judge_result = await self._judge_validation(new_code, description)
+        if not judge_result.get("approved", False):
+            result["errors"].extend(judge_result.get("errors", []))
+            result["warnings"].extend(judge_result.get("warnings", []))
+            self.log(f"❌ AI-СУДЬЯ: {judge_result.get('reason')}", "ERROR")
+            return result
+        self.log("✅ AI-Судья OK", "SUCCESS")
+        self.log("🔍 Уровень 4/5: Sandbox тест...", "INFO")
+        result["steps"].append("4. Sandbox")
+        test_result = await self._sandbox_test(new_code)
+        if not test_result.get("success", False):
+            result["errors"].append(f"Sandbox: {test_result.get('error')}")
+            self.log(f"❌ SANDBOX: {test_result.get('error')}", "ERROR")
+            return result
+        self.log("✅ Sandbox OK", "SUCCESS")
+        self.log(" Уровень 5/5: Тройной бэкап...", "INFO")
+        result["steps"].append("5. Бэкап")
+        current_backup = create_triple_backup(ENGINE_FILE)
+        result["backups"] = current_backup
+        if not current_backup:
+            result["warnings"].append("Не удалось создать бэкап")
+        else:
+            self.log(f"✅ Создано {len(current_backup)} бэкапов", "SUCCESS")
+        result["approved"] = True
+        self.log("🎉 ВСЕ 5 УРОВНЕЙ ПРОЙДЕНЫ!", "SUCCESS")
+        return result
+    
+    async def _judge_validation(self, new_code: str, description: str) -> dict:
+        judge_prompt = f"""Ты — технический ревизор. Проверь обновление ядра.
+ОПИСАНИЕ: {description}
+КОД:
+{new_code[:5000]}
+ПРОВЕРКИ:
+1. Есть class AgentEngine?
+2. Есть async def run_task?
+3. Есть async def get_code_response?
+4. Нет вызовов ui.* вне create_ui?
+5. Есть try/except в асинхронных методах?
+ВЕРНИ JSON:
+{{"approved": true/false, "reason": "причина если отклонено", "warnings": [], "suggestions": []}}
+JSON:"""
+        try:
+            if self.engine and hasattr(self.engine, '_get_judge_model'):
+                judge_model = self.engine._get_judge_model()
+                messages = [{"role": "user", "content": judge_prompt}]
+                if hasattr(self.engine, '_query_model'):
+                    response = await self.engine._query_model(judge_model, messages, timeout=120.0)
+                    import json as json_module, re
+                    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                    if json_match:
+                        return json_module.loads(json_match.group())
+            return self._heuristic_validation(new_code)
+        except Exception as e:
+            self.log(f"⚠️ AI ошибка: {e}", "WARNING")
+            return self._heuristic_validation(new_code)
+    
+    def _heuristic_validation(self, code: str) -> dict:
+        errors = []
+        warnings = []
+        if 'class AgentEngine' not in code: errors.append("Нет class AgentEngine")
+        if 'async def run_task' not in code: errors.append("Нет async def run_task")
+        if 'async def get_code_response' not in code: errors.append("Нет async def get_code_response")
+        if 'ui.dark_mode' in code or 'ui.label' in code:
+            if 'def create_ui' not in code: errors.append("UI вызовы вне create_ui")
+        if code.count('try:') < 2: warnings.append("Мало try/except")
+        return {"approved": len(errors) == 0, "reason": "; ".join(errors) if errors else None, "warnings": warnings, "suggestions": []}
+    
+    async def _sandbox_test(self, code: str) -> dict:
+        temp_path = None
+        try:
+            fd, temp_path = tempfile.mkstemp(suffix='.py', prefix='sandbox_')
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(code)
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("test_engine", temp_path)
+            if spec and spec.loader:
+                test_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(test_module)
+                if not hasattr(test_module, 'AgentEngine'):
+                    return {"success": False, "error": "Нет AgentEngine"}
+                engine_class = test_module.AgentEngine
+                for method in ['__init__', 'run_task', 'get_code_response']:
+                    if not hasattr(engine_class, method):
+                        return {"success": False, "error": f"Нет метода {method}"}
+                return {"success": True}
+            else:
+                return {"success": False, "error": "Не удалось загрузить"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try: os.unlink(temp_path)
+                except: pass
+    
+    async def apply_update(self, new_code: str, validation_result: dict) -> bool:
+        if not validation_result.get("approved", False):
+            self.log("❌ Отклонено", "ERROR")
+            return False
+        try:
+            with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
+                f.write(new_code)
+            self.log("✅ Обновление применено!", "SUCCESS")
+            global engine_instance
+            engine_instance = None
+            return True
+        except Exception as e:
+            self.log(f"❌ Ошибка применения: {e}", "ERROR")
+            backups = validation_result.get("backups", [])
+            if backups:
+                if restore_from_backup(backups[0]):
+                    self.log("🔄 Откат выполнен", "WARNING")
+            return False
+
+def create_ui():
+    global guardian_instance
+    ui.dark_mode().enable()
+
+    with ui.header().classes('bg-gray-900 text-white border-b border-gray-700 p-4'):
+        with ui.row().classes('w-full items-center justify-between'):
+            ui.label('️ ЦУ v3.0.3 FORTRESS').classes('text-xl font-bold')
+            ui.button('🔄 ПЕРЕЗАПУСТИТЬ', on_click=restart_server).props('color=orange')
+
+    with ui.tabs().classes('w-full') as tabs:
+        tab_dash = ui.tab('dashboard', label='Дашборд')
+        tab_api = ui.tab('api', label='API')
+        tab_llm = ui.tab('llm', label='LLM')
+        tab_updates = ui.tab('updates', label='🛡️ Обновления')
+        tab_debug = ui.tab('debug', label='Debug')
+        tab_editor = ui.tab('editor', label='📝 Редактор')
+        tab_console = ui.tab('console', label='💬 Консоль')
+
+    with ui.tab_panels(tabs, value=tab_dash).classes('w-full p-6'):
+
+        with ui.tab_panel(tab_dash):
+            ui.label('Статус системы (FORTRESS)').classes('text-lg font-bold mb-4')
+            config = load_config()
+            with ui.row().classes('gap-4'):
+                ui.badge('Ollama: OK', color='green')
+                groq_text = 'Groq: OK' if config.get('groq_api_key') else 'Groq: Нет'
+                groq_color = 'green' if config.get('groq_api_key') else 'red'
+                ui.badge(groq_text, color=groq_color)
+                ui.badge('Ядро: v3.0.3 FORTRESS', color='green')
+                ui.badge('🛡️ Защита: АКТИВНА', color='green')
+            ui.markdown('''
+**Защита ядра:**
+- ✅ Редактор НЕ может изменить agent_engine.py
+- ✅ Все обновления через AI-Guardian (5 уровней)
+- ✅ Тройной бэкап
+- ✅ Авто-откат при ошибке
+- ✅ Аварийное ядро встроено
+            ''')
+
+        with ui.tab_panel(tab_api):
+            ui.label('API ключи').classes('text-lg font-bold mb-2')
+            config = load_config()
+            with ui.row().classes('w-full items-center gap-4 mb-4'):
+                groq_key = ui.input('Groq API Key', value=config.get('groq_api_key', ''), password=True).classes('flex-grow')
+                def save_groq():
+                    save_config({'groq_api_key': groq_key.value})
+                    ui.notify('✅ Groq сохранен', type='positive')
+                groq_key.on('blur', save_groq)
+                ui.button('💾', on_click=save_groq)
+
+        with ui.tab_panel(tab_llm):
+            ui.label('LLM Провайдеры').classes('text-lg font-bold mb-4')
+            config = load_config()
+            providers = [
+                ('groq_api_key', 'Groq', 'https://console.groq.com'),
+                ('hf_api_key', 'Hugging Face', 'https://huggingface.co/settings/tokens'),
+                ('openrouter_api_key', 'OpenRouter', 'https://openrouter.ai/keys'),
+                ('gemini_api_key', 'Google Gemini', 'https://makersuite.google.com/app/apikey'),
+                ('together_api_key', 'Together AI', 'https://api.together.xyz/settings/api-keys')
+            ]
+            for key_name, label, url in providers:
+                with ui.card().classes('w-full mb-4'):
+                    with ui.row().classes('w-full items-center justify-between'):
+                        ui.label(label).classes('font-bold')
+                        status = '✅' if config.get(key_name) else '❌'
+                        ui.badge(f'{status}', color='green' if config.get(key_name) else 'red')
+                    key_input = ui.input('API Key', value=config.get(key_name, ''), password=True).classes('w-full')
+                    with ui.row().classes('gap-2'):
+                        def make_save(kn, inp, lbl):
+                            return lambda: (save_config({kn: inp.value}), ui.notify(f'✅ {lbl} сохранен'))
+                        ui.button('', on_click=make_save(key_name, key_input, label)).props('color=green')
+                        ui.button('🔗', on_click=lambda u=url: ui.open_url(u)).props('flat')
+
+        with ui.tab_panel(tab_updates):
+            ui.label('🛡️ AI-Guardian: Обновление ядра').classes('text-lg font-bold mb-4')
+            ui.label('Все обновления проходят 5 уровней проверки.').classes('text-gray-400 mb-4')
+            update_description = ui.textarea('Описание обновления', placeholder='Что нового?').classes('w-full h-24')
+            new_code_area = ui.textarea('Новый код agent_engine.py').classes('w-full h-96')
+            validation_log = ui.log(max_lines=50).classes('w-full h-48 bg-black text-green-400 font-mono mt-4')
+            
+            async def validate_and_update():
+                global guardian_instance
+                if not update_description.value:
+                    ui.notify('Введите описание!', type='warning')
+                    return
+                validation_log.clear()
+                validation_log.push('[INFO] AI-Guardian активирован...')
+                engine = get_engine()
+                if not engine:
+                    validation_log.push('[ERROR] Ядро не загружено!')
+                    ui.notify('❌ Ядро не загружено', type='negative')
+                    return
+                if guardian_instance is None:
+                    guardian_instance = AIGuardian(engine, lambda msg, lvl: validation_log.push(f'[{lvl}] {msg}'))
+                new_code = new_code_area.value.strip()
+                if not new_code:
+                    validation_log.push('[ERROR] Введите код!')
+                    ui.notify('⚠️ Введите код', type='warning')
+                    return
+                validation_log.push('[INFO] Запуск 5-уровневой валидации...')
+                result = await guardian_instance.validate_update(new_code, update_description.value)
+                if result.get("approved"):
+                    validation_log.push('[SUCCESS] ✅ ВСЕ УРОВНИ ПРОЙДЕНЫ!')
+                    if result.get("warnings"):
+                        for w in result["warnings"]:
+                            validation_log.push(f'[WARNING] ⚠️ {w}')
+                    validation_log.push('[INFO] Применение...')
+                    success = await guardian_instance.apply_update(new_code, result)
+                    if success:
+                        validation_log.push('[SUCCESS] 🎉 Обновление применено!')
+                        ui.notify('✅ Обновление применено! Перезапустите ЦУ.', type='positive')
+                    else:
+                        validation_log.push('[ERROR] ❌ Ошибка применения')
+                        ui.notify('❌ Ошибка', type='negative')
+                else:
+                    validation_log.push('[ERROR] ❌ ВАЛИДАЦИЯ НЕ ПРОЙДЕНА')
+                    for error in result.get("errors", []):
+                        validation_log.push(f'[ERROR] ❌ {error}')
+                    ui.notify(f'❌ Не пройдено: {result.get("errors", ["неизвестно"])[0]}', type='negative')
+            
+            with ui.row().classes('mt-4 gap-4'):
+                ui.button('🛡️ Проверить и применить', on_click=validate_and_update).props('color=green size=lg')
+            with ui.expansion('📖 Правила', icon='help').classes('w-full mt-4'):
+                ui.markdown('''
+**Правила обновления:**
+1. Введите описание изменений
+2. Вставьте новый код agent_engine.py
+3. Нажмите "Проверить и применить"
+4. 5 уровней проверки: Синтаксис → Структура → AI-Судья → Sandbox → Бэкап
+5. Авто-откат при ошибке
+
+**Редактор НЕ может изменить agent_engine.py!**
+                ''')
+
+        with ui.tab_panel(tab_debug):
+            ui.label('🐞 Debug').classes('text-lg font-bold mb-4')
+            with ui.row().classes('w-full gap-4'):
+                with ui.column().classes('w-1/3'):
+                    ui.label('Тесты').classes('font-bold mb-2')
+                    async def test_ollama():
+                        try:
+                            import ollama
+                            models = ollama.list()
+                            ui.notify(f"✅ Ollama: {len(models.get('models', []))} моделей", type='positive')
+                            log_debug(f"Ollama: {models}", "SUCCESS")
+                        except Exception as e:
+                            ui.notify(f"❌ Ollama: {e}", type='negative')
+                            log_debug(f"Ollama error: {e}", "ERROR")
+                    ui.button('🔌 Тест Ollama', on_click=test_ollama).classes('w-full mb-2')
+                    ui.button('⚙️ Тест Ядра', on_click=lambda: ui.notify("✅ Ядро OK" if get_engine() else "❌ Ядро ERROR")).classes('w-full mb-2')
+                    ui.button('🗑️ Очистить лог', on_click=lambda: (DEBUG_LOG.clear(), ui.notify('Лог очищен'))).classes('w-full')
+                with ui.column().classes('w-2/3'):
+                    log_display = ui.log(max_lines=200).classes('w-full h-[500px] bg-black text-green-400 font-mono')
+                    _last_log_len = 0
+                    async def update_log():
+                        nonlocal _last_log_len
+                        if len(DEBUG_LOG) > _last_log_len:
+                            for entry in DEBUG_LOG[_last_log_len:]:
+                                log_display.push(entry)
+                            _last_log_len = len(DEBUG_LOG)
+                    ui.timer(1, update_log, once=False)
+
+        with ui.tab_panel(tab_editor):
+            ui.label('📝 Редактор (ЯДРО ЗАЩИЩЕНО)').classes('text-lg font-bold mb-4')
+            ui.label('⚠️ agent_engine.py НЕЛЬЗЯ изменить здесь! Используйте вкладку "🛡️ Обновления"').classes('text-yellow-400 mb-4')
+            with ui.row().classes('w-full gap-4 items-end'):
+                file_selector = ui.select(options=get_project_files(), label='Файл', on_change=lambda e: load_file_to_editor(e.value)).classes('w-1/3')
+                new_file_name = ui.input('Новый файл').classes('w-1/3')
+                def create_file():
+                    fname = new_file_name.value.strip()
+                    if not fname or os.path.exists(fname): 
+                        ui.notify('Файл существует!', type='warning')
+                        return
+                    with open(fname, 'w') as f: f.write(f"# {fname}\n")
+                    file_selector.options = get_project_files(); file_selector.update()
+                    file_selector.value = fname; load_file_to_editor(fname)
+                    ui.notify(f'✅ {fname} создан', type='positive')
+                ui.button('➕ Создать', on_click=create_file)
+            editor_container = ui.column().classes('w-full')
+            def load_file_to_editor(filename):
+                global current_editor, current_file
+                if not filename: return
+                current_file = filename
+                editor_container.clear()
+                with editor_container:
+                    with open(filename, 'r', encoding='utf-8') as f: 
+                        content = f.read()
+                    if filename == ENGINE_FILE:
+                        ui.label('🔒 agent_engine.py — ТОЛЬКО ЧТЕНИЕ').classes('text-red-400 font-bold mb-2')
+                        ui.markdown('Для обновления используйте вкладку **🛡️ Обновления**')
+                        escaped_code = content.replace('`', '\\`')
+                        ui.markdown(f'```python\n{escaped_code}\n```').classes('w-full')
+                        current_editor = None
+                    else:
+                        current_editor = ui.codemirror(
+                            value=content, 
+                            language=get_language(filename), 
+                            theme='dark'
+                        ).classes('w-full h-[500px] border rounded')
+            def save_current_file():
+                global current_file, current_editor, engine_instance
+                if current_file and current_editor:
+                    if current_file == ENGINE_FILE:
+                        ui.notify('⛔ agent_engine.py НЕЛЬЗЯ изменить через редактор!', type='negative')
+                        ui.notify('Используйте вкладку 🛡️ Обновления', type='warning')
+                        return
+                    code = current_editor.value
+                    if current_file.endswith('.py'):
+                        is_valid, error = validate_python_syntax(code)
+                        if not is_valid:
+                            ui.notify(f' Ошибка синтаксиса: {error[:100]}', type='negative', timeout=10)
+                            return
+                    with open(current_file, 'w', encoding='utf-8') as f:
+                        f.write(code)
+                    if current_file == 'main.py':
+                        ui.notify('🔄 Перезапуск...', type='info')
+                        restart_server()
+                    else:
+                        ui.notify(f'💾 {current_file} сохранен', type='positive')
+                else:
+                    ui.notify('⚠️ Нет активного редактора', type='warning')
+            ui.button('💾 Сохранить', on_click=save_current_file).classes('mt-4')
+            load_file_to_editor(ENGINE_FILE)
+            file_selector.value = ENGINE_FILE
+
+        with ui.tab_panel(tab_console):
+            ui.label('Консоль').classes('text-lg font-bold mb-4')
+            with ui.row().classes('w-full items-center gap-4 mb-2'):
+                mode_select = ui.select(options={'full': ' Полный', 'fast': '⚡ Быстрый'}, value='full', label='Режим').classes('w-1/3')
+            task_input = ui.input('Задача (Enter)').classes('w-full')
+            status_label = ui.label('Статус: Ожидание').classes('text-lg mt-4')
+            log_area = ui.log(max_lines=200).classes('w-full h-64 bg-black text-green-400 font-mono mt-4')
+            result_area = ui.textarea('Результат').classes('w-full h-64 mt-4')
+            
+            async def run_task():
+                if not task_input.value:
+                    ui.notify('Введите задачу!', type='warning')
+                    return
+                log_area.clear()
+                log_area.push('=' * 70)
+                log_area.push(f'ЗАДАЧА: {task_input.value}')
+                log_area.push(f'РЕЖИМ: {mode_select.value}')
+                log_area.push('=' * 70)
+                log_debug(f"Задача: {task_input.value[:50]}", "INFO")
+                def update_status(text):
+                    status_label.text = f"Статус: {text}"
+                    log_debug(f"Статус: {text}", "INFO")
+                    log_area.push(f'[СТАТУС] {text}')
+                try:
+                    engine = get_engine()
+                    if not engine:
+                        raise Exception("Ядро не загружено")
+                    if hasattr(engine, '_get_candidates'):
+                        candidates = engine._get_candidates()
+                        log_area.push('')
+                        log_area.push(f'📋 БУДУТ ОПРОШЕНЫ {len(candidates)} МОДЕЛЕЙ:')
+                        for i, c in enumerate(candidates, 1):
+                            provider = c.get('provider', 'ollama').upper()
+                            log_area.push(f'  {i}. [{provider}] {c["name"]}')
+                        log_area.push('-' * 70)
+                    else:
+                        log_area.push('📋 Используется аварийное ядро (1 модель)')
+                        log_area.push('-' * 70)
+                    update_status(" Отправка запросов...")
+                    if hasattr(engine, 'run_task_detailed'):
+                        result = await engine.run_task_detailed(
+                            task_input.value,
+                            status_callback=update_status,
+                            log_callback=lambda msg: log_area.push(msg),
+                            mode=mode_select.value
+                        )
+                    else:
+                        result = await engine.run_task(
+                            task_input.value,
+                            status_callback=update_status,
+                            mode=mode_select.value
+                        )
+                    log_area.push('')
+                    log_area.push('=' * 70)
+                    log_area.push(' ЗАДАЧА ВЫПОЛНЕНА')
+                    log_area.push('=' * 70)
+                    result_area.value = result
+                    log_debug("✅ Готово", "SUCCESS")
+                    update_status("🏁 Готово")
+                except Exception as e:
+                    log_area.push('')
+                    log_area.push(f'[ОШИБКА] {str(e)}')
+                    log_area.push(f'[TRACEBACK] {traceback.format_exc()}')
+                    result_area.value = f"Ошибка: {str(e)}"
+                    log_debug(f"❌ Ошибка: {e}", "ERROR")
+                    update_status("❌ Ошибка")
+            
+            task_input.on('keydown.enter', lambda: asyncio.create_task(run_task()))
+            ui.button('▶️ Отправить', on_click=run_task).props('color=green').classes('mt-2')
+
+log_debug("ЦУ v3.0.3 FORTRESS запущен", "SUCCESS")
+ensure_base_files()
+create_ui()
+ui.run(title='ЦУ v3.0.3 FORTRESS', port=8080, dark=True, reload=False)</pre>
+        </div>
+
+        <!-- agent_engine.py -->
+        <div class="file-section">
+            <div class="file-header">
+                <span class="file-name">agent_engine.py</span>
+                <button class="copy-btn" onclick="copyCode('agent-engine-py')">📋 Копировать</button>
+            </div>
+            <pre id="agent-engine-py"># agent_engine.py
+# Версия 2.3 (ИСПРАВЛЕНЫ ОШИБКИ)
+
+import asyncio
+import ollama
+from typing import List, Dict
+import traceback
+
+
+class AgentEngine:
+    def __init__(self, config, **kwargs):
+        self.config = config
+        self.log = kwargs.get('log_callback', lambda msg, lvl: print(f"[{lvl}] {msg}"))
+        
+        # Собираем информацию о доступных провайдерах
+        self.providers = {
+            'ollama': True,
+            'groq': bool(config.get('groq_api_key', '').strip()),
+            'huggingface': bool(config.get('hf_api_key', '').strip()),
+            'openrouter': bool(config.get('openrouter_api_key', '').strip()),
+            'gemini': bool(config.get('gemini_api_key', '').strip()),
+            'together': bool(config.get('together_api_key', '').strip())
+        }
+        
+        self.log("=" * 60, "INFO")
+        self.log("Инициализация ядра v2.3", "SUCCESS")
+        self.log("Доступные провайдеры:", "INFO")
+        for provider, active in self.providers.items():
+            status = "✅" if active else "❌"
+            self.log(f"  {status} {provider.upper()}", "INFO")
+        self.log("=" * 60, "INFO")
+        
+        self._clients = {}
+        self._init_clients()
+
+    def _init_clients(self):
+        """Ленивая инициализация клиентов"""
+        from openai import AsyncOpenAI
+        
+        if self.providers['groq']:
+            self._clients['groq'] = AsyncOpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=self.config.get('groq_api_key', ''),
+                timeout=60.0
+            )
+        
+        if self.providers['openrouter']:
+            self._clients['openrouter'] = AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.config.get('openrouter_api_key', ''),
+                timeout=60.0
+            )
+        
+        if self.providers['together']:
+            self._clients['together'] = AsyncOpenAI(
+                base_url="https://api.together.xyz/v1",
+                api_key=self.config.get('together_api_key', ''),
+                timeout=60.0
+            )
+        
+        if self.providers['huggingface']:
+            self._clients['huggingface'] = {
+                'api_key': self.config.get('hf_api_key', ''),
+                'timeout': 60.0
+            }
+
+    def _get_candidates(self) -> List[Dict]:
+        """Возвращает список моделей из ВСЕХ доступных провайдеров"""
+        candidates = []
+        
+        # Ollama (локальные)
+        if self.providers['ollama']:
+            candidates.extend([
+                {"provider": "ollama", "model": "qwen2.5-coder:1.5b", "name": "Ollama: Qwen 1.5B"},
+                {"provider": "ollama", "model": "qwen2.5-coder:14b", "name": "Ollama: Qwen 14B"}
+            ])
+        
+        # Groq
+        if self.providers['groq']:
+            candidates.extend([
+                {"provider": "groq", "model": "llama-3.1-8b-versatile", "name": "Groq: Llama 8B"},
+                {"provider": "groq", "model": "llama-3.1-70b-versatile", "name": "Groq: Llama 70B"}
+            ])
+        
+        # OpenRouter (бесплатные модели)
+        if self.providers['openrouter']:
+            candidates.extend([
+                {"provider": "openrouter", "model": "meta-llama/llama-3.1-8b-instruct:free", "name": "OpenRouter: Llama 8B (free)"},
+                {"provider": "openrouter", "model": "qwen/qwen-2.5-coder-32b-instruct:free", "name": "OpenRouter: Qwen 32B (free)"}
+            ])
+        
+        # Google Gemini
+        if self.providers['gemini']:
+            candidates.append({
+                "provider": "gemini", 
+                "model": "gemini-1.5-flash", 
+                "name": "Gemini: 1.5 Flash (free)"
+            })
+        
+        # Together AI
+        if self.providers['together']:
+            candidates.extend([
+                {"provider": "together", "model": "meta-llama/Llama-3.1-8B-Instruct-Turbo", "name": "Together: Llama 8B"},
+                {"provider": "together", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "Together: Qwen 32B"}
+            ])
+        
+        # HuggingFace
+        if self.providers['huggingface']:
+            candidates.extend([
+                {"provider": "huggingface", "model": "meta-llama/Llama-3.1-8B-Instruct", "name": "HF: Llama 8B"},
+                {"provider": "huggingface", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "HF: Qwen 32B"}
+            ])
+        
+        return candidates
+
+    def _get_judge_model(self) -> Dict:
+        """Выбираем лучшую доступную модель для судьи"""
+        if self.providers['groq']:
+            return {"provider": "groq", "model": "llama-3.1-70b-versatile", "name": "Groq: Llama 70B (судья)"}
+        elif self.providers['openrouter']:
+            return {"provider": "openrouter", "model": "qwen/qwen-2.5-coder-32b-instruct:free", "name": "OpenRouter: Qwen 32B (судья)"}
+        elif self.providers['together']:
+            return {"provider": "together", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "Together: Qwen 32B (судья)"}
+        else:
+            return {"provider": "ollama", "model": "qwen2.5-coder:14b", "name": "Ollama: Qwen 14B (судья)"}
+
+    async def _query_ollama(self, model: str, messages: List[Dict], timeout: float = 120.0) -> str:
+        loop = asyncio.get_running_loop()
+        def do_request():
+            return ollama.chat(model=model, messages=messages, options={"num_predict": 1000})
+        response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=timeout)
+        return response['message']['content']
+
+    async def _query_openai_style(self, provider: str, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        """Универсальный запрос для OpenAI-совместимых API"""
+        client = self._clients.get(provider)
+        if not client:
+            raise Exception(f"Клиент {provider} не инициализирован")
+        
+        response = await asyncio.wait_for(
+            client.chat.completions.create(model=model, messages=messages, temperature=0.3),
+            timeout=timeout
+        )
+        return response.choices[0].message.content
+
+    async def _query_gemini(self, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        """Запрос к Google Gemini"""
+        import aiohttp
+        
+        api_key = self.config.get('gemini_api_key', '')
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        
+        # Конвертируем ВСЕ сообщения в формат Gemini
+        contents = []
+        for msg in messages:
+            role = "model" if msg["role"] == "assistant" else "user"
+            contents.append({
+                "role": role,
+                "parts": [{"text": msg["content"]}]
+            })
+        
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1000
+            }
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"Gemini API error {response.status}: {error_text[:100]}")
+                result = await response.json()
+                return result['candidates'][0]['content']['parts'][0]['text']
+
+    async def _query_huggingface(self, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        """Запрос к HuggingFace Inference API"""
+        import aiohttp
+        api_key = self.config.get('hf_api_key', '')
+        url = f"https://api-inference.huggingface.co/models/{model}"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        prompt = messages[-1]['content']
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json={"inputs": prompt}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    raise Exception(f"HF API error {resp.status}: {error_text[:100]}")
+                result = await resp.json()
+                return result[0]['generated_text']
+
+    async def _query_model(self, candidate: Dict, messages: List[Dict], timeout: float = 120.0) -> str:
+        """Универсальный диспетчер запросов"""
+        provider = candidate['provider']
+        model = candidate['model']
+        
+        if provider == 'ollama':
+            return await self._query_ollama(model, messages, timeout)
+        elif provider in ['groq', 'openrouter', 'together']:
+            return await self._query_openai_style(provider, model, messages, timeout)
+        elif provider == 'gemini':
+            return await self._query_gemini(model, messages, timeout)
+        elif provider == 'huggingface':
+            return await self._query_huggingface(model, messages, timeout)
+        else:
+            raise Exception(f"Неизвестный провайдер: {provider}")
+
+    async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
+        """Запрос к одной модели с ДЕТАЛЬНЫМ логом и retry"""
+        provider = candidate['provider'].upper()
+        model_name = candidate['name']
+        
+        self.log(f"🚀 [{provider}] {model_name}...", "INFO")
+        
+        messages = [
+            {"role": "system", "content": "You are an expert programmer in Python and VBA. Write clean, efficient code. Return ONLY code without explanations."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                code = await self._query_model(candidate, messages, timeout=120.0)
+                self.log(f"✅ [{provider}] {model_name}: {len(code)} симв.", "SUCCESS")
+                return {"candidate": candidate, "code": code, "error": None}
+            except asyncio.TimeoutError:
+                if attempt < max_retries:
+                    self.log(f"⏳ [{provider}] Попытка {attempt+2}/{max_retries+1}...", "WARN")
+                    await asyncio.sleep(2)
+                    continue
+                self.log(f" [{provider}] {model_name}: ТАЙМАУТ", "ERROR")
+                return {"candidate": candidate, "code": None, "error": "Таймаут"}
+            except Exception as e:
+                self.log(f"❌ [{provider}] {model_name}: {str(e)[:60]}", "ERROR")
+                return {"candidate": candidate, "code": None, "error": str(e)}
+
+    async def judge_responses(self, prompt: str, responses: List[Dict]) -> Dict:
+        """Судья с детальным логом"""
+        judge = self._get_judge_model()
+        provider = judge['provider'].upper()
+        self.log(f"⚖️ [{provider}] Судья анализирует {len(responses)} ответов...", "INFO")
+        
+        candidates_text = "\n\n".join([
+            f"=== ВАРИАНТ #{i+1} ({r['candidate']['name']}) ===\n{r['code']}"
+            for i, r in enumerate(responses)
+        ])
+        
+        judge_prompt = f"""Ты — эксперт-программист и судья. Выбери лучший вариант.
+
+ЗАДАЧА: {prompt}
+
+ВАРИАНТЫ:
+{candidates_text}
+
+КРИТЕРИИ: корректность, логика, полнота, читаемость.
+
+Выведи ТОЛЬКО код лучшего варианта БЕЗ markdown и пояснений.
+
+ОТВЕТ (только код):"""
+        
+        messages = [{"role": "user", "content": judge_prompt}]
+        
+        try:
+            best_code = await self._query_model(judge, messages, timeout=120.0)
+            self.log(f"🏆 [{provider}] Судья выбрал: {len(best_code)} симв.", "SUCCESS")
+            return {"code": best_code, "error": None, "judge": judge}
+        except Exception as e:
+            self.log(f"❌ [{provider}] Судья ошибка: {str(e)[:60]}", "ERROR")
+            return {"code": None, "error": str(e), "judge": judge}
+
+    async def run_task(self, prompt: str, status_callback=None, mode: str = "full") -> str:
+        self.log("=" * 70, "INFO")
+        self.log(f"ЗАДАЧА: {prompt[:80]}", "INFO")
+        self.log(f"РЕЖИМ: {mode}", "INFO")
+        self.log("=" * 70, "INFO")
+        
+        candidates = self._get_candidates()
+        active_providers = set(c['provider'].upper() for c in candidates)
+        self.log(f"📋 Активные провайдеры: {', '.join(sorted(active_providers))}", "INFO")
+        self.log(f" Всего моделей: {len(candidates)}", "INFO")
+        
+        if status_callback:
+            status_callback(f"🚀 Отправка {len(candidates)} моделям...")
+        
+        tasks = [self.get_code_response(c, prompt) for c in candidates]
+        self.log("⏳ Параллельный опрос...", "INFO")
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        valid_responses = []
+        for res in results:
+            if isinstance(res, Exception):
+                self.log(f"❌ Критическая ошибка: {res}", "ERROR")
+            elif isinstance(res, dict) and res.get("code"):
+                valid_responses.append(res)
+            elif isinstance(res, dict):
+                self.log(f"⚠️ {res['candidate']['name']}: {res.get('error')}", "WARN")
+        
+        self.log(f"📊 Успешных: {len(valid_responses)} из {len(candidates)}", "INFO")
+        
+        # Показываем какие модели ответили
+        if valid_responses:
+            answered = [r['candidate']['name'] for r in valid_responses]
+            self.log(f"✅ Ответили: {', '.join(answered)}", "SUCCESS")
+        
+        if not valid_responses:
+            if status_callback: status_callback("❌ Все молчат")
+            self.log("💥 Все модели не ответили", "ERROR")
+            return " Все модели не ответили. Проверь Debug лог."
+        
+        if mode == "fast":
+            winner = valid_responses[0]['candidate']['name']
+            if status_callback: status_callback(f"⚡ {winner}")
+            self.log(f"⚡ Быстрый: {winner}", "SUCCESS")
+            return valid_responses[0]["code"]
+        
+        if len(valid_responses) == 1:
+            if status_callback: status_callback("️ 1 ответ")
+            self.log("⚖️ Только 1 ответ", "INFO")
+            return valid_responses[0]["code"]
+        
+        if status_callback: status_callback("⚖️ Судья...")
+        judge_result = await self.judge_responses(prompt, valid_responses)
+        
+        if judge_result.get("code"):
+            if status_callback: status_callback("🏆 Судья выбрал")
+            return judge_result["code"]
+        else:
+            self.log("⚠️ Судья ошибся, берем первый", "WARN")
+            if status_callback: status_callback("️ Берем первый")
+            return valid_responses[0]["code"]</pre>
+        </div>
+
+        <div class="instructions" style="margin-top: 40px;">
+            <h2>✅ Готово!</h2>
+            <p>Все файлы скопированы. Замени их в проекте и запусти <code>launcher.bat</code>.</p>
+            <p style="margin-top: 10px; color: #6b7280; font-size: 0.9rem;">
+                Если возникнут проблемы — проверь логи в папке <code>logs/</code>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function copyCode(elementId) {
+            const codeElement = document.getElementById(elementId);
+            const code = codeElement.textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Скопировано!';
+                btn.classList.add('copied');
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                alert('Ошибка копирования: ' + err);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1164,6 +1164,29 @@ export default function App() {
         )}
       </main>
 
+      {/* Download Section */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 p-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                📦 Исправленный код готов
+              </h3>
+              <p className="text-sm text-gray-400 mt-1">
+                4 файла с исправлениями • 18 проблем решено • Копируй и заменяй
+              </p>
+            </div>
+            <a
+              href="/fixed-code.html"
+              target="_blank"
+              className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 hover:scale-105"
+            >
+              📋 Открыть код →
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Footer */}
       <footer className="border-t border-gray-800 bg-gray-900/50 mt-8">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between text-[10px] text-gray-600">
