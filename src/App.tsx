@@ -96,6 +96,159 @@ const initialTasks: Task[] = [
   { id: 5, text: 'Документация API агентов', done: false, priority: 'low' },
 ];
 
+// Анализ launcher.bat и settings.json
+const launcherIssues: CodeIssue[] = [
+  {
+    id: 201,
+    severity: 'critical',
+    line: '11-12',
+    title: 'settings.json: ollama_url содержит /v1 — дублирование',
+    description: 'В agent_engine.py используется библиотека ollama (Python), которая сама добавляет /v1 к URL. В settings.json указан http://localhost:11434/v1 — будет http://localhost:11434/v1/v1. Ollama не ответит.',
+    fix: 'Убрать /v1 из settings.json',
+    before: `{
+    "groq_api_key": "",
+    "ollama_url": "http://localhost:11434/v1"
+}`,
+    after: `{
+    "groq_api_key": "",
+    "ollama_url": "http://localhost:11434"
+}`,
+  },
+  {
+    id: 202,
+    severity: 'critical',
+    line: '1-15',
+    title: 'launcher.bat: нет проверки существования Python',
+    description: 'Если Python не установлен или не в PATH, скрипт уйдёт в бесконечный цикл с ошибкой "python не является внутренней командой". Нет graceful exit.',
+    fix: 'Добавить проверку Python в начале скрипта',
+    before: `@echo off
+title ЦУ Агент - Launcher
+color 0A
+echo ========================================
+echo   ЦУ Агент - Автозапуск
+echo ========================================
+echo.
+
+:loop`,
+    after: `@echo off
+title ЦУ Агент - Launcher
+color 0A
+
+:: Проверка Python
+python --version >nul 2>&1
+if errorlevel 1 (
+    color 0C
+    echo [ОШИБКА] Python не найден! Установите Python 3.10+
+    echo и добавьте в PATH.
+    pause
+    exit /b 1
+)
+
+echo ========================================
+echo   ЦУ Агент - Автозапуск
+echo ========================================
+echo.
+
+:loop`,
+  },
+  {
+    id: 203,
+    severity: 'warning',
+    line: '11-15',
+    title: 'launcher.bat: нет обработки Ctrl+C для выхода',
+    description: 'Бесконечный цикл :loop не имеет выхода. Ctrl+C вызывает "Завершить пакетный файл?" — неудобно. Нужна возможность graceful shutdown.',
+    fix: 'Добавить проверку restart.flag и обработку Ctrl+C',
+    before: `:loop
+echo [%time%] Запуск ЦУ...
+python main.py
+
+echo.
+echo [%time%] ЦУ остановился. Перезапуск через 3 секунды...
+timeout /t 3 /nobreak >nul
+echo.
+goto loop`,
+    after: `:loop
+echo [%time%] Запуск ЦУ...
+python main.py
+set EXITCODE=%errorlevel%
+
+:: Проверка флага перезапуска
+if exist restart.flag (
+    del restart.flag >nul 2>&1
+    echo [%time%] Флаг перезапуска найден. Перезапуск...
+    timeout /t 2 /nobreak >nul
+    goto loop
+)
+
+:: Exit code 0 = нормальный выход
+if %EXITCODE%==0 (
+    echo [%time%] ЦУ остановлен нормально.
+    pause
+    exit /b 0
+)
+
+echo.
+echo [%time%] ЦУ упал (код %EXITCODE%). Перезапуск через 3 секунды...
+echo Нажмите любую клавишу для отмены...
+timeout /t 3 /nobreak >nul
+if errorlevel 1 goto loop
+echo.
+goto loop`,
+  },
+  {
+    id: 204,
+    severity: 'warning',
+    line: '1-15',
+    title: 'launcher.bat: нет логирования в файл',
+    description: 'Весь вывод только в консоль. При краше — теряется. Нужен лог-файл для диагностики.',
+    fix: 'Добавить tee-подобное логирование в файл',
+    before: `:loop
+echo [%time%] Запуск ЦУ...
+python main.py
+
+echo.
+echo [%time%] ЦУ остановился. Перезапуск через 3 секунды...`,
+    after: `:: Создание папки логов
+if not exist logs mkdir logs
+
+:loop
+echo [%time%] Запуск ЦУ...
+python main.py 2>&1 | tee logs/cu_%date:~-4%%date:~3,2%%date:~0,2%.log
+
+echo.
+echo [%time%] ЦУ остановился. Перезапуск через 3 секунды...`,
+  },
+  {
+    id: 205,
+    severity: 'info',
+    line: '1-5',
+    title: 'launcher.bat: нет проверки наличия main.py',
+    description: 'Если main.py отсутствует, скрипт уйдёт в цикл с ошибкой. Нужна проверка перед запуском.',
+    fix: 'Добавить проверку существования main.py',
+    before: `echo ========================================
+echo   ЦУ Агент - Автозапуск
+echo ========================================
+echo.
+
+:loop`,
+    after: `:: Проверка main.py
+if not exist main.py (
+    color 0C
+    echo [ОШИБКА] main.py не найден!
+    echo Поместите launcher.bat в папку с main.py
+    pause
+    exit /b 1
+)
+
+echo ========================================
+echo   ЦУ Агент - Автозапуск
+echo ========================================
+echo.
+
+:loop`,
+  },
+];
+
 // Анализ main.py
 const mainPyIssues: CodeIssue[] = [
   {
@@ -571,8 +724,8 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState<'dashboard' | 'code' | 'logs' | 'vba' | 'tasks'>('dashboard');
   const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set([1]));
-  const [analyzedFile, setAnalyzedFile] = useState<'engine' | 'main'>('engine');
-  const currentIssues = analyzedFile === 'engine' ? codeIssues : mainPyIssues;
+  const [analyzedFile, setAnalyzedFile] = useState<'engine' | 'main' | 'launcher'>('engine');
+  const currentIssues = analyzedFile === 'engine' ? codeIssues : analyzedFile === 'main' ? mainPyIssues : launcherIssues;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -595,7 +748,7 @@ export default function App() {
 
   const tabs = [
     { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
-    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length + mainPyIssues.length },
+    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length + mainPyIssues.length + launcherIssues.length },
     { id: 'logs' as const, label: 'Логи', icon: '▤' },
     { id: 'vba' as const, label: 'VBA', icon: '⧉' },
     { id: 'tasks' as const, label: 'Задачи', icon: '☑' },
@@ -665,7 +818,7 @@ export default function App() {
               </div>
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Баги в коде</p>
-                <p className="text-2xl font-bold text-red-400">{codeIssues.length + mainPyIssues.length}</p>
+                <p className="text-2xl font-bold text-red-400">{codeIssues.length + mainPyIssues.length + launcherIssues.length}</p>
               </div>
             </div>
 
@@ -701,13 +854,13 @@ export default function App() {
                   <p className="text-lg font-bold text-cyan-400">main.py</p>
                   <p className="text-xs text-gray-400 mt-1">{mainPyIssues.length} проблем</p>
                 </button>
+                <button onClick={() => { setActiveTab('code'); setAnalyzedFile('launcher'); }} className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-left hover:bg-yellow-500/10 transition-all">
+                  <p className="text-lg font-bold text-yellow-400">launcher + config</p>
+                  <p className="text-xs text-gray-400 mt-1">{launcherIssues.length} проблем</p>
+                </button>
                 <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-                  <p className="text-2xl font-bold text-red-400">{[...codeIssues, ...mainPyIssues].filter(i => i.severity === 'critical').length}</p>
+                  <p className="text-2xl font-bold text-red-400">{[...codeIssues, ...mainPyIssues, ...launcherIssues].filter(i => i.severity === 'critical').length}</p>
                   <p className="text-xs text-gray-400 mt-1">Критических</p>
-                </div>
-                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-                  <p className="text-2xl font-bold text-yellow-400">{[...codeIssues, ...mainPyIssues].filter(i => i.severity === 'warning').length}</p>
-                  <p className="text-xs text-gray-400 mt-1">Предупреждений</p>
                 </div>
               </div>
             </section>
@@ -739,7 +892,7 @@ export default function App() {
           <div className="space-y-4">
             {/* File switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => { setAnalyzedFile('engine'); setExpandedIssues(new Set([1])); }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -759,6 +912,16 @@ export default function App() {
                   }`}
                 >
                   main.py
+                </button>
+                <button
+                  onClick={() => { setAnalyzedFile('launcher'); setExpandedIssues(new Set([201])); }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    analyzedFile === 'launcher'
+                      ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                      : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  launcher.bat / settings.json
                 </button>
               </div>
               <div className="flex items-center gap-2">
@@ -780,12 +943,14 @@ export default function App() {
             {/* File info */}
             <div>
               <h2 className="text-lg font-bold text-white">
-                {analyzedFile === 'engine' ? 'Анализ agent_engine.py v2.2' : 'Анализ main.py v3.0.2 FORTRESS'}
+                {analyzedFile === 'engine' ? 'Анализ agent_engine.py v2.2' : analyzedFile === 'main' ? 'Анализ main.py v3.0.2 FORTRESS' : 'Анализ launcher.bat + settings.json'}
               </h2>
               <p className="text-xs text-gray-500 mt-1">
                 {analyzedFile === 'engine'
                   ? 'Мульти-провайдеры • Детальный лог • Async/await'
-                  : 'NiceGUI • AI-Guardian • 5 уровней защиты • Sandbox'}
+                  : analyzedFile === 'main'
+                  ? 'NiceGUI • AI-Guardian • 5 уровней защиты • Sandbox'
+                  : 'Автозапуск • Конфигурация • Логирование'}
               </p>
             </div>
 
@@ -805,7 +970,7 @@ export default function App() {
                   <span className="text-gray-300">{currentIssues.filter(i => i.severity === 'info').length} рекомендаций</span>
                 </div>
                 <div className="ml-auto text-gray-500">
-                  {analyzedFile === 'engine' ? '~230 строк' : '~400 строк'} • Python 3.10+
+                  {analyzedFile === 'engine' ? '~230 строк • Python' : analyzedFile === 'main' ? '~400 строк • Python' : '15 строк • BAT + JSON'}
                 </div>
               </div>
             </div>
@@ -848,6 +1013,37 @@ export default function App() {
                 </div>
               </div>
             </div>
+            )}
+
+            {analyzedFile === 'launcher' && (
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Схема запуска</h3>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                    launcher.bat
+                  </div>
+                  <div className="text-gray-600">↓ проверка Python + main.py</div>
+                  <div className="px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold">
+                    settings.json
+                  </div>
+                  <div className="text-gray-600">↓ загрузка конфига</div>
+                  <div className="px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs font-bold">
+                    python main.py
+                  </div>
+                  <div className="text-gray-600">↓ exit code</div>
+                  <div className="grid grid-cols-3 gap-2 w-full">
+                    <div className="px-2 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-center text-[10px] text-emerald-400">
+                      code=0 → выход
+                    </div>
+                    <div className="px-2 py-1.5 rounded bg-yellow-500/10 border border-yellow-500/30 text-center text-[10px] text-yellow-400">
+                      restart.flag → перезапуск
+                    </div>
+                    <div className="px-2 py-1.5 rounded bg-red-500/10 border border-red-500/30 text-center text-[10px] text-red-400">
+                      code≠0 → retry
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {analyzedFile === 'main' && (
