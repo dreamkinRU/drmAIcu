@@ -96,6 +96,148 @@ const initialTasks: Task[] = [
   { id: 5, text: 'Документация API агентов', done: false, priority: 'low' },
 ];
 
+// Анализ main.py
+const mainPyIssues: CodeIssue[] = [
+  {
+    id: 101,
+    severity: 'critical',
+    line: '33-52',
+    title: 'EMERGENCY_ENGINE_CODE: asyncio.get_event_loop() — deprecated',
+    description: 'Аварийное ядро содержит ту же ошибку что и agent_engine.py. При восстановлении из бэкапа — RuntimeError в Python 3.12+.',
+    fix: 'Заменить на asyncio.get_running_loop()',
+    before: `    async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
+        try:
+            loop = asyncio.get_event_loop()
+            def do_request():
+                return ollama.chat(model=candidate["model"], messages=[`,
+    after: `    async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
+        try:
+            loop = asyncio.get_running_loop()
+            def do_request():
+                return ollama.chat(model=candidate["model"], messages=[`,
+  },
+  {
+    id: 102,
+    severity: 'critical',
+    line: '225-245',
+    title: '_sandbox_test: OSError [Errno 22] на Windows',
+    description: 'tempfile.NamedTemporaryFile(delete=False) + exec_module на Windows блокирует файл. Это и есть причина OSError: [Errno 22] Invalid argument при py_compile.compile.',
+    fix: 'Использовать delete=False + явный unlink в finally + закрыть spec перед удалением',
+    before: `    async def _sandbox_test(self, code: str) -> dict:
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+                f.write(code)
+                temp_path = f.name
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("test_engine", temp_path)`,
+    after: `    async def _sandbox_test(self, code: str) -> dict:
+        temp_path = None
+        try:
+            fd, temp_path = tempfile.mkstemp(suffix='.py', prefix='sandbox_')
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(code)
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("test_engine", temp_path)`,
+  },
+  {
+    id: 103,
+    severity: 'warning',
+    line: '155-160',
+    title: 'validate_python_syntax: нет обработки UnicodeDecodeError',
+    description: 'Если код содержит невалидные UTF-8 байты, ast.parse бросит UnicodeDecodeError вместо SyntaxError.',
+    fix: 'Обернуть в try/except с обработкой UnicodeDecodeError',
+    before: `def validate_python_syntax(code: str) -> tuple:
+    try:
+        ast.parse(code)
+        return True, None
+    except SyntaxError as e:
+        return False, str(e)`,
+    after: `def validate_python_syntax(code: str) -> tuple:
+    try:
+        ast.parse(code)
+        return True, None
+    except SyntaxError as e:
+        return False, str(e)
+    except (UnicodeDecodeError, ValueError) as e:
+        return False, f"Кодировка: {e}"`,
+  },
+  {
+    id: 104,
+    severity: 'warning',
+    line: '172-185',
+    title: 'get_engine(): race condition без блокировки',
+    description: 'Глобальная engine_instance может быть инициализирована дважды при параллельных запросах. Нет threading.Lock.',
+    fix: 'Добавить threading.Lock для инициализации',
+    before: `engine_instance = None
+current_editor = None
+current_file = None
+guardian_instance = None
+
+def get_engine():
+    global engine_instance
+    try:
+        if engine_instance is None:`,
+    after: `engine_instance = None
+current_editor = None
+current_file = None
+guardian_instance = None
+_engine_lock = threading.Lock()
+
+def get_engine():
+    global engine_instance
+    try:
+        with _engine_lock:
+          if engine_instance is not None:
+              return engine_instance
+        # далее — инициализация вне lock (долгая операция)`,
+  },
+  {
+    id: 105,
+    severity: 'warning',
+    line: '245-250',
+    title: '_sandbox_test: нет cleanup в finally',
+    description: 'Если exec_module бросит исключение, временный файл останется на диске. Нужен finally с os.unlink.',
+    fix: 'Добавить finally блок с удалением temp_path',
+    before: `                os.unlink(temp_path)
+                return {"success": True}
+            else:
+                os.unlink(temp_path)
+                return {"success": False, "error": "Не удалось загрузить"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}`,
+    after: `                return {"success": True}
+            else:
+                return {"success": False, "error": "Не удалось загрузить"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try: os.unlink(temp_path)
+                except: pass`,
+  },
+  {
+    id: 106,
+    severity: 'info',
+    line: '340-345',
+    title: 'Debug: ui.timer каждую секунду очищает и перерисовывает весь лог',
+    description: 'log_display.clear() + push всех записей каждую секунду — неэффективно. 200 строк × 1 сек = мерцание.',
+    fix: 'Использовать инкрементальное обновление — push только новых записей',
+    before: `                    async def update_log():
+                        while True:
+                            log_display.clear()
+                            for entry in DEBUG_LOG:
+                                log_display.push(entry)
+                            await asyncio.sleep(1)`,
+    after: `                    _last_log_len = 0
+                    async def update_log():
+                        nonlocal _last_log_len
+                        if len(DEBUG_LOG) > _last_log_len:
+                            for entry in DEBUG_LOG[_last_log_len:]:
+                                log_display.push(entry)
+                            _last_log_len = len(DEBUG_LOG)`,
+  },
+];
+
 // Анализ agent_engine.py
 const codeIssues: CodeIssue[] = [
   {
@@ -429,6 +571,8 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState<'dashboard' | 'code' | 'logs' | 'vba' | 'tasks'>('dashboard');
   const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set([1]));
+  const [analyzedFile, setAnalyzedFile] = useState<'engine' | 'main'>('engine');
+  const currentIssues = analyzedFile === 'engine' ? codeIssues : mainPyIssues;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -448,12 +592,10 @@ export default function App() {
   };
 
   const completedTasks = taskList.filter(t => t.done).length;
-  const criticalCount = codeIssues.filter(i => i.severity === 'critical').length;
-  const warningCount = codeIssues.filter(i => i.severity === 'warning').length;
 
   const tabs = [
     { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
-    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length },
+    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length + mainPyIssues.length },
     { id: 'logs' as const, label: 'Логи', icon: '▤' },
     { id: 'vba' as const, label: 'VBA', icon: '⧉' },
     { id: 'tasks' as const, label: 'Задачи', icon: '☑' },
@@ -523,7 +665,7 @@ export default function App() {
               </div>
               <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Баги в коде</p>
-                <p className="text-2xl font-bold text-red-400">{codeIssues.length}</p>
+                <p className="text-2xl font-bold text-red-400">{codeIssues.length + mainPyIssues.length}</p>
               </div>
             </div>
 
@@ -548,21 +690,25 @@ export default function App() {
             {/* Code Issues Summary */}
             <section>
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Найдено в agent_engine.py
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Найдено проблем в коде
               </h2>
-              <div className="grid grid-cols-3 gap-3">
-                <button onClick={() => setActiveTab('code')} className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-left hover:bg-red-500/10 transition-all">
-                  <p className="text-2xl font-bold text-red-400">{criticalCount}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onClick={() => { setActiveTab('code'); setAnalyzedFile('engine'); }} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-left hover:bg-emerald-500/10 transition-all">
+                  <p className="text-lg font-bold text-emerald-400">agent_engine.py</p>
+                  <p className="text-xs text-gray-400 mt-1">{codeIssues.length} проблем</p>
+                </button>
+                <button onClick={() => { setActiveTab('code'); setAnalyzedFile('main'); }} className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-left hover:bg-cyan-500/10 transition-all">
+                  <p className="text-lg font-bold text-cyan-400">main.py</p>
+                  <p className="text-xs text-gray-400 mt-1">{mainPyIssues.length} проблем</p>
+                </button>
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+                  <p className="text-2xl font-bold text-red-400">{[...codeIssues, ...mainPyIssues].filter(i => i.severity === 'critical').length}</p>
                   <p className="text-xs text-gray-400 mt-1">Критических</p>
-                </button>
-                <button onClick={() => setActiveTab('code')} className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-left hover:bg-yellow-500/10 transition-all">
-                  <p className="text-2xl font-bold text-yellow-400">{warningCount}</p>
+                </div>
+                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+                  <p className="text-2xl font-bold text-yellow-400">{[...codeIssues, ...mainPyIssues].filter(i => i.severity === 'warning').length}</p>
                   <p className="text-xs text-gray-400 mt-1">Предупреждений</p>
-                </button>
-                <button onClick={() => setActiveTab('code')} className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-left hover:bg-blue-500/10 transition-all">
-                  <p className="text-2xl font-bold text-blue-400">{codeIssues.length - criticalCount - warningCount}</p>
-                  <p className="text-xs text-gray-400 mt-1">Рекомендаций</p>
-                </button>
+                </div>
               </div>
             </section>
 
@@ -591,14 +737,33 @@ export default function App() {
         {/* ===== CODE ANALYSIS ===== */}
         {activeTab === 'code' && (
           <div className="space-y-4">
+            {/* File switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-white">Анализ agent_engine.py v2.2</h2>
-                <p className="text-xs text-gray-500 mt-1">Мульти-провайдеры • Детальный лог • Async/await</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setAnalyzedFile('engine'); setExpandedIssues(new Set([1])); }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    analyzedFile === 'engine'
+                      ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                      : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  agent_engine.py
+                </button>
+                <button
+                  onClick={() => { setAnalyzedFile('main'); setExpandedIssues(new Set([101])); }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    analyzedFile === 'main'
+                      ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                      : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  main.py
+                </button>
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setExpandedIssues(new Set(codeIssues.map(i => i.id)))}
+                  onClick={() => setExpandedIssues(new Set(currentIssues.map(i => i.id)))}
                   className="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-all"
                 >
                   Раскрыть все
@@ -612,30 +777,42 @@ export default function App() {
               </div>
             </div>
 
+            {/* File info */}
+            <div>
+              <h2 className="text-lg font-bold text-white">
+                {analyzedFile === 'engine' ? 'Анализ agent_engine.py v2.2' : 'Анализ main.py v3.0.2 FORTRESS'}
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                {analyzedFile === 'engine'
+                  ? 'Мульти-провайдеры • Детальный лог • Async/await'
+                  : 'NiceGUI • AI-Guardian • 5 уровней защиты • Sandbox'}
+              </p>
+            </div>
+
             {/* Summary bar */}
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              <div className="flex items-center gap-4 text-xs">
+              <div className="flex flex-wrap items-center gap-4 text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-red-500" />
-                  <span className="text-gray-300">{criticalCount} критических</span>
+                  <span className="text-gray-300">{currentIssues.filter(i => i.severity === 'critical').length} критических</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                  <span className="text-gray-300">{warningCount} предупреждений</span>
+                  <span className="text-gray-300">{currentIssues.filter(i => i.severity === 'warning').length} предупреждений</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-gray-300">{codeIssues.length - criticalCount - warningCount} рекомендаций</span>
+                  <span className="text-gray-300">{currentIssues.filter(i => i.severity === 'info').length} рекомендаций</span>
                 </div>
                 <div className="ml-auto text-gray-500">
-                  Файл: ~230 строк • Python 3.10+
+                  {analyzedFile === 'engine' ? '~230 строк' : '~400 строк'} • Python 3.10+
                 </div>
               </div>
             </div>
 
             {/* Issues */}
             <div className="space-y-3">
-              {codeIssues.map((issue) => (
+              {currentIssues.map((issue) => (
                 <IssueCard
                   key={issue.id}
                   issue={issue}
@@ -646,6 +823,7 @@ export default function App() {
             </div>
 
             {/* Architecture diagram */}
+            {analyzedFile === 'engine' && (
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Архитектура запросов</h3>
               <div className="flex flex-col items-center gap-2">
@@ -670,6 +848,39 @@ export default function App() {
                 </div>
               </div>
             </div>
+            )}
+
+            {analyzedFile === 'main' && (
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Архитектура FORTRESS</h3>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                    main.py → create_ui()
+                  </div>
+                  <div className="text-gray-600">↓</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
+                    {['Дашборд', 'API', 'LLM', 'Обновления'].map((t) => (
+                      <div key={t} className="px-2 py-1.5 rounded bg-gray-800/50 border border-gray-700/50 text-center text-[10px] text-gray-400">{t}</div>
+                    ))}
+                  </div>
+                  <div className="text-gray-600">↓</div>
+                  <div className="px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs font-bold">
+                    AI-Guardian (5 уровней)
+                  </div>
+                  <div className="grid grid-cols-5 gap-1 w-full text-[9px] text-center">
+                    {['Синтаксис', 'Структура', 'AI-Судья', 'Sandbox', 'Бэкап'].map((s, i) => (
+                      <div key={s} className="px-1 py-1.5 rounded bg-gray-800/30 border border-gray-700/30 text-gray-500">
+                        <span className="text-emerald-400">{i + 1}.</span> {s}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-gray-600">↓</div>
+                  <div className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold">
+                    agent_engine.py (ЗАЩИЩЁН)
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
