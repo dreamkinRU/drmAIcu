@@ -722,10 +722,18 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [taskList, setTaskList] = useState<Task[]>(initialTasks);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'code' | 'logs' | 'vba' | 'tasks'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'console' | 'dashboard' | 'code' | 'logs' | 'vba' | 'tasks'>('console');
   const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set([1]));
   const [analyzedFile, setAnalyzedFile] = useState<'engine' | 'main' | 'launcher'>('engine');
   const currentIssues = analyzedFile === 'engine' ? codeIssues : analyzedFile === 'main' ? mainPyIssues : launcherIssues;
+
+  // Console state
+  const [groqKey, setGroqKey] = useState('');
+  const [consolePrompt, setConsolePrompt] = useState('');
+  const [consoleResponses, setConsoleResponses] = useState<Array<{model: string, response: string, time: number}>>([]);
+  const [judgeResult, setJudgeResult] = useState<{winner: string, reason: string, code: string} | null>(null);
+  const [consoleLoading, setConsoleLoading] = useState(false);
+  const [consoleError, setConsoleError] = useState('');
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -744,9 +752,113 @@ export default function App() {
     });
   };
 
+  // Console functions
+  const sendToGroq = async (model: string, prompt: string, apiKey: string): Promise<{response: string, time: number}> => {
+    const start = Date.now();
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are an expert programmer. Write clean, efficient code. Return ONLY code without explanations.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000
+      })
+    });
+    const data = await res.json();
+    const time = Date.now() - start;
+    if (data.error) throw new Error(data.error.message || 'API error');
+    return { response: data.choices[0].message.content, time };
+  };
+
+  const runConsoleTask = async () => {
+    if (!groqKey.trim()) { setConsoleError('Введи Groq API ключ'); return; }
+    if (!consolePrompt.trim()) { setConsoleError('Введи запрос'); return; }
+    setConsoleError('');
+    setConsoleLoading(true);
+    setConsoleResponses([]);
+    setJudgeResult(null);
+
+    const models = [
+      { id: 'llama-3.1-8b-versatile', name: 'Llama 8B' },
+      { id: 'llama-3.1-70b-versatile', name: 'Llama 70B' },
+      { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' },
+    ];
+
+    try {
+      // Параллельная отправка всем моделям
+      const results = await Promise.allSettled(
+        models.map(m => sendToGroq(m.id, consolePrompt, groqKey).then(r => ({ ...r, model: m.name })))
+      );
+
+      const responses: Array<{model: string, response: string, time: number}> = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled') responses.push(r.value);
+      }
+      setConsoleResponses(responses);
+
+      if (responses.length === 0) {
+        setConsoleError('Ни одна модель не ответила');
+        setConsoleLoading(false);
+        return;
+      }
+
+      if (responses.length === 1) {
+        setJudgeResult({ winner: responses[0].model, reason: 'Единственный ответ', code: responses[0].response });
+        setConsoleLoading(false);
+        return;
+      }
+
+      // Арбитр — отправляем все ответы Llama 70B для выбора лучшего
+      const candidatesText = responses.map((r, i) =>
+        `=== ВАРИАНТ #${i+1} (${r.model}, ${r.time}ms) ===\n${r.response}`
+      ).join('\n\n');
+
+      const judgePrompt = `Ты — эксперт-судья. Выбери лучший вариант кода.
+
+ЗАДАЧА: ${consolePrompt}
+
+${candidatesText}
+
+КРИТЕРИИ: корректность, логика, полнота, читаемость.
+
+Ответь СТРОГО в JSON формате:
+{"winner": "название модели-победителя", "reason": "краткое обоснование выбора", "code": "полный код лучшего варианта"}
+
+JSON:`;
+
+      const judgeRes = await sendToGroq('llama-3.1-70b-versatile', judgePrompt, groqKey);
+      try {
+        const jsonMatch = judgeRes.response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          setJudgeResult({
+            winner: parsed.winner || 'unknown',
+            reason: parsed.reason || '',
+            code: parsed.code || judgeRes.response
+          });
+        } else {
+          setJudgeResult({ winner: 'Llama 70B', reason: 'Не удалось распарсить JSON арбитра', code: judgeRes.response });
+        }
+      } catch {
+        setJudgeResult({ winner: 'Llama 70B', reason: 'Ошибка парсинга', code: judgeRes.response });
+      }
+    } catch (e: any) {
+      setConsoleError(e.message || 'Ошибка');
+    }
+    setConsoleLoading(false);
+  };
+
   const completedTasks = taskList.filter(t => t.done).length;
 
   const tabs = [
+    { id: 'console' as const, label: 'Консоль', icon: '▶' },
     { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
     { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length + mainPyIssues.length + launcherIssues.length },
     { id: 'logs' as const, label: 'Логи', icon: '▤' },
@@ -828,6 +940,160 @@ export default function App() {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
+
+        {/* ===== CONSOLE ===== */}
+        {activeTab === 'console' && (
+          <div className="space-y-6">
+            {/* API Key */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                Groq API Key
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={groqKey}
+                  onChange={(e) => setGroqKey(e.target.value)}
+                  placeholder="gsk_..."
+                  className="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 text-xs hover:text-white transition-all"
+                >
+                  Получить ключ →
+                </a>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-2">
+                Бесплатная регистрация на console.groq.com • Llama 8B/70B + Mixtral
+              </p>
+            </div>
+
+            {/* Prompt */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                Запрос
+              </label>
+              <textarea
+                value={consolePrompt}
+                onChange={(e) => setConsolePrompt(e.target.value)}
+                placeholder="Опиши задачу для нейросети..."
+                rows={4}
+                className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none resize-none font-mono"
+              />
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>🚀 3 модели параллельно</span>
+                  <span>•</span>
+                  <span>⚖️ Арбитр выберет лучший ответ</span>
+                </div>
+                <button
+                  onClick={runConsoleTask}
+                  disabled={consoleLoading}
+                  className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${
+                    consoleLoading
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                  }`}
+                >
+                  {consoleLoading ? '⏳ Отправка...' : '▶ Отправить'}
+                </button>
+              </div>
+              {consoleError && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                  ✕ {consoleError}
+                </div>
+              )}
+            </div>
+
+            {/* Loading */}
+            {consoleLoading && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
+                <div className="animate-pulse text-emerald-400 text-lg font-bold mb-2">
+                  ⏳ Опрос моделей...
+                </div>
+                <p className="text-xs text-gray-400">Llama 8B • Llama 70B • Mixtral 8x7B</p>
+              </div>
+            )}
+
+            {/* Responses */}
+            {consoleResponses.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                  Ответы моделей ({consoleResponses.length})
+                </h3>
+                <div className="grid gap-3">
+                  {consoleResponses.map((r, i) => (
+                    <div key={i} className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-bold text-cyan-400">{r.model}</span>
+                        <span className="text-xs text-gray-500">{r.time}ms</span>
+                      </div>
+                      <pre className="text-xs font-mono text-gray-300 bg-gray-800/50 p-3 rounded-lg overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">
+                        {r.response}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Judge Result */}
+            {judgeResult && (
+              <div className="rounded-xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/5 to-cyan-500/5 p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl">🏆</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Арбитр выбрал</h3>
+                    <p className="text-emerald-400 font-bold">{judgeResult.winner}</p>
+                  </div>
+                </div>
+                {judgeResult.reason && (
+                  <div className="mb-3 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
+                    <p className="text-xs text-gray-400">
+                      <span className="font-bold text-gray-300">Обоснование:</span> {judgeResult.reason}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Лучший код:</p>
+                  <pre className="text-xs font-mono text-emerald-300 bg-gray-900 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap border border-emerald-500/20">
+                    {judgeResult.code}
+                  </pre>
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(judgeResult.code)}
+                  className="mt-3 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all"
+                >
+                  📋 Копировать код
+                </button>
+              </div>
+            )}
+
+            {/* How it works */}
+            {!consoleLoading && consoleResponses.length === 0 && (
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Как это работает</h3>
+                <div className="grid sm:grid-cols-3 gap-3 text-xs text-gray-400">
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-bold">1.</span>
+                    <span>Запрос отправляется <strong className="text-white">3 моделям</strong> параллельно через Groq API</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-bold">2.</span>
+                    <span>Все ответы показывает <strong className="text-white">арбитру</strong> (Llama 70B)</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-bold">3.</span>
+                    <span>Арбитр выбирает <strong className="text-white">лучший код</strong> с обоснованием</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ===== DASHBOARD ===== */}
         {activeTab === 'dashboard' && (
