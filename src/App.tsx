@@ -944,6 +944,36 @@ JSON:`;
         {/* ===== CONSOLE ===== */}
         {activeTab === 'console' && (
           <div className="space-y-6">
+            {/* AI-Guardian Info */}
+            <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 p-5">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">🛡️</div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-white mb-2">Как применять изменения через AI-Guardian</h3>
+                  <div className="space-y-2 text-sm text-gray-300">
+                    <p><strong className="text-emerald-400">agent_engine.py:</strong> Через вкладку "Обновления" в твоём локальном дашборде (http://localhost:8080)</p>
+                    <p><strong className="text-yellow-400">main.py, launcher.bat, settings.json:</strong> Вручную замени файлы (AI-Guardian пока поддерживает только agent_engine.py)</p>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <a
+                      href="/patches.html"
+                      target="_blank"
+                      className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-all"
+                    >
+                      🔧 Патчи для AI-Guardian
+                    </a>
+                    <a
+                      href="/fixed-code.html"
+                      target="_blank"
+                      className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold transition-all"
+                    >
+                      📦 Все файлы для ручной замены
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* API Key */}
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
