@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>drmAIcu v3.0.4 — РУССКИЙ интерфейс</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0a0a0a;color:#e5e5e5;padding:20px;line-height:1.6}
+.container{max-width:900px;margin:0 auto}
+h1{color:#10b981;margin-bottom:8px;font-size:1.8rem}
+.sub{color:#6b7280;margin-bottom:20px;font-size:0.9rem}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:20px}
+.card h2{color:#10b981;margin-bottom:12px;font-size:1.1rem}
+.warn{background:#7f1d1d;border:1px solid #991b1b;border-radius:8px;padding:12px;margin:10px 0;color:#fecaca;font-size:0.9rem}
+.ok{background:#064e3b;border:1px solid #065f46;border-radius:8px;padding:12px;margin:10px 0;color:#a7f3d0;font-size:0.9rem}
+.info{background:#1e3a8a;border:1px solid #1e40af;border-radius:8px;padding:12px;margin:10px 0;color:#dbeafe;font-size:0.9rem}
+.step{display:flex;gap:12px;margin:10px 0;align-items:start}
+.step-num{background:#10b981;color:#000;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;flex-shrink:0}
+.btn{display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:1rem;margin:5px 5px 5px 0}
+.btn:hover{background:#059669}
+.btn-sec{background:#374151}
+.btn-sec:hover{background:#4b5563}
+.diff{background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:12px;font-family:monospace;font-size:0.8rem;margin:8px 0;overflow-x:auto}
+.diff .old{color:#f87171}
+.diff .new{color:#34d399}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🛡️ drmAIcu v3.0.4 FORTRESS</h1>
+<p class="sub">Универсальный AI-Guardian — РУССКИЙ интерфейс</p>
+
+<div class="info">
+<strong>Что исправлено:</strong><br>
+✓ Весь интерфейс на русском языке<br>
+✓ Заголовок: "drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian"<br>
+✓ Все вкладки, кнопки, уведомления — на русском<br>
+✓ Поддержка всех файлов проекта через AI-Guardian
+</div>
+
+<div class="card">
+<h2>📥 Шаг 1: Скачай русскую версию main.py</h2>
+<a href="/main_v3.0.4_ru.py" download class="btn">📥 Скачать main_v3.0.4_ru.py</a>
+<p style="color:#6b7280;font-size:0.85rem;margin-top:10px">Помести файл в папку drmAIcu и замени свой main.py</p>
+</div>
+
+<div class="card">
+<h2>🔄 Шаг 2: Замени main.py</h2>
+<div class="step"><div class="step-num">1</div><div>Сделай бэкап текущего main.py</div></div>
+<div class="step"><div class="step-num">2</div><div>Замени main.py на скачанный main_v3.0.4_ru.py</div></div>
+<div class="step"><div class="step-num">3</div><div>Запусти launcher.bat или <code style="color:#06b6d4">python main.py</code></div></div>
+</div>
+
+<div class="card">
+<h2>🎯 Что ты увидишь</h2>
+<div class="diff">
+<span class="new">🛡️ drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian</span>
+</div>
+
+<p style="color:#d1d5db;font-size:0.9rem;margin:15px 0">Вкладки:</p>
+<ul style="margin-left:20px;color:#d1d5db;font-size:0.9rem">
+<li><strong>Панель</strong> — статус системы</li>
+<li><strong>API</strong> — ключи API</li>
+<li><strong>LLM</strong> — провайдеры</li>
+<li><strong>🛡️ Универсальные обновления</strong> — обновление ЛЮБОГО файла</li>
+<li><strong>Отладка</strong> — тесты и логи</li>
+<li><strong>📝 Редактор</strong> — просмотр файлов (read-only для защищённых)</li>
+<li><strong>💬 Консоль</strong> — отправка задач LLM</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>🛡️ Вкладка "Универсальные обновления"</h2>
+<p style="color:#d1d5db;font-size:0.9rem;margin-bottom:10px">Теперь можешь обновлять ЛЮБОЙ файл через AI-Guardian:</p>
+
+<div class="step"><div class="step-num">1</div><div>Выбери файл из списка (main.py, agent_engine.py, settings.json, launcher.bat, context_manager.py)</div></div>
+<div class="step"><div class="step-num">2</div><div>Введи описание изменений</div></div>
+<div class="step"><div class="step-num">3</div><div>Вставь новый код</div></div>
+<div class="step"><div class="step-num">4</div><div>Нажми "🛡️ Проверить и применить"</div></div>
+<div class="step"><div class="step-num">5</div><div>AI-Guardian проверит 4 уровня и применит с бэкапом</div></div>
+
+<div class="ok" style="margin-top:15px">
+<strong>Импорт контекста:</strong><br>
+Прокрути вниз → "📦 Импорт из контекстного JSON" → вставь context_export.json → все файлы обновятся автоматически
+</div>
+</div>
+
+<div class="card">
+<h2>📊 Сравнение с предыдущей версией</h2>
+<table style="width:100%;border-collapse:collapse;margin:10px 0">
+<tr style="background:#252525">
+<th style="border:1px solid #333;padding:8px;text-align:left;color:#10b981">Функция</th>
+<th style="border:1px solid #333;padding:8px;text-align:left;color:#10b981">v3.0.3</th>
+<th style="border:1px solid #333;padding:8px;text-align:left;color:#10b981">v3.0.4 RU</th>
+</tr>
+<tr>
+<td style="border:1px solid #333;padding:8px">Язык интерфейса</td>
+<td style="border:1px solid #333;padding:8px;color:#f87171">Английский</td>
+<td style="border:1px solid #333;padding:8px;color:#34d399">Русский</td>
+</tr>
+<tr>
+<td style="border:1px solid #333;padding:8px">Заголовок</td>
+<td style="border:1px solid #333;padding:8px">CU v3.0.4 FORTRESS</td>
+<td style="border:1px solid #333;padding:8px">drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian</td>
+</tr>
+<tr>
+<td style="border:1px solid #333;padding:8px">Поддержка файлов</td>
+<td style="border:1px solid #333;padding:8px">Только agent_engine.py</td>
+<td style="border:1px solid #333;padding:8px">ВСЕ файлы проекта</td>
+</tr>
+<tr>
+<td style="border:1px solid #333;padding:8px">Импорт контекста</td>
+<td style="border:1px solid #333;padding:8px;color:#f87171">Нет</td>
+<td style="border:1px solid #333;padding:8px;color:#34d399">Через UI</td>
+</tr>
+</table>
+</div>
+
+<div class="card">
+<h2>🔗 Другие файлы</h2>
+<a href="/context_manager.py" download class="btn btn-sec">📥 context_manager.py</a>
+<a href="/context.html" target="_blank" class="btn btn-sec">🔧 Инструкция по контексту</a>
+<a href="/fixed-code.html" target="_blank" class="btn btn-sec">📦 Исправленный код v3.0.3</a>
+</div>
+
+<div style="text-align:center;color:#6b7280;font-size:0.8rem;margin-top:30px">
+drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian • dreamkin • 2026
+</div>
+</div>
+</body>
+</html>

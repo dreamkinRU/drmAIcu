@@ -924,24 +924,24 @@ JSON:`;
           <div className="flex items-center gap-3">
             <span className="text-3xl">🛡️</span>
             <div>
-              <p className="text-white font-bold text-sm sm:text-base">drmAIcu v3.0.4 FORTRESS — Universal AI-Guardian</p>
-              <p className="text-emerald-100 text-xs">Обновления для ВСЕХ файлов • 4-уровневая валидация • Автооткат</p>
+              <p className="text-white font-bold text-sm sm:text-base">drmAIcu v3.0.4 FORTRESS — РУССКИЙ интерфейс</p>
+              <p className="text-emerald-100 text-xs">Универсальный AI-Guardian • Все файлы • Автооткат</p>
             </div>
           </div>
           <div className="flex gap-2">
             <a
-              href="/v3.0.4.html"
+              href="/v3.0.4_ru.html"
               target="_blank"
               className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-lg whitespace-nowrap"
             >
-              🛡️ v3.0.4 →
+              📋 Инструкция →
             </a>
             <a
-              href="/main_v3.0.4.py"
+              href="/main_v3.0.4_ru.py"
               download
               className="px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white font-bold text-sm hover:bg-white/20 transition-all whitespace-nowrap"
             >
-              📥 Скачать
+              📥 Скачать RU
             </a>
           </div>
         </div>
