@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>drmAIcu v3.0.4 — Universal AI-Guardian</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0a0a0a;color:#e5e5e5;padding:20px;line-height:1.6}
+.container{max-width:1000px;margin:0 auto}
+h1{color:#10b981;margin-bottom:8px;font-size:1.8rem}
+.sub{color:#6b7280;margin-bottom:20px;font-size:0.9rem}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:20px}
+.card h2{color:#10b981;margin-bottom:12px;font-size:1.1rem}
+.cmd{background:#0d0d0d;border:1px solid #333;border-radius:6px;padding:12px;font-family:monospace;font-size:0.85rem;margin:8px 0;color:#06b6d4;position:relative}
+.cmd button{position:absolute;right:8px;top:8px;background:#10b981;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.75rem}
+.warn{background:#7f1d1d;border:1px solid #991b1b;border-radius:8px;padding:12px;margin:10px 0;color:#fecaca;font-size:0.9rem}
+.ok{background:#064e3b;border:1px solid #065f46;border-radius:8px;padding:12px;margin:10px 0;color:#a7f3d0;font-size:0.9rem}
+.info{background:#1e3a8a;border:1px solid #1e40af;border-radius:8px;padding:12px;margin:10px 0;color:#dbeafe;font-size:0.9rem}
+.feature{display:flex;gap:12px;margin:10px 0;align-items:start}
+.feature-icon{font-size:1.5rem}
+.feature-text{flex:1}
+.feature-text strong{color:#10b981}
+.btn{display:inline-block;background:#10b981;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.9rem;margin:5px 5px 5px 0}
+.btn:hover{background:#059669}
+.btn-sec{background:#374151}
+.btn-sec:hover{background:#4b5563}
+table{width:100%;border-collapse:collapse;margin:10px 0}
+th,td{border:1px solid #333;padding:8px;text-align:left;font-size:0.9rem}
+th{background:#252525;color:#10b981}
+td{background:#1a1a1a}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🛡️ drmAIcu v3.0.4 FORTRESS</h1>
+<p class="sub">Universal AI-Guardian — обновления для ВСЕХ файлов проекта</p>
+
+<div class="info">
+<strong>Что нового в v3.0.4:</strong><br>
+✓ Universal AI-Guardian поддерживает все файлы проекта<br>
+✓ 4-уровневая валидация (синтаксис, структура, AI-проверка, бэкап)<br>
+✓ Импорт контекста из JSON прямо через UI<br>
+✓ Автоматический откат при ошибках<br>
+✓ Защита всех критических файлов
+</div>
+
+<div class="card">
+<h2>🎯 Возможности Universal AI-Guardian</h2>
+
+<div class="feature">
+<div class="feature-icon">📁</div>
+<div class="feature-text">
+<strong>Поддерживаемые файлы:</strong><br>
+main.py, agent_engine.py, settings.json, launcher.bat, context_manager.py
+</div>
+</div>
+
+<div class="feature">
+<div class="feature-icon">🔍</div>
+<div class="feature-text">
+<strong>4-уровневая валидация:</strong><br>
+1. Синтаксис (Python/JSON)<br>
+2. Структура (для agent_engine.py)<br>
+3. AI-проверка (через LLM)<br>
+4. Тройной бэкап
+</div>
+</div>
+
+<div class="feature">
+<div class="feature-icon">🔄</div>
+<div class="feature-text">
+<strong>Автоматический откат:</strong><br>
+При ошибке применения — восстановление из бэкапа
+</div>
+</div>
+
+<div class="feature">
+<div class="feature-icon">📦</div>
+<div class="feature-text">
+<strong>Импорт контекста:</strong><br>
+Вставка context_export.json → автоматическое обновление всех файлов
+</div>
+</div>
+</div>
+
+<div class="card">
+<h2>📥 Установка v3.0.4</h2>
+
+<div class="step">
+<div class="step-num">1</div>
+<div>Скачай main_v3.0.4.py</div>
+</div>
+<a href="/main_v3.0.4.py" download class="btn">📥 Скачать main_v3.0.4.py</a>
+
+<div class="step" style="margin-top:15px">
+<div class="step-num">2</div>
+<div>Замени main.py в папке drmAIcu</div>
+</div>
+
+<div class="warn">
+<strong>ВАЖНО:</strong> Перед заменой сделай бэкап текущего main.py!
+</div>
+
+<div class="step" style="margin-top:15px">
+<div class="step-num">3</div>
+<div>Запусти launcher.bat или python main.py</div>
+</div>
+</div>
+
+<div class="card">
+<h2>🛠️ Как использовать Universal AI-Guardian</h2>
+
+<h3 style="color:#06b6d4;margin:15px 0 10px">Способ 1: Обновление одного файла</h3>
+<ol style="margin-left:20px;color:#d1d5db;font-size:0.9rem">
+<li>Открой дашборд (http://localhost:8080)</li>
+<li>Перейди на вкладку <strong>"Universal Updates"</strong></li>
+<li>Выбери файл из списка (main.py, agent_engine.py, settings.json и т.д.)</li>
+<li>Введи описание изменений</li>
+<li>Вставь новый код</li>
+<li>Нажми <strong>"Check and Apply"</strong></li>
+<li>AI-Guardian проверит 4 уровня и применит с бэкапом</li>
+</ol>
+
+<h3 style="color:#06b6d4;margin:25px 0 10px">Способ 2: Импорт контекста из JSON</h3>
+<ol style="margin-left:20px;color:#d1d5db;font-size:0.9rem">
+<li>Получи context_export.json от AI</li>
+<li>Открой вкладку <strong>"Universal Updates"</strong></li>
+<li>Прокрути вниз до секции <strong>"Import from Context JSON"</strong></li>
+<li>Вставь содержимое context_export.json</li>
+<li>Нажми <strong>"Import Context"</strong></li>
+<li>Все файлы из контекста будут обновлены с проверкой</li>
+</ol>
+</div>
+
+<div class="card">
+<h2>📊 Сравнение версий</h2>
+<table>
+<tr>
+<th>Функция</th>
+<th>v3.0.3</th>
+<th>v3.0.4</th>
+</tr>
+<tr>
+<td>Поддержка agent_engine.py</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Поддержка main.py</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Поддержка settings.json</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Поддержка launcher.bat</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Поддержка context_manager.py</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Уровней валидации</td>
+<td>5</td>
+<td>4</td>
+</tr>
+<tr>
+<td>Импорт контекста через UI</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Автоматический откат</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+</table>
+</div>
+
+<div class="card">
+<h2>🔐 Безопасность</h2>
+<ul style="margin-left:20px;color:#d1d5db;font-size:0.9rem">
+<li>Тройной бэкап перед каждым изменением</li>
+<li>Проверка синтаксиса (Python AST, JSON parser)</li>
+<li>AI-проверка через LLM (если доступен)</li>
+<li>Автоматический откат при ошибке</li>
+<li>Защита от изменения через редактор (read-only)</li>
+<li>Логирование всех действий</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>📋 Рабочий процесс с AI</h2>
+
+<div class="feature">
+<div class="feature-icon">1️⃣</div>
+<div class="feature-text">
+<strong>Экспорт контекста:</strong><br>
+<code style="color:#06b6d4">python context_manager.py export</code><br>
+Получаешь context_export.json
+</div>
+</div>
+
+<div class="feature">
+<div class="feature-icon">2️⃣</div>
+<div class="feature-text">
+<strong>Передаёшь AI:</strong><br>
+Отправляешь context_export.json + задачу AI
+</div>
+</div>
+
+<div class="feature">
+<div class="feature-icon">3️⃣</div>
+<div class="feature-text">
+<strong>AI возвращает исправления:</strong><br>
+AI генерирует новый context_export.json с исправленными файлами
+</div>
+</div>
+
+<div class="feature">
+<div class="feature-icon">4️⃣</div>
+<div class="feature-text">
+<strong>Импортируешь через UI:</strong><br>
+Вставляешь JSON в "Universal Updates" → "Import Context"<br>
+AI-Guardian проверяет и применяет все изменения
+</div>
+</div>
+</div>
+
+<div class="card">
+<h2>🔗 Ссылки</h2>
+<a href="/fixed-code.html" target="_blank" class="btn btn-sec">📦 Исправленный код v3.0.3</a>
+<a href="/patches.html" target="_blank" class="btn btn-sec">🔧 Патчи для AI-Guardian</a>
+<a href="/context.html" target="_blank" class="btn btn-sec">🔧 Context Manager</a>
+<a href="/main_v3.0.4.py" download class="btn">📥 Скачать main_v3.0.4.py</a>
+</div>
+
+<div style="text-align:center;color:#6b7280;font-size:0.8rem;margin-top:30px">
+drmAIcu v3.0.4 FORTRESS • dreamkin • 2026<br>
+Universal AI-Guardian — обновления для всех файлов проекта
+</div>
+</div>
+
+<script>
+function copy(id) {
+    const el = document.getElementById(id);
+    navigator.clipboard.writeText(el.textContent).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = el.textContent;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    });
+}
+</script>
+</body>
+</html>
