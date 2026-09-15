@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { font-family: system-ui, -apple-system, sans-serif; }
+.animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+</style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
+<div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/20">AI</div>
+<div>
+<h1 class="text-lg font-bold tracking-tight">drmAIcu</h1>
+<p class="text-[10px] text-gray-500">v3.0.4 FORTRESS • Universal AI-Guardian • 2026</p>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center gap-2 text-xs text-gray-400">
+<div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+<span>Система активна</span>
+</div>
+<div id="clock" class="font-mono text-sm text-gray-300"></div>
+</div>
+</div>
+</header>
+
+<!-- Mega Banner -->
+<div class="bg-gradient-to-r from-emerald-600 to-cyan-600 py-4 px-4 shadow-lg shadow-emerald-500/20">
+<div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+<div class="flex items-center gap-3">
+<span class="text-3xl">🛡️</span>
+<div>
+<p class="text-white font-bold text-sm sm:text-base">drmAIcu v3.0.4 FORTRESS — РУССКИЙ интерфейс</p>
+<p class="text-emerald-100 text-xs">Универсальный AI-Guardian • Все файлы • Автооткат</p>
+</div>
+</div>
+<div class="flex gap-2">
+<a href="context_manager.py" download class="px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white font-bold text-sm hover:bg-white/20 transition-all whitespace-nowrap">📥 Контекст</a>
+<a href="main_v3.0.4_ru.py" download class="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-lg whitespace-nowrap">📋 Скачать RU →</a>
+</div>
+</div>
+</div>
+
+<!-- Navigation -->
+<nav class="border-b border-gray-800 bg-gray-900/50 sticky top-[61px] z-40">
+<div class="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto">
+<button onclick="showTab('console')" id="tab-console" class="px-4 py-2.5 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 whitespace-nowrap flex items-center gap-1.5">▶ Консоль</button>
+<button onclick="showTab('dashboard')" id="tab-dashboard" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-300 whitespace-nowrap flex items-center gap-1.5">◈ Панель</button>
+<button onclick="showTab('code')" id="tab-code" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-300 whitespace-nowrap flex items-center gap-1.5">⟨⟩ Анализ кода <span class="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">18</span></button>
+<button onclick="showTab('logs')" id="tab-logs" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-300 whitespace-nowrap flex items-center gap-1.5">▤ Логи</button>
+<button onclick="showTab('tasks')" id="tab-tasks" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-300 whitespace-nowrap flex items-center gap-1.5">☑ Задачи</button>
+</div>
+</nav>
+
+<!-- Content -->
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+<!-- Console Tab -->
+<div id="content-console" class="space-y-6">
+<!-- API Key -->
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Groq API Key</label>
+<div class="flex gap-2">
+<input type="password" id="groqKey" placeholder="gsk_..." class="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none">
+<a href="https://console.groq.com/keys" target="_blank" class="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 text-xs hover:text-white transition-all">Получить ключ →</a>
+</div>
+<p class="text-[10px] text-gray-500 mt-2">Бесплатная регистрация на console.groq.com • Llama 8B/70B + Mixtral</p>
+</div>
+
+<!-- Prompt -->
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Запрос</label>
+<textarea id="prompt" placeholder="Опиши задачу для нейросети..." rows="4" class="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none resize-none font-mono"></textarea>
+<div class="flex items-center justify-between mt-3">
+<div class="flex items-center gap-2 text-xs text-gray-500">
+<span>🚀 3 модели параллельно</span>
+<span>•</span>
+<span>⚖️ Арбитр выберет лучший ответ</span>
+</div>
+<button onclick="sendToAI()" id="sendBtn" class="px-6 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-500/20">▶ Отправить</button>
+</div>
+<div id="error" class="mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs hidden"></div>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center hidden">
+<div class="animate-pulse text-emerald-400 text-lg font-bold mb-2">⏳ Опрос моделей...</div>
+<p class="text-xs text-gray-400">Llama 8B • Llama 70B • Mixtral 8x7B</p>
+</div>
+
+<!-- Responses -->
+<div id="responses" class="space-y-4 hidden">
+<h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+Ответы моделей (<span id="responseCount">0</span>)
+</h3>
+<div id="responsesList" class="grid gap-3"></div>
+</div>
+
+<!-- Judge Result -->
+<div id="judgeResult" class="rounded-xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/5 to-cyan-500/5 p-5 hidden">
+<div class="flex items-center gap-3 mb-3">
+<span class="text-2xl">🏆</span>
+<div>
+<h3 class="text-lg font-bold text-white">Арбитр выбрал</h3>
+<p id="winnerName" class="text-emerald-400 font-bold"></p>
+</div>
+</div>
+<div id="judgeReason" class="mb-3 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hidden">
+<p class="text-xs text-gray-400"><span class="font-bold text-gray-300">Обоснование:</span> <span id="reasonText"></span></p>
+</div>
+<div>
+<p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Лучший код:</p>
+<pre id="bestCode" class="text-xs font-mono text-emerald-300 bg-gray-900 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap border border-emerald-500/20"></pre>
+</div>
+<button onclick="copyCode()" class="mt-3 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all">📋 Копировать код</button>
+</div>
+
+<!-- How it works -->
+<div id="howItWorks" class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Как это работает</h3>
+<div class="grid sm:grid-cols-3 gap-3 text-xs text-gray-400">
+<div class="flex items-start gap-2"><span class="text-emerald-400 font-bold">1.</span><span>Запрос отправляется <strong class="text-white">3 моделям</strong> параллельно через Groq API</span></div>
+<div class="flex items-start gap-2"><span class="text-emerald-400 font-bold">2.</span><span>Все ответы показывает <strong class="text-white">арбитру</strong> (Llama 70B)</span></div>
+<div class="flex items-start gap-2"><span class="text-emerald-400 font-bold">3.</span><span>Арбитр выбирает <strong class="text-white">лучший код</strong> с обоснованием</span></div>
+</div>
+</div>
+</div>
+
+<!-- Dashboard Tab -->
+<div id="content-dashboard" class="space-y-6 hidden">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-wider">Агенты</p>
+<p class="text-2xl font-bold text-emerald-400">1<span class="text-sm text-gray-500">/3</span></p>
+</div>
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-wider">Провайдеры</p>
+<p class="text-2xl font-bold text-cyan-400">4<span class="text-sm text-gray-500">/6</span></p>
+</div>
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-wider">Задачи</p>
+<p class="text-2xl font-bold text-yellow-400">1<span class="text-sm text-gray-500">/5</span></p>
+</div>
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<p class="text-[10px] text-gray-500 uppercase tracking-wider">Баги в коде</p>
+<p class="text-2xl font-bold text-red-400">18</p>
+</div>
+</div>
+
+<section>
+<h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Найдено проблем в коде
+</h2>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+<div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+<p class="text-lg font-bold text-emerald-400">agent_engine.py</p>
+<p class="text-xs text-gray-400 mt-1">7 проблем</p>
+</div>
+<div class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+<p class="text-lg font-bold text-cyan-400">main.py</p>
+<p class="text-xs text-gray-400 mt-1">6 проблем</p>
+</div>
+<div class="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+<p class="text-lg font-bold text-yellow-400">launcher + config</p>
+<p class="text-xs text-gray-400 mt-1">5 проблем</p>
+</div>
+<div class="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+<p class="text-2xl font-bold text-red-400">6</p>
+<p class="text-xs text-gray-400 mt-1">Критических</p>
+</div>
+</div>
+</section>
+</div>
+
+<!-- Code Analysis Tab -->
+<div id="content-code" class="space-y-4 hidden">
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<h3 class="text-lg font-bold text-white mb-2">Анализ кода</h3>
+<p class="text-xs text-gray-400">Всего найдено 18 проблем в 3 файлах</p>
+<div class="mt-4 space-y-3">
+<div class="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+<p class="text-sm font-bold text-red-400">🔴 6 критических проблем</p>
+<p class="text-xs text-gray-400 mt-1">asyncio.get_event_loop(), Gemini API, sandbox_test, settings.json</p>
+</div>
+<div class="p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+<p class="text-sm font-bold text-yellow-400">🟡 8 предупреждений</p>
+<p class="text-xs text-gray-400 mt-1">HuggingFace, retry-логика, race condition, cleanup</p>
+</div>
+<div class="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+<p class="text-sm font-bold text-blue-400">🔵 4 рекомендации</p>
+<p class="text-xs text-gray-400 mt-1">Дублирование импорта, уровни логирования, оптимизация</p>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Logs Tab -->
+<div id="content-logs" class="space-y-4 hidden">
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Системный лог</h3>
+<div class="font-mono text-xs space-y-1">
+<div class="flex items-start gap-2"><span class="text-gray-600">[14:32:01]</span><span class="text-blue-400">ℹ</span><span class="text-gray-300">ЦУ v3.0.4 FORTRESS запущена</span><span class="text-gray-600 ml-auto">(main.py)</span></div>
+<div class="flex items-start gap-2"><span class="text-gray-600">[14:32:03]</span><span class="text-emerald-400">✓</span><span class="text-gray-300">Агент №1 инициализирован</span><span class="text-gray-600 ml-auto">(agent_engine.py)</span></div>
+<div class="flex items-start gap-2"><span class="text-gray-600">[14:32:05]</span><span class="text-yellow-400">⚠</span><span class="text-gray-300">OSError: [Errno 22] в py_compile.compile</span><span class="text-gray-600 ml-auto">(main.py)</span></div>
+<div class="flex items-start gap-2"><span class="text-gray-600">[14:32:07]</span><span class="text-red-400">✕</span><span class="text-gray-300">drm.cls could not be loaded</span><span class="text-gray-600 ml-auto">(mod_Core)</span></div>
+</div>
+</div>
+</div>
+
+<!-- Tasks Tab -->
+<div id="content-tasks" class="space-y-4 hidden">
+<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+<h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Задачи Агента №1</h3>
+<div class="space-y-2">
+<div class="flex items-center gap-3 py-2 border-b border-gray-800/50">
+<button class="w-5 h-5 rounded border-2 border-gray-600 flex items-center justify-center"></button>
+<span class="text-sm text-gray-200 flex-1">Исправить py_compile ошибку в main.py</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400">ВЫСОКИЙ</span>
+</div>
+<div class="flex items-center gap-3 py-2 border-b border-gray-800/50">
+<button class="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500 text-white flex items-center justify-center text-xs">✓</button>
+<span class="text-sm text-gray-500 flex-1 line-through">Тестирование мульти-провайдеров</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400">НИЗКИЙ</span>
+</div>
+</div>
+</div>
+</div>
+
+</main>
+
+<!-- Footer -->
+<footer class="border-t border-gray-800 bg-gray-900/50 mt-8">
+<div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between text-[10px] text-gray-600">
+<span>drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian • dreamkin • 2026</span>
+<span>Агент №1 активен • Агенты №2, №3 заморожены</span>
+</div>
+</footer>
+
+<script>
+// Clock
+function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('ru-RU');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Tabs
+function showTab(tabName) {
+    const tabs = ['console', 'dashboard', 'code', 'logs', 'tasks'];
+    tabs.forEach(tab => {
+        document.getElementById(`content-${tab}`).classList.add('hidden');
+        document.getElementById(`tab-${tab}`).classList.remove('border-emerald-500', 'text-emerald-400');
+        document.getElementById(`tab-${tab}`).classList.add('border-transparent', 'text-gray-500');
+    });
+    document.getElementById(`content-${tabName}`).classList.remove('hidden');
+    document.getElementById(`tab-${tabName}`).classList.remove('border-transparent', 'text-gray-500');
+    document.getElementById(`tab-${tabName}`).classList.add('border-emerald-500', 'text-emerald-400');
+}
+
+// AI Console
+let bestCodeText = '';
+
+async function sendToAI() {
+    const groqKey = document.getElementById('groqKey').value.trim();
+    const prompt = document.getElementById('prompt').value.trim();
+    const errorDiv = document.getElementById('error');
+    const loadingDiv = document.getElementById('loading');
+    const responsesDiv = document.getElementById('responses');
+    const judgeResultDiv = document.getElementById('judgeResult');
+    const howItWorksDiv = document.getElementById('howItWorks');
+    const sendBtn = document.getElementById('sendBtn');
+
+    errorDiv.classList.add('hidden');
+    responsesDiv.classList.add('hidden');
+    judgeResultDiv.classList.add('hidden');
+    howItWorksDiv.classList.add('hidden');
+
+    if (!groqKey) {
+        errorDiv.textContent = '✕ Введи Groq API ключ';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    if (!prompt) {
+        errorDiv.textContent = '✕ Введи запрос';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    loadingDiv.classList.remove('hidden');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '⏳ Отправка...';
+
+    const models = [
+        { id: 'llama-3.1-8b-versatile', name: 'Llama 8B' },
+        { id: 'llama-3.1-70b-versatile', name: 'Llama 70B' },
+        { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' },
+    ];
+
+    try {
+        const results = await Promise.allSettled(
+            models.map(m => sendToGroq(m.id, prompt, groqKey).then(r => ({ ...r, model: m.name })))
+        );
+
+        const responses = [];
+        for (const r of results) {
+            if (r.status === 'fulfilled') responses.push(r.value);
+        }
+
+        loadingDiv.classList.add('hidden');
+        displayResponses(responses);
+
+        if (responses.length === 0) {
+            errorDiv.textContent = '✕ Ни одна модель не ответила';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        if (responses.length === 1) {
+            displayJudge(responses[0].model, 'Единственный ответ', responses[0].response);
+            return;
+        }
+
+        // Judge
+        const candidatesText = responses.map((r, i) =>
+            `=== ВАРИАНТ #${i+1} (${r.model}, ${r.time}ms) ===\n${r.response}`
+        ).join('\n\n');
+
+        const judgePrompt = `Ты — эксперт-судья. Выбери лучший вариант кода.
+
+ЗАДАЧА: ${prompt}
+
+${candidatesText}
+
+КРИТЕРИИ: корректность, логика, полнота, читаемость.
+
+Ответь СТРОГО в JSON формате:
+{"winner": "название модели-победителя", "reason": "краткое обоснование выбора", "code": "полный код лучшего варианта"}
+
+JSON:`;
+
+        const judgeRes = await sendToGroq('llama-3.1-70b-versatile', judgePrompt, groqKey);
+        try {
+            const jsonMatch = judgeRes.response.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                displayJudge(parsed.winner || 'unknown', parsed.reason || '', parsed.code || judgeRes.response);
+            } else {
+                displayJudge('Llama 70B', 'Не удалось распарсить JSON арбитра', judgeRes.response);
+            }
+        } catch {
+            displayJudge('Llama 70B', 'Ошибка парсинга', judgeRes.response);
+        }
+    } catch (e) {
+        loadingDiv.classList.add('hidden');
+        errorDiv.textContent = '✕ ' + (e.message || 'Ошибка');
+        errorDiv.classList.remove('hidden');
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = '▶ Отправить';
+}
+
+async function sendToGroq(model, prompt, apiKey) {
+    const start = Date.now();
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                { role: 'system', content: 'You are an expert programmer. Write clean, efficient code. Return ONLY code without explanations.' },
+                { role: 'user', content: prompt }
+            ],
+            temperature: 0.3,
+            max_tokens: 2000
+        })
+    });
+    const data = await res.json();
+    const time = Date.now() - start;
+    if (data.error) throw new Error(data.error.message || 'API error');
+    return { response: data.choices[0].message.content, time };
+}
+
+function displayResponses(responses) {
+    const responsesDiv = document.getElementById('responses');
+    const responsesList = document.getElementById('responsesList');
+    const responseCount = document.getElementById('responseCount');
+
+    responseCount.textContent = responses.length;
+    responsesList.innerHTML = '';
+
+    responses.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'rounded-xl border border-gray-800 bg-gray-900/50 p-4';
+        div.innerHTML = `
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-bold text-cyan-400">${r.model}</span>
+                <span class="text-xs text-gray-500">${r.time}ms</span>
+            </div>
+            <pre class="text-xs font-mono text-gray-300 bg-gray-800/50 p-3 rounded-lg overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">${escapeHtml(r.response)}</pre>
+        `;
+        responsesList.appendChild(div);
+    });
+
+    responsesDiv.classList.remove('hidden');
+}
+
+function displayJudge(winner, reason, code) {
+    const judgeResultDiv = document.getElementById('judgeResult');
+    const winnerName = document.getElementById('winnerName');
+    const judgeReason = document.getElementById('judgeReason');
+    const reasonText = document.getElementById('reasonText');
+    const bestCode = document.getElementById('bestCode');
+
+    winnerName.textContent = winner;
+    if (reason) {
+        reasonText.textContent = reason;
+        judgeReason.classList.remove('hidden');
+    } else {
+        judgeReason.classList.add('hidden');
+    }
+    bestCodeText = code;
+    bestCode.textContent = code;
+    judgeResultDiv.classList.remove('hidden');
+}
+
+function copyCode() {
+    navigator.clipboard.writeText(bestCodeText).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = '✅ Скопировано!';
+        setTimeout(() => { btn.textContent = orig; }, 2000);
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
