@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>drmAIcu — Исправленный код</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0a;color:#e5e5e5;line-height:1.6;padding:20px}
+.container{max-width:1000px;margin:0 auto}
+h1{font-size:1.8rem;margin-bottom:8px;color:#10b981}
+.sub{color:#6b7280;margin-bottom:20px;font-size:0.9rem}
+.warn{background:#7f1d1d;border:1px solid #991b1b;border-radius:8px;padding:15px;margin:15px 0;color:#fecaca;font-size:0.9rem}
+.warn strong{color:#fca5a5}
+.file{background:#1a1a1a;border:1px solid #333;border-radius:10px;margin-bottom:20px;overflow:hidden}
+.file-head{background:#222;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #333}
+.fname{font-family:monospace;font-size:1rem;font-weight:bold;color:#10b981}
+.btn{background:#10b981;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600}
+.btn:hover{background:#059669}
+.btn.ok{background:#059669}
+pre{background:#0d0d0d;padding:16px;overflow:auto;font-family:monospace;font-size:0.8rem;line-height:1.5;max-height:500px;white-space:pre;tab-size:4}
+.steps{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px;margin-bottom:20px}
+.steps h2{color:#10b981;margin-bottom:10px;font-size:1.1rem}
+.steps ol{margin-left:20px;color:#d1d5db;font-size:0.9rem}
+.steps li{margin-bottom:6px}
+.steps code{background:#252525;padding:1px 5px;border-radius:3px;color:#06b6d4;font-family:monospace}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>drmAIcu — Исправленный код</h1>
+<p class="sub">4 файла. Скопируй каждый. Замени в проекте. Запусти.</p>
+
+<div class="warn">
+<strong>ВАЖНО:</strong> Копируй кнопкой "Копировать" — не выделяй мышкой. При выделении мышкой ломаются отступы.
+</div>
+
+<div class="steps">
+<h2>Порядок действий:</h2>
+<ol>
+<li>Скопируй <code>settings.json</code> → замени файл</li>
+<li>Скопируй <code>launcher.bat</code> → замени файл</li>
+<li>Скопируй <code>agent_engine.py</code> → замени файл</li>
+<li>Скопируй <code>main.py</code> → замени файл</li>
+<li>Запусти <code>launcher.bat</code></li>
+</ol>
+</div>
+
+<!-- settings.json -->
+<div class="file">
+<div class="file-head">
+<span class="fname">1. settings.json</span>
+<button class="btn" onclick="copy('f1',this)">Копировать</button>
+</div>
+<pre id="f1">{
+    "groq_api_key": "",
+    "ollama_url": "http://localhost:11434"
+}</pre>
+</div>
+
+<!-- launcher.bat -->
+<div class="file">
+<div class="file-head">
+<span class="fname">2. launcher.bat</span>
+<button class="btn" onclick="copy('f2',this)">Копировать</button>
+</div>
+<pre id="f2">@echo off
+chcp 65001 >nul
+title CU Agent Launcher
+color 0A
+
+python --version >nul 2>&1
+if errorlevel 1 (
+    color 0C
+    echo [ERROR] Python not found! Install Python 3.10+
+    pause
+    exit /b 1
+)
+
+if not exist main.py (
+    color 0C
+    echo [ERROR] main.py not found!
+    pause
+    exit /b 1
+)
+
+if not exist logs mkdir logs
+
+echo ========================================
+echo   CU Agent Launcher
+echo ========================================
+echo.
+
+:loop
+echo [%time%] Starting...
+python main.py
+set EXITCODE=%errorlevel%
+
+if exist restart.flag (
+    del restart.flag >nul 2>&1
+    echo [%time%] Restart flag found. Restarting...
+    timeout /t 2 /nobreak >nul
+    goto loop
+)
+
+if %EXITCODE%==0 (
+    echo [%time%] Stopped normally.
+    pause
+    exit /b 0
+)
+
+echo.
+echo [%time%] Crashed (code %EXITCODE%). Restart in 3 sec...
+timeout /t 3 /nobreak >nul
+goto loop</pre>
+</div>
+
+<!-- agent_engine.py -->
+<div class="file">
+<div class="file-head">
+<span class="fname">3. agent_engine.py</span>
+<button class="btn" onclick="copy('f3',this)">Копировать</button>
+</div>
+<pre id="f3"># agent_engine.py
+# Version 2.3 (FIXED)
+
+import asyncio
+import ollama
+from typing import List, Dict
+import traceback
+
+
+class AgentEngine:
+    def __init__(self, config, **kwargs):
+        self.config = config
+        self.log = kwargs.get('log_callback', lambda msg, lvl: print(f"[{lvl}] {msg}"))
+
+        self.providers = {
+            'ollama': True,
+            'groq': bool(config.get('groq_api_key', '').strip()),
+            'huggingface': bool(config.get('hf_api_key', '').strip()),
+            'openrouter': bool(config.get('openrouter_api_key', '').strip()),
+            'gemini': bool(config.get('gemini_api_key', '').strip()),
+            'together': bool(config.get('together_api_key', '').strip())
+        }
+
+        self.log("=" * 60, "INFO")
+        self.log("Agent engine v2.3 initialized", "SUCCESS")
+        self.log("Available providers:", "INFO")
+        for provider, active in self.providers.items():
+            status = "OK" if active else "NO"
+            self.log(f"  [{status}] {provider.upper()}", "INFO")
+        self.log("=" * 60, "INFO")
+
+        self._clients = {}
+        self._init_clients()
+
+    def _init_clients(self):
+        from openai import AsyncOpenAI
+
+        if self.providers['groq']:
+            self._clients['groq'] = AsyncOpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=self.config.get('groq_api_key', ''),
+                timeout=60.0
+            )
+
+        if self.providers['openrouter']:
+            self._clients['openrouter'] = AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.config.get('openrouter_api_key', ''),
+                timeout=60.0
+            )
+
+        if self.providers['together']:
+            self._clients['together'] = AsyncOpenAI(
+                base_url="https://api.together.xyz/v1",
+                api_key=self.config.get('together_api_key', ''),
+                timeout=60.0
+            )
+
+        if self.providers['huggingface']:
+            self._clients['huggingface'] = {
+                'api_key': self.config.get('hf_api_key', ''),
+                'timeout': 60.0
+            }
+
+    def _get_candidates(self) -> List[Dict]:
+        candidates = []
+
+        if self.providers['ollama']:
+            candidates.extend([
+                {"provider": "ollama", "model": "qwen2.5-coder:1.5b", "name": "Ollama: Qwen 1.5B"},
+                {"provider": "ollama", "model": "qwen2.5-coder:14b", "name": "Ollama: Qwen 14B"}
+            ])
+
+        if self.providers['groq']:
+            candidates.extend([
+                {"provider": "groq", "model": "llama-3.1-8b-versatile", "name": "Groq: Llama 8B"},
+                {"provider": "groq", "model": "llama-3.1-70b-versatile", "name": "Groq: Llama 70B"}
+            ])
+
+        if self.providers['openrouter']:
+            candidates.extend([
+                {"provider": "openrouter", "model": "meta-llama/llama-3.1-8b-instruct:free", "name": "OpenRouter: Llama 8B (free)"},
+                {"provider": "openrouter", "model": "qwen/qwen-2.5-coder-32b-instruct:free", "name": "OpenRouter: Qwen 32B (free)"}
+            ])
+
+        if self.providers['gemini']:
+            candidates.append({
+                "provider": "gemini",
+                "model": "gemini-1.5-flash",
+                "name": "Gemini: 1.5 Flash"
+            })
+
+        if self.providers['together']:
+            candidates.extend([
+                {"provider": "together", "model": "meta-llama/Llama-3.1-8B-Instruct-Turbo", "name": "Together: Llama 8B"},
+                {"provider": "together", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "Together: Qwen 32B"}
+            ])
+
+        if self.providers['huggingface']:
+            candidates.extend([
+                {"provider": "huggingface", "model": "meta-llama/Llama-3.1-8B-Instruct", "name": "HF: Llama 8B"},
+                {"provider": "huggingface", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "HF: Qwen 32B"}
+            ])
+
+        return candidates
+
+    def _get_judge_model(self) -> Dict:
+        if self.providers['groq']:
+            return {"provider": "groq", "model": "llama-3.1-70b-versatile", "name": "Groq: Llama 70B (judge)"}
+        elif self.providers['openrouter']:
+            return {"provider": "openrouter", "model": "qwen/qwen-2.5-coder-32b-instruct:free", "name": "OpenRouter: Qwen 32B (judge)"}
+        elif self.providers['together']:
+            return {"provider": "together", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "Together: Qwen 32B (judge)"}
+        else:
+            return {"provider": "ollama", "model": "qwen2.5-coder:14b", "name": "Ollama: Qwen 14B (judge)"}
+
+    async def _query_ollama(self, model: str, messages: List[Dict], timeout: float = 120.0) -> str:
+        loop = asyncio.get_running_loop()
+        def do_request():
+            return ollama.chat(model=model, messages=messages, options={"num_predict": 1000})
+        response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=timeout)
+        return response['message']['content']
+
+    async def _query_openai_style(self, provider: str, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        client = self._clients.get(provider)
+        if not client:
+            raise Exception(f"Client {provider} not initialized")
+
+        response = await asyncio.wait_for(
+            client.chat.completions.create(model=model, messages=messages, temperature=0.3),
+            timeout=timeout
+        )
+        return response.choices[0].message.content
+
+    async def _query_gemini(self, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        import aiohttp
+
+        api_key = self.config.get('gemini_api_key', '')
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+        contents = []
+        for msg in messages:
+            role = "model" if msg["role"] == "assistant" else "user"
+            contents.append({
+                "role": role,
+                "parts": [{"text": msg["content"]}]
+            })
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1000
+            }
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"Gemini API error {response.status}: {error_text[:100]}")
+                result = await response.json()
+                return result['candidates'][0]['content']['parts'][0]['text']
+
+    async def _query_huggingface(self, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
+        import aiohttp
+        api_key = self.config.get('hf_api_key', '')
+        url = f"https://api-inference.huggingface.co/models/{model}"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        prompt = messages[-1]['content']
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json={"inputs": prompt}, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    raise Exception(f"HF API error {resp.status}: {error_text[:100]}")
+                result = await resp.json()
+                return result[0]['generated_text']
+
+    async def _query_model(self, candidate: Dict, messages: List[Dict], timeout: float = 120.0) -> str:
+        provider = candidate['provider']
+        model = candidate['model']
+
+        if provider == 'ollama':
+            return await self._query_ollama(model, messages, timeout)
+        elif provider in ['groq', 'openrouter', 'together']:
+            return await self._query_openai_style(provider, model, messages, timeout)
+        elif provider == 'gemini':
+            return await self._query_gemini(model, messages, timeout)
+        elif provider == 'huggingface':
+            return await self._query_huggingface(model, messages, timeout)
+        else:
+            raise Exception(f"Unknown provider: {provider}")
+
+    async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
+        provider = candidate['provider'].upper()
+        model_name = candidate['name']
+
+        self.log(f"[{provider}] {model_name}...", "INFO")
+
+        messages = [
+            {"role": "system", "content": "You are an expert programmer in Python and VBA. Write clean, efficient code. Return ONLY code without explanations."},
+            {"role": "user", "content": prompt}
+        ]
+
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                code = await self._query_model(candidate, messages, timeout=120.0)
+                self.log(f"[OK] [{provider}] {model_name}: {len(code)} chars", "SUCCESS")
+                return {"candidate": candidate, "code": code, "error": None}
+            except asyncio.TimeoutError:
+                if attempt < max_retries:
+                    self.log(f"[{provider}] Retry {attempt+2}/{max_retries+1}...", "WARN")
+                    await asyncio.sleep(2)
+                    continue
+                self.log(f"[{provider}] {model_name}: TIMEOUT", "ERROR")
+                return {"candidate": candidate, "code": None, "error": "Timeout"}
+            except Exception as e:
+                self.log(f"[ERR] [{provider}] {model_name}: {str(e)[:60]}", "ERROR")
+                return {"candidate": candidate, "code": None, "error": str(e)}
+
+    async def judge_responses(self, prompt: str, responses: List[Dict]) -> Dict:
+        judge = self._get_judge_model()
+        provider = judge['provider'].upper()
+        self.log(f"[JUDGE] [{provider}] Analyzing {len(responses)} responses...", "INFO")
+
+        candidates_text = "\n\n".join([
+            f"=== VARIANT #{i+1} ({r['candidate']['name']}) ===\n{r['code']}"
+            for i, r in enumerate(responses)
+        ])
+
+        judge_prompt = f"""You are an expert programmer and judge. Choose the best variant.
+
+TASK: {prompt}
+
+VARIANTS:
+{candidates_text}
+
+CRITERIA: correctness, logic, completeness, readability.
+
+Return ONLY the code of the best variant WITHOUT markdown and explanations.
+
+ANSWER (code only):"""
+
+        messages = [{"role": "user", "content": judge_prompt}]
+
+        try:
+            best_code = await self._query_model(judge, messages, timeout=120.0)
+            self.log(f"[OK] [{provider}] Judge selected: {len(best_code)} chars", "SUCCESS")
+            return {"code": best_code, "error": None, "judge": judge}
+        except Exception as e:
+            self.log(f"[ERR] [{provider}] Judge error: {str(e)[:60]}", "ERROR")
+            return {"code": None, "error": str(e), "judge": judge}
+
+    async def run_task(self, prompt: str, status_callback=None, mode: str = "full") -> str:
+        self.log("=" * 70, "INFO")
+        self.log(f"TASK: {prompt[:80]}", "INFO")
+        self.log(f"MODE: {mode}", "INFO")
+        self.log("=" * 70, "INFO")
+
+        candidates = self._get_candidates()
+        active_providers = set(c['provider'].upper() for c in candidates)
+        self.log(f"Active providers: {', '.join(sorted(active_providers))}", "INFO")
+        self.log(f"Total models: {len(candidates)}", "INFO")
+
+        if status_callback:
+            status_callback(f"Sending to {len(candidates)} models...")
+
+        tasks = [self.get_code_response(c, prompt) for c in candidates]
+        self.log("Parallel query...", "INFO")
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        valid_responses = []
+        for res in results:
+            if isinstance(res, Exception):
+                self.log(f"[ERR] Critical: {res}", "ERROR")
+            elif isinstance(res, dict) and res.get("code"):
+                valid_responses.append(res)
+            elif isinstance(res, dict):
+                self.log(f"[WARN] {res['candidate']['name']}: {res.get('error')}", "WARN")
+
+        self.log(f"Success: {len(valid_responses)} of {len(candidates)}", "INFO")
+
+        if valid_responses:
+            answered = [r['candidate']['name'] for r in valid_responses]
+            self.log(f"Answered: {', '.join(answered)}", "SUCCESS")
+
+        if not valid_responses:
+            if status_callback:
+                status_callback("All models failed")
+            self.log("All models failed", "ERROR")
+            return "All models failed. Check Debug log."
+
+        if mode == "fast":
+            winner = valid_responses[0]['candidate']['name']
+            if status_callback:
+                status_callback(f"Fast: {winner}")
+            self.log(f"Fast: {winner}", "SUCCESS")
+            return valid_responses[0]["code"]
+
+        if len(valid_responses) == 1:
+            if status_callback:
+                status_callback("1 response")
+            self.log("Only 1 response", "INFO")
+            return valid_responses[0]["code"]
+
+        if status_callback:
+            status_callback("Judge...")
+        judge_result = await self.judge_responses(prompt, valid_responses)
+
+        if judge_result.get("code"):
+            if status_callback:
+                status_callback("Judge selected")
+            return judge_result["code"]
+        else:
+            self.log("Judge failed, taking first", "WARN")
+            if status_callback:
+                status_callback("Taking first")
+            return valid_responses[0]["code"]</pre>
+</div>
+
+<!-- main.py -->
+<div class="file">
+<div class="file-head">
+<span class="fname">4. main.py</span>
+<button class="btn" onclick="copy('f4',this)">Копировать</button>
+</div>
+<pre id="f4"># main.py
+# Version 3.0.3 FORTRESS (FIXED)
+
+from nicegui import ui, app
+import json
+import os
+import importlib
+import sys
+import asyncio
+import time
+import threading
+import traceback
+import shutil
+import hashlib
+import ast
+from datetime import datetime
+from openai import AsyncOpenAI
+import tempfile
+
+CONFIG_FILE = 'settings.json'
+ENGINE_FILE = 'agent_engine.py'
+RESTART_FLAG = 'restart.flag'
+DEBUG_LOG = []
+BACKUP_DIR = 'backups'
+UPDATES_DIR = 'updates'
+CHECKSUM_FILE = 'backups/checksums.json'
+
+os.makedirs(BACKUP_DIR, exist_ok=True)
+os.makedirs(UPDATES_DIR, exist_ok=True)
+
+if os.path.exists(RESTART_FLAG):
+    try:
+        os.remove(RESTART_FLAG)
+    except Exception:
+        pass
+
+EMERGENCY_ENGINE_CODE = '''# agent_engine.py
+import asyncio
+import ollama
+from typing import List, Dict
+
+class AgentEngine:
+    def __init__(self, config, **kwargs):
+        self.config = config
+        self.log = kwargs.get('log_callback', lambda msg, lvl: print(f"[{lvl}] {msg}"))
+        self.log("Emergency engine loaded", "WARNING")
+
+    async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
+        try:
+            loop = asyncio.get_running_loop()
+            def do_request():
+                return ollama.chat(model=candidate["model"], messages=[
+                    {"role": "system", "content": "You are an expert programmer."},
+                    {"role": "user", "content": prompt}
+                ])
+            response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=120.0)
+            code = response['message']['content']
+            self.log(f"[OK] {candidate['name']}: {len(code)} chars", "SUCCESS")
+            return {"candidate": candidate, "code": code, "error": None}
+        except Exception as e:
+            self.log(f"[ERR] {candidate['name']}: {e}", "ERROR")
+            return {"candidate": candidate, "code": None, "error": str(e)}
+
+    async def run_task(self, prompt: str, status_callback=None, mode: str = "full") -> str:
+        self.log(f"TASK: {prompt[:50]}", "INFO")
+        candidates = [{"model": "qwen2.5-coder:1.5b", "name": "Qwen 1.5B"}]
+        if status_callback:
+            status_callback("Sending...")
+        results = await asyncio.gather(*[self.get_code_response(c, prompt) for c in candidates], return_exceptions=True)
+        valid = [r for r in results if isinstance(r, dict) and r.get("code")]
+        if not valid:
+            return "All models failed"
+        if status_callback:
+            status_callback("Done")
+        return valid[0]["code"]
+'''
+
+
+def log_debug(message: str, level: str = "INFO"):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    entry = f"[{timestamp}] [{level}] {message}"
+    DEBUG_LOG.append(entry)
+    if len(DEBUG_LOG) > 200:
+        DEBUG_LOG.pop(0)
+    print(entry)
+
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            log_debug("settings.json corrupted", "WARNING")
+    return {
+        "groq_api_key": "",
+        "ollama_url": "http://localhost:11434",
+        "hf_api_key": "",
+        "openrouter_api_key": "",
+        "gemini_api_key": "",
+        "together_api_key": ""
+    }
+
+
+def save_config(data):
+    current = load_config()
+    current.update(data)
+    if os.path.exists(CONFIG_FILE):
+        backup_path = os.path.join(BACKUP_DIR, f"settings_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        try:
+            shutil.copy2(CONFIG_FILE, backup_path)
+        except Exception:
+            pass
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(current, f, indent=4, ensure_ascii=False)
+
+
+def calculate_checksum(filepath: str) -> str:
+    if not os.path.exists(filepath):
+        return ""
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+
+def save_checksum(filepath: str):
+    checksums = {}
+    if os.path.exists(CHECKSUM_FILE):
+        try:
+            with open(CHECKSUM_FILE, 'r') as f:
+                checksums = json.load(f)
+        except Exception:
+            pass
+    checksums[filepath] = calculate_checksum(filepath)
+    with open(CHECKSUM_FILE, 'w') as f:
+        json.dump(checksums, f, indent=2)
+
+
+def create_triple_backup(filepath: str) -> list:
+    if not os.path.exists(filepath):
+        return []
+    backups = []
+    filename = os.path.basename(filepath)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup1 = os.path.join(BACKUP_DIR, f"{filename}_{timestamp}.bak")
+    backup2 = os.path.join(BACKUP_DIR, f"{filename}_{timestamp}_verified.bak")
+    backup3 = os.path.join(BACKUP_DIR, f"{filename}_LATEST.bak")
+    try:
+        shutil.copy2(filepath, backup1)
+        backups.append(backup1)
+    except Exception:
+        pass
+    try:
+        shutil.copy2(filepath, backup2)
+        save_checksum(backup2)
+        backups.append(backup2)
+    except Exception:
+        pass
+    try:
+        shutil.copy2(filepath, backup3)
+        backups.append(backup3)
+    except Exception:
+        pass
+    return backups
+
+
+def validate_python_syntax(code: str) -> tuple:
+    try:
+        ast.parse(code)
+        return True, None
+    except SyntaxError as e:
+        return False, str(e)
+    except (UnicodeDecodeError, ValueError) as e:
+        return False, f"Encoding: {e}"
+
+
+def validate_engine_structure(code: str) -> tuple:
+    required = ['class AgentEngine', 'async def run_task', 'async def get_code_response', '__init__']
+    missing = [r for r in required if r not in code]
+    if missing:
+        return False, f"Missing: {', '.join(missing)}"
+    if 'ui.dark_mode' in code or 'ui.label' in code or 'ui.button' in code:
+        if 'def create_ui' not in code:
+            return False, "UI calls outside create_ui()"
+    return True, None
+
+
+def restore_from_backup(backup_path: str = None) -> bool:
+    if backup_path and os.path.exists(backup_path):
+        try:
+            shutil.copy2(backup_path, ENGINE_FILE)
+            log_debug(f"Restored from: {backup_path}", "SUCCESS")
+            return True
+        except Exception as e:
+            log_debug(f"Restore error: {e}", "ERROR")
+    latest_backup = os.path.join(BACKUP_DIR, "agent_engine_LATEST.bak")
+    if os.path.exists(latest_backup):
+        return restore_from_backup(latest_backup)
+    log_debug("No backups found - creating emergency engine", "WARNING")
+    with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
+        f.write(EMERGENCY_ENGINE_CODE)
+    return True
+
+
+def ensure_base_files():
+    if not os.path.exists(CONFIG_FILE):
+        save_config({})
+        log_debug("settings.json created", "SUCCESS")
+    if not os.path.exists(ENGINE_FILE):
+        log_debug("agent_engine.py not found - creating emergency engine", "WARNING")
+        with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
+            f.write(EMERGENCY_ENGINE_CODE)
+        return
+    with open(ENGINE_FILE, 'r', encoding='utf-8') as f:
+        content = f.read()
+    valid_syntax, syntax_error = validate_python_syntax(content)
+    valid_structure, structure_error = validate_engine_structure(content)
+    if not valid_syntax or not valid_structure:
+        log_debug("agent_engine.py CORRUPTED!", "ERROR")
+        if syntax_error:
+            log_debug(f"Syntax: {syntax_error}", "ERROR")
+        if structure_error:
+            log_debug(f"Structure: {structure_error}", "ERROR")
+        log_debug("Restoring from backup...", "INFO")
+        if not restore_from_backup():
+            log_debug("FAILED to restore engine!", "ERROR")
+    log_debug("Base files checked", "SUCCESS")
+
+
+engine_instance = None
+current_editor = None
+current_file = None
+guardian_instance = None
+_engine_lock = threading.Lock()
+
+
+def get_engine():
+    global engine_instance
+    try:
+        with _engine_lock:
+            if engine_instance is not None:
+                return engine_instance
+        config = load_config()
+        if 'agent_engine' in sys.modules:
+            importlib.reload(sys.modules['agent_engine'])
+        else:
+            import agent_engine
+        try:
+            engine_instance = sys.modules['agent_engine'].AgentEngine(config, log_callback=log_debug)
+        except TypeError:
+            engine_instance = sys.modules['agent_engine'].AgentEngine(config)
+        log_debug("Engine loaded", "SUCCESS")
+        return engine_instance
+    except Exception as e:
+        log_debug(f"Engine error: {e}", "ERROR")
+        log_debug(f"Traceback: {traceback.format_exc()}", "ERROR")
+        log_debug("Trying to restore...", "WARNING")
+        if restore_from_backup():
+            log_debug("Restored! Restart CU", "SUCCESS")
+        else:
+            log_debug("FAILED to restore", "ERROR")
+        return None
+
+
+def get_language(filename):
+    if filename.endswith('.py'):
+        return 'python'
+    if filename.endswith('.json'):
+        return 'json'
+    if filename.endswith(('.bas', '.vba')):
+        return 'vbscript'
+    return 'plaintext'
+
+
+def get_project_files():
+    return [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith(('.py', '.json', '.txt', '.bas', '.vba', '.md'))]
+
+
+def restart_server():
+    log_debug("Restarting...", "WARNING")
+    with open(RESTART_FLAG, 'w') as f:
+        f.write('restart')
+
+    def do_exit():
+        time.sleep(2)
+        os._exit(0)
+
+    threading.Thread(target=do_exit, daemon=True).start()
+
+
+class AIGuardian:
+    def __init__(self, engine, log_callback):
+        self.engine = engine
+        self.log = log_callback
+
+    async def validate_update(self, new_code: str, description: str) -> dict:
+        result = {"approved": False, "errors": [], "warnings": [], "steps": [], "backups": []}
+
+        self.log("Level 1/5: Python syntax...", "INFO")
+        result["steps"].append("1. Syntax")
+        valid, error = validate_python_syntax(new_code)
+        if not valid:
+            result["errors"].append(f"Syntax: {error}")
+            self.log(f"SYNTAX: {error}", "ERROR")
+            return result
+        self.log("Syntax OK", "SUCCESS")
+
+        self.log("Level 2/5: Core structure...", "INFO")
+        result["steps"].append("2. Structure")
+        valid, error = validate_engine_structure(new_code)
+        if not valid:
+            result["errors"].append(f"Structure: {error}")
+            self.log(f"STRUCTURE: {error}", "ERROR")
+            return result
+        self.log("Structure OK", "SUCCESS")
+
+        self.log("Level 3/5: AI-Judge...", "INFO")
+        result["steps"].append("3. AI-Judge")
+        judge_result = await self._judge_validation(new_code, description)
+        if not judge_result.get("approved", False):
+            result["errors"].extend(judge_result.get("errors", []))
+            result["warnings"].extend(judge_result.get("warnings", []))
+            self.log(f"AI-JUDGE: {judge_result.get('reason')}", "ERROR")
+            return result
+        self.log("AI-Judge OK", "SUCCESS")
+
+        self.log("Level 4/5: Sandbox test...", "INFO")
+        result["steps"].append("4. Sandbox")
+        test_result = await self._sandbox_test(new_code)
+        if not test_result.get("success", False):
+            result["errors"].append(f"Sandbox: {test_result.get('error')}")
+            self.log(f"SANDBOX: {test_result.get('error')}", "ERROR")
+            return result
+        self.log("Sandbox OK", "SUCCESS")
+
+        self.log("Level 5/5: Triple backup...", "INFO")
+        result["steps"].append("5. Backup")
+        current_backup = create_triple_backup(ENGINE_FILE)
+        result["backups"] = current_backup
+        if not current_backup:
+            result["warnings"].append("Failed to create backup")
+        else:
+            self.log(f"Created {len(current_backup)} backups", "SUCCESS")
+
+        result["approved"] = True
+        self.log("ALL 5 LEVELS PASSED!", "SUCCESS")
+        return result
+
+    async def _judge_validation(self, new_code: str, description: str) -> dict:
+        judge_prompt = f"""You are a technical reviewer. Check the core update.
+DESCRIPTION: {description}
+CODE:
+{new_code[:5000]}
+CHECKS:
+1. Has class AgentEngine?
+2. Has async def run_task?
+3. Has async def get_code_response?
+4. No ui.* calls outside create_ui?
+5. Has try/except in async methods?
+RETURN JSON:
+{{"approved": true/false, "reason": "reason if rejected", "warnings": [], "suggestions": []}}
+JSON:"""
+        try:
+            if self.engine and hasattr(self.engine, '_get_judge_model'):
+                judge_model = self.engine._get_judge_model()
+                messages = [{"role": "user", "content": judge_prompt}]
+                if hasattr(self.engine, '_query_model'):
+                    response = await self.engine._query_model(judge_model, messages, timeout=120.0)
+                    import json as json_module
+                    import re
+                    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                    if json_match:
+                        return json_module.loads(json_match.group())
+            return self._heuristic_validation(new_code)
+        except Exception as e:
+            self.log(f"AI error: {e}", "WARNING")
+            return self._heuristic_validation(new_code)
+
+    def _heuristic_validation(self, code: str) -> dict:
+        errors = []
+        warnings = []
+        if 'class AgentEngine' not in code:
+            errors.append("No class AgentEngine")
+        if 'async def run_task' not in code:
+            errors.append("No async def run_task")
+        if 'async def get_code_response' not in code:
+            errors.append("No async def get_code_response")
+        if 'ui.dark_mode' in code or 'ui.label' in code:
+            if 'def create_ui' not in code:
+                errors.append("UI calls outside create_ui")
+        if code.count('try:') < 2:
+            warnings.append("Few try/except")
+        return {
+            "approved": len(errors) == 0,
+            "reason": "; ".join(errors) if errors else None,
+            "warnings": warnings,
+            "suggestions": []
+        }
+
+    async def _sandbox_test(self, code: str) -> dict:
+        temp_path = None
+        try:
+            fd, temp_path = tempfile.mkstemp(suffix='.py', prefix='sandbox_')
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(code)
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("test_engine", temp_path)
+            if spec and spec.loader:
+                test_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(test_module)
+                if not hasattr(test_module, 'AgentEngine'):
+                    return {"success": False, "error": "No AgentEngine"}
+                engine_class = test_module.AgentEngine
+                for method in ['__init__', 'run_task', 'get_code_response']:
+                    if not hasattr(engine_class, method):
+                        return {"success": False, "error": f"No method {method}"}
+                return {"success": True}
+            else:
+                return {"success": False, "error": "Failed to load"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+
+    async def apply_update(self, new_code: str, validation_result: dict) -> bool:
+        if not validation_result.get("approved", False):
+            self.log("Rejected", "ERROR")
+            return False
+        try:
+            with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
+                f.write(new_code)
+            self.log("Update applied!", "SUCCESS")
+            global engine_instance
+            engine_instance = None
+            return True
+        except Exception as e:
+            self.log(f"Apply error: {e}", "ERROR")
+            backups = validation_result.get("backups", [])
+            if backups:
+                if restore_from_backup(backups[0]):
+                    self.log("Rollback done", "WARNING")
+            return False
+
+
+def create_ui():
+    global guardian_instance
+    ui.dark_mode().enable()
+
+    with ui.header().classes('bg-gray-900 text-white border-b border-gray-700 p-4'):
+        with ui.row().classes('w-full items-center justify-between'):
+            ui.label('CU v3.0.3 FORTRESS').classes('text-xl font-bold')
+            ui.button('RESTART', on_click=restart_server).props('color=orange')
+
+    with ui.tabs().classes('w-full') as tabs:
+        tab_dash = ui.tab('dashboard', label='Dashboard')
+        tab_api = ui.tab('api', label='API')
+        tab_llm = ui.tab('llm', label='LLM')
+        tab_updates = ui.tab('updates', label='Updates')
+        tab_debug = ui.tab('debug', label='Debug')
+        tab_editor = ui.tab('editor', label='Editor')
+        tab_console = ui.tab('console', label='Console')
+
+    with ui.tab_panels(tabs, value=tab_dash).classes('w-full p-6'):
+
+        with ui.tab_panel(tab_dash):
+            ui.label('System Status (FORTRESS)').classes('text-lg font-bold mb-4')
+            config = load_config()
+            with ui.row().classes('gap-4'):
+                ui.badge('Ollama: OK', color='green')
+                groq_text = 'Groq: OK' if config.get('groq_api_key') else 'Groq: No'
+                groq_color = 'green' if config.get('groq_api_key') else 'red'
+                ui.badge(groq_text, color=groq_color)
+                ui.badge('Core: v3.0.3 FORTRESS', color='green')
+                ui.badge('Protection: ACTIVE', color='green')
+            ui.markdown('''
+**Core Protection:**
+- Editor CANNOT change agent_engine.py
+- All updates via AI-Guardian (5 levels)
+- Triple backup
+- Auto-rollback on error
+- Emergency engine built-in
+            ''')
+
+        with ui.tab_panel(tab_api):
+            ui.label('API Keys').classes('text-lg font-bold mb-2')
+            config = load_config()
+            with ui.row().classes('w-full items-center gap-4 mb-4'):
+                groq_key = ui.input('Groq API Key', value=config.get('groq_api_key', ''), password=True).classes('flex-grow')
+
+                def save_groq():
+                    save_config({'groq_api_key': groq_key.value})
+                    ui.notify('Groq saved', type='positive')
+
+                groq_key.on('blur', save_groq)
+                ui.button('Save', on_click=save_groq)
+
+        with ui.tab_panel(tab_llm):
+            ui.label('LLM Providers').classes('text-lg font-bold mb-4')
+            config = load_config()
+            providers = [
+                ('groq_api_key', 'Groq', 'https://console.groq.com'),
+                ('hf_api_key', 'Hugging Face', 'https://huggingface.co/settings/tokens'),
+                ('openrouter_api_key', 'OpenRouter', 'https://openrouter.ai/keys'),
+                ('gemini_api_key', 'Google Gemini', 'https://makersuite.google.com/app/apikey'),
+                ('together_api_key', 'Together AI', 'https://api.together.xyz/settings/api-keys')
+            ]
+            for key_name, label, url in providers:
+                with ui.card().classes('w-full mb-4'):
+                    with ui.row().classes('w-full items-center justify-between'):
+                        ui.label(label).classes('font-bold')
+                        status = 'OK' if config.get(key_name) else 'No'
+                        ui.badge(f'{status}', color='green' if config.get(key_name) else 'red')
+                    key_input = ui.input('API Key', value=config.get(key_name, ''), password=True).classes('w-full')
+                    with ui.row().classes('gap-2'):
+                        def make_save(kn, inp, lbl):
+                            return lambda: (save_config({kn: inp.value}), ui.notify(f'{lbl} saved'))
+                        ui.button('Save', on_click=make_save(key_name, key_input, label)).props('color=green')
+                        ui.button('Link', on_click=lambda u=url: ui.open_url(u)).props('flat')
+
+        with ui.tab_panel(tab_updates):
+            ui.label('AI-Guardian: Update Core').classes('text-lg font-bold mb-4')
+            ui.label('All updates pass 5 levels of checks.').classes('text-gray-400 mb-4')
+            update_description = ui.textarea('Update description', placeholder='What is new?').classes('w-full h-24')
+            new_code_area = ui.textarea('New agent_engine.py code').classes('w-full h-96')
+            validation_log = ui.log(max_lines=50).classes('w-full h-48 bg-black text-green-400 font-mono mt-4')
+
+            async def validate_and_update():
+                global guardian_instance
+                if not update_description.value:
+                    ui.notify('Enter description!', type='warning')
+                    return
+                validation_log.clear()
+                validation_log.push('[INFO] AI-Guardian activated...')
+                engine = get_engine()
+                if not engine:
+                    validation_log.push('[ERROR] Engine not loaded!')
+                    ui.notify('Engine not loaded', type='negative')
+                    return
+                if guardian_instance is None:
+                    guardian_instance = AIGuardian(engine, lambda msg, lvl: validation_log.push(f'[{lvl}] {msg}'))
+                new_code = new_code_area.value.strip()
+                if not new_code:
+                    validation_log.push('[ERROR] Enter code!')
+                    ui.notify('Enter code', type='warning')
+                    return
+                validation_log.push('[INFO] Running 5-level validation...')
+                result = await guardian_instance.validate_update(new_code, update_description.value)
+                if result.get("approved"):
+                    validation_log.push('[SUCCESS] ALL LEVELS PASSED!')
+                    if result.get("warnings"):
+                        for w in result["warnings"]:
+                            validation_log.push(f'[WARNING] {w}')
+                    validation_log.push('[INFO] Applying...')
+                    success = await guardian_instance.apply_update(new_code, result)
+                    if success:
+                        validation_log.push('[SUCCESS] Update applied!')
+                        ui.notify('Update applied! Restart CU.', type='positive')
+                    else:
+                        validation_log.push('[ERROR] Apply error')
+                        ui.notify('Error', type='negative')
+                else:
+                    validation_log.push('[ERROR] VALIDATION FAILED')
+                    for error in result.get("errors", []):
+                        validation_log.push(f'[ERROR] {error}')
+                    ui.notify(f'Failed: {result.get("errors", ["unknown"])[0]}', type='negative')
+
+            with ui.row().classes('mt-4 gap-4'):
+                ui.button('Check and Apply', on_click=validate_and_update).props('color=green size=lg')
+
+        with ui.tab_panel(tab_debug):
+            ui.label('Debug').classes('text-lg font-bold mb-4')
+            with ui.row().classes('w-full gap-4'):
+                with ui.column().classes('w-1/3'):
+                    ui.label('Tests').classes('font-bold mb-2')
+
+                    async def test_ollama():
+                        try:
+                            import ollama
+                            models = ollama.list()
+                            ui.notify(f"Ollama: {len(models.get('models', []))} models", type='positive')
+                            log_debug(f"Ollama: {models}", "SUCCESS")
+                        except Exception as e:
+                            ui.notify(f"Ollama: {e}", type='negative')
+                            log_debug(f"Ollama error: {e}", "ERROR")
+
+                    ui.button('Test Ollama', on_click=test_ollama).classes('w-full mb-2')
+                    ui.button('Test Engine', on_click=lambda: ui.notify("Engine OK" if get_engine() else "Engine ERROR")).classes('w-full mb-2')
+                    ui.button('Clear log', on_click=lambda: (DEBUG_LOG.clear(), ui.notify('Log cleared'))).classes('w-full')
+                with ui.column().classes('w-2/3'):
+                    log_display = ui.log(max_lines=200).classes('w-full h-[500px] bg-black text-green-400 font-mono')
+                    _last_log_len = 0
+
+                    async def update_log():
+                        nonlocal _last_log_len
+                        if len(DEBUG_LOG) > _last_log_len:
+                            for entry in DEBUG_LOG[_last_log_len:]:
+                                log_display.push(entry)
+                            _last_log_len = len(DEBUG_LOG)
+
+                    ui.timer(1, update_log, once=False)
+
+        with ui.tab_panel(tab_editor):
+            ui.label('Editor (CORE PROTECTED)').classes('text-lg font-bold mb-4')
+            ui.label('agent_engine.py CANNOT be changed here! Use Updates tab').classes('text-yellow-400 mb-4')
+            with ui.row().classes('w-full gap-4 items-end'):
+                file_selector = ui.select(
+                    options=get_project_files(),
+                    label='File',
+                    on_change=lambda e: load_file_to_editor(e.value)
+                ).classes('w-1/3')
+                new_file_name = ui.input('New file').classes('w-1/3')
+
+                def create_file():
+                    fname = new_file_name.value.strip()
+                    if not fname or os.path.exists(fname):
+                        ui.notify('File exists!', type='warning')
+                        return
+                    with open(fname, 'w') as f:
+                        f.write(f"# {fname}\n")
+                    file_selector.options = get_project_files()
+                    file_selector.update()
+                    file_selector.value = fname
+                    load_file_to_editor(fname)
+                    ui.notify(f'{fname} created', type='positive')
+
+                ui.button('Create', on_click=create_file)
+            editor_container = ui.column().classes('w-full')
+
+            def load_file_to_editor(filename):
+                global current_editor, current_file
+                if not filename:
+                    return
+                current_file = filename
+                editor_container.clear()
+                with editor_container:
+                    with open(filename, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    if filename == ENGINE_FILE:
+                        ui.label('agent_engine.py - READ ONLY').classes('text-red-400 font-bold mb-2')
+                        ui.markdown('Use **Updates** tab to modify')
+                        escaped_code = content.replace('`', '\\`')
+                        ui.markdown(f'```python\n{escaped_code}\n```').classes('w-full')
+                        current_editor = None
+                    else:
+                        current_editor = ui.codemirror(
+                            value=content,
+                            language=get_language(filename),
+                            theme='dark'
+                        ).classes('w-full h-[500px] border rounded')
+
+            def save_current_file():
+                global current_file, current_editor, engine_instance
+                if current_file and current_editor:
+                    if current_file == ENGINE_FILE:
+                        ui.notify('agent_engine.py CANNOT be changed via editor!', type='negative')
+                        ui.notify('Use Updates tab', type='warning')
+                        return
+                    code = current_editor.value
+                    if current_file.endswith('.py'):
+                        is_valid, error = validate_python_syntax(code)
+                        if not is_valid:
+                            ui.notify(f'Syntax error: {error[:100]}', type='negative', timeout=10)
+                            return
+                    with open(current_file, 'w', encoding='utf-8') as f:
+                        f.write(code)
+                    if current_file == 'main.py':
+                        ui.notify('Restarting...', type='info')
+                        restart_server()
+                    else:
+                        ui.notify(f'{current_file} saved', type='positive')
+                else:
+                    ui.notify('No active editor', type='warning')
+
+            ui.button('Save', on_click=save_current_file).classes('mt-4')
+            load_file_to_editor(ENGINE_FILE)
+            file_selector.value = ENGINE_FILE
+
+        with ui.tab_panel(tab_console):
+            ui.label('Console').classes('text-lg font-bold mb-4')
+            with ui.row().classes('w-full items-center gap-4 mb-2'):
+                mode_select = ui.select(
+                    options={'full': 'Full', 'fast': 'Fast'},
+                    value='full',
+                    label='Mode'
+                ).classes('w-1/3')
+            task_input = ui.input('Task (Enter)').classes('w-full')
+            status_label = ui.label('Status: Waiting').classes('text-lg mt-4')
+            log_area = ui.log(max_lines=200).classes('w-full h-64 bg-black text-green-400 font-mono mt-4')
+            result_area = ui.textarea('Result').classes('w-full h-64 mt-4')
+
+            async def run_task():
+                if not task_input.value:
+                    ui.notify('Enter task!', type='warning')
+                    return
+                log_area.clear()
+                log_area.push('=' * 70)
+                log_area.push(f'TASK: {task_input.value}')
+                log_area.push(f'MODE: {mode_select.value}')
+                log_area.push('=' * 70)
+                log_debug(f"Task: {task_input.value[:50]}", "INFO")
+
+                def update_status(text):
+                    status_label.text = f"Status: {text}"
+                    log_debug(f"Status: {text}", "INFO")
+                    log_area.push(f'[STATUS] {text}')
+
+                try:
+                    engine = get_engine()
+                    if not engine:
+                        raise Exception("Engine not loaded")
+                    if hasattr(engine, '_get_candidates'):
+                        candidates = engine._get_candidates()
+                        log_area.push('')
+                        log_area.push(f'MODELS TO QUERY: {len(candidates)}')
+                        for i, c in enumerate(candidates, 1):
+                            provider = c.get('provider', 'ollama').upper()
+                            log_area.push(f'  {i}. [{provider}] {c["name"]}')
+                        log_area.push('-' * 70)
+                    else:
+                        log_area.push('Using emergency engine (1 model)')
+                        log_area.push('-' * 70)
+                    update_status("Sending requests...")
+                    if hasattr(engine, 'run_task_detailed'):
+                        result = await engine.run_task_detailed(
+                            task_input.value,
+                            status_callback=update_status,
+                            log_callback=lambda msg: log_area.push(msg),
+                            mode=mode_select.value
+                        )
+                    else:
+                        result = await engine.run_task(
+                            task_input.value,
+                            status_callback=update_status,
+                            mode=mode_select.value
+                        )
+                    log_area.push('')
+                    log_area.push('=' * 70)
+                    log_area.push('TASK COMPLETED')
+                    log_area.push('=' * 70)
+                    result_area.value = result
+                    log_debug("Done", "SUCCESS")
+                    update_status("Done")
+                except Exception as e:
+                    log_area.push('')
+                    log_area.push(f'[ERROR] {str(e)}')
+                    log_area.push(f'[TRACEBACK] {traceback.format_exc()}')
+                    result_area.value = f"Error: {str(e)}"
+                    log_debug(f"Error: {e}", "ERROR")
+                    update_status("Error")
+
+            task_input.on('keydown.enter', lambda: asyncio.create_task(run_task()))
+            ui.button('Send', on_click=run_task).props('color=green').classes('mt-2')
+
+
+log_debug("CU v3.0.3 FORTRESS started", "SUCCESS")
+ensure_base_files()
+create_ui()
+ui.run(title='CU v3.0.3 FORTRESS', port=8080, dark=True, reload=False)</pre>
+</div>
+
+<div class="steps" style="margin-top:30px">
+<h2>Готово!</h2>
+<p style="color:#d1d5db;font-size:0.9rem">Замени 4 файла. Запусти launcher.bat. Открой http://localhost:8080</p>
+</div>
+</div>
+
+<script>
+function copy(id, btn) {
+    const el = document.getElementById(id);
+    const text = el.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'OK!';
+        btn.classList.add('ok');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 2000);
+    }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.textContent = 'OK!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+}
+</script>
+</body>
+</html>
