@@ -447,7 +447,7 @@ JSON:"""
         elif filename.endswith('.json'):
             try:
                 data = json.loads(content)
-                if not 
+                if not data:
                     warnings.append("Пустой JSON")
             except Exception:
                 errors.append("Невалидный JSON")
