@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # context_manager.py
-# Version 1.0
+# Версия 1.0
 # Экспорт/импорт контекста для drmAIcu
 
 import json
@@ -9,12 +9,10 @@ import sys
 import hashlib
 from datetime import datetime
 import zipfile
-import tempfile
 
-VERSION = "3.0.3"
+VERSION = "3.0.5"
 PROJECT_NAME = "drmAIcu"
 CONTEXT_FILE = "context_export.json"
-CONTEXT_ARCHIVE = "context_export.zip"
 
 # Файлы для экспорта
 FILES_TO_EXPORT = [
@@ -25,7 +23,7 @@ FILES_TO_EXPORT = [
     'context_manager.py'
 ]
 
-# Директории для экспорта
+# Директории для экспорта (только список файлов)
 DIRS_TO_EXPORT = [
     'backups',
     'logs'
@@ -117,8 +115,9 @@ def export_context_zip():
         return False
     
     # Создаём ZIP
+    context_archive = "context_export.zip"
     try:
-        with zipfile.ZipFile(CONTEXT_ARCHIVE, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(context_archive, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.write(CONTEXT_FILE)
             
             # Добавляем файлы
@@ -135,8 +134,8 @@ def export_context_zip():
                             arcname = os.path.relpath(filepath, '.')
                             zipf.write(filepath, arcname)
         
-        print(f"\n[SUCCESS] Архив создан: {CONTEXT_ARCHIVE}")
-        print(f"[INFO] Размер: {os.path.getsize(CONTEXT_ARCHIVE)} bytes")
+        print(f"\n[SUCCESS] Архив создан: {context_archive}")
+        print(f"[INFO] Размер: {os.path.getsize(context_archive)} bytes")
         return True
     except Exception as e:
         print(f"[ERROR] Failed to create ZIP: {e}")

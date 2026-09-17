@@ -3,41 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>drmAIcu v3.0.4 — ИСПРАВЛЕНО</title>
+<title>drmAIcu v3.0.5 FORTRESS — Полный комплект</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { font-family: system-ui, -apple-system, sans-serif; }
+</style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen">
 
-<div class="max-w-4xl mx-auto px-4 py-8">
+<div class="max-w-5xl mx-auto px-4 py-8">
     
     <!-- Header -->
     <div class="mb-8">
-        <h1 class="text-3xl font-bold text-emerald-400 mb-2">🛡️ drmAIcu v3.0.4 FORTRESS</h1>
-        <p class="text-gray-400">Исправленная версия — ошибка FileNotFoundError устранена</p>
-    </div>
-
-    <!-- Error Fixed -->
-    <div class="bg-emerald-500/10 border-2 border-emerald-500/50 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-bold text-emerald-400 mb-3">✅ Ошибка исправлена</h2>
-        <div class="space-y-2 text-sm">
-            <p class="text-gray-300"><strong class="text-red-400">Было:</strong> FileNotFoundError: No such file or directory: 'main.py'</p>
-            <p class="text-gray-300"><strong class="text-emerald-400">Причина:</strong> Скрипт пытался загрузить main.py при старте, но его не было в папке</p>
-            <p class="text-gray-300"><strong class="text-emerald-400">Исправление:</strong></p>
-            <ul class="list-disc list-inside ml-4 text-gray-400">
-                <li>Добавлена проверка существования файла перед открытием</li>
-                <li>Стартовый файл изменён на settings.json (создаётся автоматически)</li>
-                <li>Добавлено уведомление если файл не найден</li>
-            </ul>
+        <div class="flex items-center gap-4 mb-4">
+            <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-2xl shadow-lg shadow-emerald-500/20">AI</div>
+            <div>
+                <h1 class="text-4xl font-bold text-emerald-400">drmAIcu v3.0.5 FORTRESS</h1>
+                <p class="text-gray-400">Universal AI-Guardian • Полный комплект файлов</p>
+            </div>
         </div>
     </div>
 
-    <!-- Download -->
+    <!-- Version Info -->
+    <div class="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-2 border-emerald-500/30 rounded-xl p-6 mb-6">
+        <h2 class="text-2xl font-bold text-emerald-400 mb-3">📦 Комплект v3.0.5</h2>
+        <p class="text-gray-300 mb-4">Все файлы для запуска drmAIcu локально. Скачай и замени в папке проекта.</p>
+        <div class="grid md:grid-cols-2 gap-3 text-sm">
+            <div class="bg-gray-800/50 rounded-lg p-3">
+                <p class="text-emerald-400 font-semibold">✅ main.py</p>
+                <p class="text-gray-400 text-xs">v3.0.5 — исправлено FileNotFoundError</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-lg p-3">
+                <p class="text-emerald-400 font-semibold">✅ agent_engine.py</p>
+                <p class="text-gray-400 text-xs">v2.3 — исправлены asyncio, Gemini, HuggingFace</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-lg p-3">
+                <p class="text-emerald-400 font-semibold">✅ launcher.bat</p>
+                <p class="text-gray-400 text-xs">Рабочий (без tee, с chcp 65001)</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-lg p-3">
+                <p class="text-emerald-400 font-semibold">✅ settings.json</p>
+                <p class="text-gray-400 text-xs">Правильный ollama_url (без /v1)</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-lg p-3">
+                <p class="text-emerald-400 font-semibold">✅ context_manager.py</p>
+                <p class="text-gray-400 text-xs">v1.0 — экспорт/импорт контекста</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download All -->
     <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-bold text-white mb-4">📥 Скачать исправленную версию</h2>
-        <a href="main_v3.0.4_fixed.py" download class="inline-block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors">
-            📥 Скачать main_v3.0.4_fixed.py
-        </a>
-        <p class="text-sm text-gray-400 mt-3">Размер: ~35 KB • Версия: 3.0.4 FIXED</p>
+        <h2 class="text-xl font-bold text-white mb-4">📥 Скачать все файлы</h2>
+        <div class="grid md:grid-cols-2 gap-3">
+            <a href="main.py" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                📄 main.py
+            </a>
+            <a href="agent_engine.py" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                📄 agent_engine.py
+            </a>
+            <a href="launcher.bat" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                📄 launcher.bat
+            </a>
+            <a href="settings.json" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                📄 settings.json
+            </a>
+            <a href="context_manager.py" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center md:col-span-2">
+                📄 context_manager.py
+            </a>
+        </div>
     </div>
 
     <!-- Installation -->
@@ -47,59 +81,95 @@
             <div class="flex items-start gap-3">
                 <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">1</span>
                 <div>
-                    <p class="text-white font-semibold">Скачай файл</p>
-                    <p class="text-sm text-gray-400">Нажми кнопку выше или используй прямую ссылку</p>
+                    <p class="text-white font-semibold">Скачай все 5 файлов</p>
+                    <p class="text-sm text-gray-400">Нажми на каждую кнопку выше</p>
                 </div>
             </div>
             <div class="flex items-start gap-3">
                 <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">2</span>
                 <div>
-                    <p class="text-white font-semibold">Переименуй в main.py</p>
-                    <p class="text-sm text-gray-400">Замени существующий main.py в папке drmAIcu</p>
+                    <p class="text-white font-semibold">Замени файлы в папке drmAIcu</p>
+                    <p class="text-sm text-gray-400">Перемести скачанные файлы в папку проекта</p>
                 </div>
             </div>
             <div class="flex items-start gap-3">
                 <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">3</span>
                 <div>
-                    <p class="text-white font-semibold">Запусти</p>
+                    <p class="text-white font-semibold">Установи зависимости</p>
+                    <code class="block bg-gray-800 text-emerald-400 px-4 py-2 rounded mt-2 font-mono text-sm">pip install nicegui ollama openai aiohttp</code>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">4</span>
+                <div>
+                    <p class="text-white font-semibold">Запусти Ollama</p>
+                    <code class="block bg-gray-800 text-emerald-400 px-4 py-2 rounded mt-2 font-mono text-sm">ollama serve</code>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">5</span>
+                <div>
+                    <p class="text-white font-semibold">Запусти launcher.bat</p>
+                    <p class="text-sm text-gray-400">Или выполни:</p>
                     <code class="block bg-gray-800 text-emerald-400 px-4 py-2 rounded mt-2 font-mono text-sm">python main.py</code>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">6</span>
+                <div>
+                    <p class="text-white font-semibold">Открой браузер</p>
+                    <code class="block bg-gray-800 text-emerald-400 px-4 py-2 rounded mt-2 font-mono text-sm">http://localhost:8080</code>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Changes -->
+    <!-- What's Fixed -->
     <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-bold text-white mb-4">🔧 Что изменилось</h2>
+        <h2 class="text-xl font-bold text-white mb-4">🔧 Что исправлено в v3.0.5</h2>
         <div class="space-y-3 text-sm">
             <div class="bg-gray-800 rounded-lg p-4">
-                <p class="text-emerald-400 font-semibold mb-2">load_file_to_editor()</p>
-                <pre class="text-gray-300 text-xs overflow-x-auto"><code># Добавлена проверка существования файла
-if not os.path.exists(filename):
-    ui.notify(f'⚠️ Файл {filename} не найден', type='warning')
-    return</code></pre>
+                <p class="text-emerald-400 font-semibold mb-2">main.py</p>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>✅ Исправлено FileNotFoundError при запуске</li>
+                    <li>✅ Добавлена проверка существования файлов</li>
+                    <li>✅ Стартовый файл изменён на settings.json</li>
+                    <li>✅ Universal AI-Guardian для всех файлов</li>
+                </ul>
             </div>
             <div class="bg-gray-800 rounded-lg p-4">
-                <p class="text-emerald-400 font-semibold mb-2">Стартовый файл</p>
-                <pre class="text-gray-300 text-xs overflow-x-auto"><code># Было:
-load_file_to_editor('main.py')
-
-# Стало:
-if os.path.exists('settings.json'):
-    load_file_to_editor('settings.json')
-elif os.path.exists('agent_engine.py'):
-    load_file_to_editor('agent_engine.py')</code></pre>
+                <p class="text-emerald-400 font-semibold mb-2">agent_engine.py</p>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>✅ asyncio.get_running_loop() вместо get_event_loop()</li>
+                    <li>✅ Gemini API — полная конвертация messages</li>
+                    <li>✅ HuggingFace — добавлен метод запроса</li>
+                    <li>✅ Retry-логика для нестабильных API</li>
+                </ul>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">launcher.bat</p>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>✅ Убрана команда tee (нет в Windows)</li>
+                    <li>✅ Добавлен chcp 65001 для UTF-8</li>
+                    <li>✅ Проверка Python и main.py</li>
+                </ul>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">settings.json</p>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>✅ Убран /v1 из ollama_url (дублирование)</li>
+                </ul>
             </div>
         </div>
     </div>
 
     <!-- Features -->
     <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-bold text-white mb-4">✨ Возможности v3.0.4</h2>
+        <h2 class="text-xl font-bold text-white mb-4">✨ Возможности v3.0.5</h2>
         <div class="grid md:grid-cols-2 gap-4 text-sm">
             <div class="bg-gray-800 rounded-lg p-4">
                 <p class="text-emerald-400 font-semibold mb-2">🛡️ Universal AI-Guardian</p>
-                <ul class="text-gray-400 space-y-1">
+                <ul class="text-gray-400 space-y-1 text-xs">
                     <li>• Обновление ЛЮБОГО файла проекта</li>
                     <li>• 4-уровневая валидация</li>
                     <li>• Тройной бэкап</li>
@@ -108,23 +178,24 @@ elif os.path.exists('agent_engine.py'):
             </div>
             <div class="bg-gray-800 rounded-lg p-4">
                 <p class="text-emerald-400 font-semibold mb-2">📦 Импорт контекста</p>
-                <ul class="text-gray-400 space-y-1">
-                    <li>• Вставка context_export.json</li>
-                    <li>• Автоматическое обновление всех файлов</li>
-                    <li>• Проверка через AI-Guardian</li>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>• Экспорт всех файлов в JSON</li>
+                    <li>• Передача AI для анализа</li>
+                    <li>• Импорт исправлений через UI</li>
+                    <li>• Автоматическая проверка</li>
                 </ul>
             </div>
             <div class="bg-gray-800 rounded-lg p-4">
                 <p class="text-emerald-400 font-semibold mb-2">🌐 Русский интерфейс</p>
-                <ul class="text-gray-400 space-y-1">
-                    <li>• Все вкладки на русском</li>
-                    <li>• Панель, API, LLM, Обновления</li>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>• Панель, API, LLM</li>
+                    <li>• Универсальные обновления</li>
                     <li>• Отладка, Редактор, Консоль</li>
                 </ul>
             </div>
             <div class="bg-gray-800 rounded-lg p-4">
                 <p class="text-emerald-400 font-semibold mb-2">🔒 Защита файлов</p>
-                <ul class="text-gray-400 space-y-1">
+                <ul class="text-gray-400 space-y-1 text-xs">
                     <li>• main.py, agent_engine.py</li>
                     <li>• settings.json, launcher.bat</li>
                     <li>• context_manager.py</li>
@@ -133,9 +204,28 @@ elif os.path.exists('agent_engine.py'):
         </div>
     </div>
 
+    <!-- Version History -->
+    <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4">📊 История версий</h2>
+        <div class="space-y-2 text-sm">
+            <div class="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                <span class="text-emerald-400 font-bold">v3.0.5</span>
+                <span class="text-gray-300">Исправлено FileNotFoundError, полный комплект</span>
+            </div>
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3">
+                <span class="text-gray-400 font-bold">v3.0.4</span>
+                <span class="text-gray-500">Universal AI-Guardian, русский интерфейс</span>
+            </div>
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3">
+                <span class="text-gray-400 font-bold">v3.0.3</span>
+                <span class="text-gray-500">Исправления ошибок (OSError, asyncio, Gemini)</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <div class="text-center text-gray-500 text-sm mt-8">
-        <p>drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian • dreamkin • 2026</p>
+        <p>drmAIcu v3.0.5 FORTRESS • Universal AI-Guardian • dreamkin • 2026</p>
     </div>
 
 </div>
