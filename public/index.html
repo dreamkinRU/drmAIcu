@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>drmAIcu v3.0.4 — ИСПРАВЛЕНО</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<div class="max-w-4xl mx-auto px-4 py-8">
+    
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-emerald-400 mb-2">🛡️ drmAIcu v3.0.4 FORTRESS</h1>
+        <p class="text-gray-400">Исправленная версия — ошибка FileNotFoundError устранена</p>
+    </div>
+
+    <!-- Error Fixed -->
+    <div class="bg-emerald-500/10 border-2 border-emerald-500/50 rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold text-emerald-400 mb-3">✅ Ошибка исправлена</h2>
+        <div class="space-y-2 text-sm">
+            <p class="text-gray-300"><strong class="text-red-400">Было:</strong> FileNotFoundError: No such file or directory: 'main.py'</p>
+            <p class="text-gray-300"><strong class="text-emerald-400">Причина:</strong> Скрипт пытался загрузить main.py при старте, но его не было в папке</p>
+            <p class="text-gray-300"><strong class="text-emerald-400">Исправление:</strong></p>
+            <ul class="list-disc list-inside ml-4 text-gray-400">
+                <li>Добавлена проверка существования файла перед открытием</li>
+                <li>Стартовый файл изменён на settings.json (создаётся автоматически)</li>
+                <li>Добавлено уведомление если файл не найден</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Download -->
+    <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4">📥 Скачать исправленную версию</h2>
+        <a href="main_v3.0.4_fixed.py" download class="inline-block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors">
+            📥 Скачать main_v3.0.4_fixed.py
+        </a>
+        <p class="text-sm text-gray-400 mt-3">Размер: ~35 KB • Версия: 3.0.4 FIXED</p>
+    </div>
+
+    <!-- Installation -->
+    <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4">🚀 Установка</h2>
+        <div class="space-y-4">
+            <div class="flex items-start gap-3">
+                <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">1</span>
+                <div>
+                    <p class="text-white font-semibold">Скачай файл</p>
+                    <p class="text-sm text-gray-400">Нажми кнопку выше или используй прямую ссылку</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">2</span>
+                <div>
+                    <p class="text-white font-semibold">Переименуй в main.py</p>
+                    <p class="text-sm text-gray-400">Замени существующий main.py в папке drmAIcu</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="bg-emerald-500 text-white font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">3</span>
+                <div>
+                    <p class="text-white font-semibold">Запусти</p>
+                    <code class="block bg-gray-800 text-emerald-400 px-4 py-2 rounded mt-2 font-mono text-sm">python main.py</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Changes -->
+    <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4">🔧 Что изменилось</h2>
+        <div class="space-y-3 text-sm">
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">load_file_to_editor()</p>
+                <pre class="text-gray-300 text-xs overflow-x-auto"><code># Добавлена проверка существования файла
+if not os.path.exists(filename):
+    ui.notify(f'⚠️ Файл {filename} не найден', type='warning')
+    return</code></pre>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">Стартовый файл</p>
+                <pre class="text-gray-300 text-xs overflow-x-auto"><code># Было:
+load_file_to_editor('main.py')
+
+# Стало:
+if os.path.exists('settings.json'):
+    load_file_to_editor('settings.json')
+elif os.path.exists('agent_engine.py'):
+    load_file_to_editor('agent_engine.py')</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features -->
+    <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4">✨ Возможности v3.0.4</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">🛡️ Universal AI-Guardian</p>
+                <ul class="text-gray-400 space-y-1">
+                    <li>• Обновление ЛЮБОГО файла проекта</li>
+                    <li>• 4-уровневая валидация</li>
+                    <li>• Тройной бэкап</li>
+                    <li>• Авто-откат при ошибке</li>
+                </ul>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">📦 Импорт контекста</p>
+                <ul class="text-gray-400 space-y-1">
+                    <li>• Вставка context_export.json</li>
+                    <li>• Автоматическое обновление всех файлов</li>
+                    <li>• Проверка через AI-Guardian</li>
+                </ul>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">🌐 Русский интерфейс</p>
+                <ul class="text-gray-400 space-y-1">
+                    <li>• Все вкладки на русском</li>
+                    <li>• Панель, API, LLM, Обновления</li>
+                    <li>• Отладка, Редактор, Консоль</li>
+                </ul>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">🔒 Защита файлов</p>
+                <ul class="text-gray-400 space-y-1">
+                    <li>• main.py, agent_engine.py</li>
+                    <li>• settings.json, launcher.bat</li>
+                    <li>• context_manager.py</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center text-gray-500 text-sm mt-8">
+        <p>drmAIcu v3.0.4 FORTRESS • Universal AI-Guardian • dreamkin • 2026</p>
+    </div>
+
+</div>
+
+</body>
+</html>
