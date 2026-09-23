@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>drmAIcu v3.0.5 FORTRESS — Полный комплект</title>
-<script src="https://cdn.tailwindcss.com"></script>
+    <title>drmAIcu v3.0.7 FORTRESS — Полный комплект</title><script src="https://cdn.tailwindcss.com"></script>
 <style>
 body { font-family: system-ui, -apple-system, sans-serif; }
 </style>
@@ -18,20 +17,19 @@ body { font-family: system-ui, -apple-system, sans-serif; }
         <div class="flex items-center gap-4 mb-4">
             <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-2xl shadow-lg shadow-emerald-500/20">AI</div>
             <div>
-                <h1 class="text-4xl font-bold text-emerald-400">drmAIcu v3.0.5 FORTRESS</h1>
-                <p class="text-gray-400">Universal AI-Guardian • Полный комплект файлов</p>
-            </div>
+        <h1 class="text-4xl font-bold text-emerald-400">drmAIcu v3.0.7 FORTRESS</h1>
+        <p class="text-gray-400">Universal AI-Guardian • Полный комплект файлов</p>            </div>
         </div>
     </div>
 
     <!-- Version Info -->
     <div class="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-2 border-emerald-500/30 rounded-xl p-6 mb-6">
-        <h2 class="text-2xl font-bold text-emerald-400 mb-3">📦 Комплект v3.0.5</h2>
+        <h2 class="text-2xl font-bold text-emerald-400 mb-3">📦 Комплект v3.0.7</h2>
         <p class="text-gray-300 mb-4">Все файлы для запуска drmAIcu локально. Скачай и замени в папке проекта.</p>
         <div class="grid md:grid-cols-2 gap-3 text-sm">
             <div class="bg-gray-800/50 rounded-lg p-3">
                 <p class="text-emerald-400 font-semibold">✅ main.py</p>
-                <p class="text-gray-400 text-xs">v3.0.5 — исправлено FileNotFoundError</p>
+                <p class="text-gray-400 text-xs">v3.0.7 — исправлена lambda ошибка</p>
             </div>
             <div class="bg-gray-800/50 rounded-lg p-3">
                 <p class="text-emerald-400 font-semibold">✅ agent_engine.py</p>
@@ -56,8 +54,8 @@ body { font-family: system-ui, -apple-system, sans-serif; }
     <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
         <h2 class="text-xl font-bold text-white mb-4">📥 Скачать все файлы</h2>
         <div class="grid md:grid-cols-2 gap-3">
-            <a href="main.py" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
-                📄 main.py
+            <a href="main_v3.0.7.py" download="main.py" class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                📄 main.py (v3.0.7)
             </a>
             <a href="agent_engine.py" download class="block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
                 📄 agent_engine.py
@@ -126,7 +124,7 @@ body { font-family: system-ui, -apple-system, sans-serif; }
 
     <!-- What's Fixed -->
     <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-bold text-white mb-4">🔧 Что исправлено в v3.0.5</h2>
+        <h2 class="text-xl font-bold text-white mb-4">🔧 Что исправлено в v3.0.7</h2>
         <div class="space-y-3 text-sm">
             <div class="bg-gray-800 rounded-lg p-4">
                 <p class="text-emerald-400 font-semibold mb-2">main.py</p>
@@ -160,12 +158,20 @@ body { font-family: system-ui, -apple-system, sans-serif; }
                     <li>✅ Убран /v1 из ollama_url (дублирование)</li>
                 </ul>
             </div>
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-emerald-400 font-semibold mb-2">v3.0.7</p>
+                <ul class="text-gray-400 space-y-1 text-xs">
+                    <li>✅ Исправлена lambda ошибка в Console (нельзя присваивать в lambda)</li>
+                    <li>✅ Удалены дубликаты функций</li>
+                    <li>✅ Проверка существования файлов перед загрузкой</li>
+                </ul>
+            </div>
         </div>
     </div>
 
     <!-- Features -->
     <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-bold text-white mb-4">✨ Возможности v3.0.5</h2>
+        <h2 class="text-xl font-bold text-white mb-4">✨ Возможности v3.0.7</h2>
         <div class="grid md:grid-cols-2 gap-4 text-sm">
             <div class="bg-gray-800 rounded-lg p-4">
                 <p class="text-emerald-400 font-semibold mb-2">🛡️ Universal AI-Guardian</p>
@@ -209,8 +215,16 @@ body { font-family: system-ui, -apple-system, sans-serif; }
         <h2 class="text-xl font-bold text-white mb-4">📊 История версий</h2>
         <div class="space-y-2 text-sm">
             <div class="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
-                <span class="text-emerald-400 font-bold">v3.0.5</span>
-                <span class="text-gray-300">Исправлено FileNotFoundError, полный комплект</span>
+                <span class="text-emerald-400 font-bold">v3.0.7</span>
+                <span class="text-gray-300">Исправлена lambda ошибка в Console</span>
+            </div>
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3">
+                <span class="text-gray-400 font-bold">v3.0.6</span>
+                <span class="text-gray-500">Удалены дубликаты функций</span>
+            </div>
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3">
+                <span class="text-gray-400 font-bold">v3.0.5</span>
+                <span class="text-gray-500">Исправлено FileNotFoundError, полный комплект</span>
             </div>
             <div class="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3">
                 <span class="text-gray-400 font-bold">v3.0.4</span>
@@ -225,7 +239,7 @@ body { font-family: system-ui, -apple-system, sans-serif; }
 
     <!-- Footer -->
     <div class="text-center text-gray-500 text-sm mt-8">
-        <p>drmAIcu v3.0.5 FORTRESS • Universal AI-Guardian • dreamkin • 2026</p>
+        <p>drmAIcu v3.0.7 FORTRESS • Universal AI-Guardian • dreamkin • 2026</p>
     </div>
 
 </div>
