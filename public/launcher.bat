@@ -21,7 +21,7 @@ if not exist main.py (
 if not exist logs mkdir logs
 
 echo ========================================
-echo   drmAIcu v3.0.5 FORTRESS
+echo   drmAIcu FORTRESS starter
 echo ========================================
 echo.
 
