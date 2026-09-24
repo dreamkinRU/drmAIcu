@@ -1,5 +1,5 @@
 # main.py
-# Версия 3.0.5 FORTRESS (ИСПРАВЛЕНО)
+# Version 3.0.6 FORTRESS (ЧИСТЫЙ КОД)
 
 from nicegui import ui, app
 import json
@@ -51,7 +51,7 @@ class AgentEngine:
     def __init__(self, config, **kwargs):
         self.config = config
         self.log = kwargs.get('log_callback', lambda msg, lvl: print(f"[{lvl}] {msg}"))
-        self.log("Загружено АВАРИЙНОЕ ядро", "WARNING")
+        self.log("Emergency engine loaded", "WARNING")
 
     async def get_code_response(self, candidate: Dict, prompt: str) -> Dict:
         try:
@@ -63,23 +63,23 @@ class AgentEngine:
                 ])
             response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=120.0)
             code = response['message']['content']
-            self.log(f"✅ {candidate['name']}: {len(code)} симв.", "SUCCESS")
+            self.log(f"[OK] {candidate['name']}: {len(code)} chars", "SUCCESS")
             return {"candidate": candidate, "code": code, "error": None}
         except Exception as e:
-            self.log(f"❌ {candidate['name']}: {e}", "ERROR")
+            self.log(f"[ERR] {candidate['name']}: {e}", "ERROR")
             return {"candidate": candidate, "code": None, "error": str(e)}
 
     async def run_task(self, prompt: str, status_callback=None, mode: str = "full") -> str:
-        self.log(f"ЗАДАЧА: {prompt[:50]}", "INFO")
+        self.log(f"TASK: {prompt[:50]}", "INFO")
         candidates = [{"model": "qwen2.5-coder:1.5b", "name": "Qwen 1.5B"}]
         if status_callback:
-            status_callback("Отправка...")
+            status_callback("Sending...")
         results = await asyncio.gather(*[self.get_code_response(c, prompt) for c in candidates], return_exceptions=True)
         valid = [r for r in results if isinstance(r, dict) and r.get("code")]
         if not valid:
-            return "Все модели не ответили"
+            return "All models failed"
         if status_callback:
-            status_callback("✅ Готово")
+            status_callback("Done")
         return valid[0]["code"]
 '''
 
@@ -99,7 +99,7 @@ def load_config():
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
-            log_debug("⚠️ settings.json повреждён", "WARNING")
+            log_debug("settings.json corrupted", "WARNING")
     return {
         "groq_api_key": "",
         "ollama_url": "http://localhost:11434",
@@ -181,7 +181,7 @@ def validate_python_syntax(code: str) -> tuple:
     except SyntaxError as e:
         return False, str(e)
     except (UnicodeDecodeError, ValueError) as e:
-        return False, f"Кодировка: {e}"
+        return False, f"Encoding: {e}"
 
 
 def validate_json_syntax(code: str) -> tuple:
@@ -196,10 +196,10 @@ def validate_engine_structure(code: str) -> tuple:
     required = ['class AgentEngine', 'async def run_task', 'async def get_code_response', '__init__']
     missing = [r for r in required if r not in code]
     if missing:
-        return False, f"Отсутствуют: {', '.join(missing)}"
+        return False, f"Missing: {', '.join(missing)}"
     if 'ui.dark_mode' in code or 'ui.label' in code or 'ui.button' in code:
         if 'def create_ui' not in code:
-            return False, "Вызовы UI вне create_ui()"
+            return False, "UI calls outside create_ui()"
     return True, None
 
 
@@ -207,14 +207,14 @@ def restore_from_backup(backup_path: str = None) -> bool:
     if backup_path and os.path.exists(backup_path):
         try:
             shutil.copy2(backup_path, ENGINE_FILE)
-            log_debug(f"🔄 Восстановлено из: {backup_path}", "SUCCESS")
+            log_debug(f"Restored from: {backup_path}", "SUCCESS")
             return True
         except Exception as e:
-            log_debug(f"❌ Ошибка восстановления: {e}", "ERROR")
+            log_debug(f"Restore error: {e}", "ERROR")
     latest_backup = os.path.join(BACKUP_DIR, "agent_engine_LATEST.bak")
     if os.path.exists(latest_backup):
         return restore_from_backup(latest_backup)
-    log_debug("⚠️ Бэкапы не найдены — создаю аварийное ядро", "WARNING")
+    log_debug("No backups found - creating emergency engine", "WARNING")
     with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
         f.write(EMERGENCY_ENGINE_CODE)
     return True
@@ -223,9 +223,9 @@ def restore_from_backup(backup_path: str = None) -> bool:
 def ensure_base_files():
     if not os.path.exists(CONFIG_FILE):
         save_config({})
-        log_debug("✅ settings.json создан", "SUCCESS")
+        log_debug("settings.json created", "SUCCESS")
     if not os.path.exists(ENGINE_FILE):
-        log_debug("⚠️ agent_engine.py не найден — создаю аварийное ядро", "WARNING")
+        log_debug("agent_engine.py not found - creating emergency engine", "WARNING")
         with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
             f.write(EMERGENCY_ENGINE_CODE)
         return
@@ -234,15 +234,15 @@ def ensure_base_files():
     valid_syntax, syntax_error = validate_python_syntax(content)
     valid_structure, structure_error = validate_engine_structure(content)
     if not valid_syntax or not valid_structure:
-        log_debug(f"⚠️ agent_engine.py ПОВРЕЖДЁН!", "ERROR")
+        log_debug("agent_engine.py CORRUPTED!", "ERROR")
         if syntax_error:
-            log_debug(f"Синтаксис: {syntax_error}", "ERROR")
+            log_debug(f"Syntax: {syntax_error}", "ERROR")
         if structure_error:
-            log_debug(f"Структура: {structure_error}", "ERROR")
-        log_debug("🔄 Восстановление из бэкапа...", "INFO")
+            log_debug(f"Structure: {structure_error}", "ERROR")
+        log_debug("Restoring from backup...", "INFO")
         if not restore_from_backup():
-            log_debug("❌ НЕ УДАЛОСЬ восстановить ядро!", "ERROR")
-    log_debug("🛡️ Базовые файлы проверены", "SUCCESS")
+            log_debug("FAILED to restore engine!", "ERROR")
+    log_debug("Base files checked", "SUCCESS")
 
 
 engine_instance = None
@@ -267,16 +267,16 @@ def get_engine():
             engine_instance = sys.modules['agent_engine'].AgentEngine(config, log_callback=log_debug)
         except TypeError:
             engine_instance = sys.modules['agent_engine'].AgentEngine(config)
-        log_debug("✅ Ядро загружено", "SUCCESS")
+        log_debug("Engine loaded", "SUCCESS")
         return engine_instance
     except Exception as e:
-        log_debug(f"❌ Ошибка ядра: {e}", "ERROR")
+        log_debug(f"Engine error: {e}", "ERROR")
         log_debug(f"Traceback: {traceback.format_exc()}", "ERROR")
-        log_debug("🔄 Попытка восстановления...", "WARNING")
+        log_debug("Trying to restore...", "WARNING")
         if restore_from_backup():
-            log_debug("✅ Восстановлено! Перезагрузите ЦУ", "SUCCESS")
+            log_debug("Restored! Restart CU", "SUCCESS")
         else:
-            log_debug("❌ НЕ УДАЛОСЬ восстановить", "ERROR")
+            log_debug("FAILED to restore", "ERROR")
         return None
 
 
@@ -295,7 +295,7 @@ def get_project_files():
 
 
 def restart_server():
-    log_debug("🔄 Перезапуск...", "WARNING")
+    log_debug("Restarting...", "WARNING")
     with open(RESTART_FLAG, 'w') as f:
         f.write('restart')
 
@@ -327,15 +327,15 @@ class UniversalAIGuardian:
         if file_type == 'python':
             valid, error = validate_python_syntax(content)
             if not valid:
-                return False, f"Ошибка синтаксиса Python: {error}"
+                return False, f"Python syntax error: {error}"
             if filename == 'agent_engine.py':
                 valid, error = validate_engine_structure(content)
                 if not valid:
-                    return False, f"Ошибка структуры: {error}"
+                    return False, f"Structure error: {error}"
         elif file_type == 'json':
             valid, error = validate_json_syntax(content)
             if not valid:
-                return False, f"Ошибка синтаксиса JSON: {error}"
+                return False, f"JSON syntax error: {error}"
         
         return True, None
     
@@ -349,71 +349,71 @@ class UniversalAIGuardian:
             "backups": []
         }
         
-        self.log(f"[GUARDIAN] Обработка: {filename}", "INFO")
+        self.log(f"[GUARDIAN] Processing: {filename}", "INFO")
         
-        self.log("Уровень 1/4: Проверка синтаксиса...", "INFO")
-        result["steps"].append("1. Синтаксис")
+        self.log("Level 1/4: Syntax validation...", "INFO")
+        result["steps"].append("1. Syntax")
         valid, error = self._validate_file(filename, new_content)
         if not valid:
-            result["errors"].append(f"Синтаксис: {error}")
-            self.log(f"❌ ОШИБКА СИНТАКСИСА: {error}", "ERROR")
+            result["errors"].append(f"Syntax: {error}")
+            self.log(f"SYNTAX ERROR: {error}", "ERROR")
             return result
-        self.log("✅ Синтаксис OK", "SUCCESS")
+        self.log("Syntax OK", "SUCCESS")
         
         if filename.endswith('.py'):
-            self.log("Уровень 2/4: Проверка структуры...", "INFO")
-            result["steps"].append("2. Структура")
+            self.log("Level 2/4: Structure validation...", "INFO")
+            result["steps"].append("2. Structure")
             if filename == 'agent_engine.py':
                 valid, error = validate_engine_structure(new_content)
                 if not valid:
-                    result["errors"].append(f"Структура: {error}")
-                    self.log(f"❌ ОШИБКА СТРУКТУРЫ: {error}", "ERROR")
+                    result["errors"].append(f"Structure: {error}")
+                    self.log(f"STRUCTURE ERROR: {error}", "ERROR")
                     return result
-            self.log("✅ Структура OK", "SUCCESS")
+            self.log("Structure OK", "SUCCESS")
         else:
-            result["steps"].append("2. Структура (пропущено)")
+            result["steps"].append("2. Structure (skipped)")
         
-        self.log("Уровень 3/4: AI-проверка...", "INFO")
-        result["steps"].append("3. AI-проверка")
+        self.log("Level 3/4: AI validation...", "INFO")
+        result["steps"].append("3. AI-Check")
         ai_result = await self._ai_validation(filename, new_content, description)
         if not ai_result.get("approved", False):
             result["errors"].extend(ai_result.get("errors", []))
             result["warnings"].extend(ai_result.get("warnings", []))
-            self.log(f"❌ AI-ПРОВЕРКА НЕ ПРОЙДЕНА: {ai_result.get('reason')}", "ERROR")
+            self.log(f"AI CHECK FAILED: {ai_result.get('reason')}", "ERROR")
             return result
-        self.log("✅ AI-проверка OK", "SUCCESS")
+        self.log("AI check OK", "SUCCESS")
         
-        self.log("Уровень 4/4: Создание бэкапа...", "INFO")
-        result["steps"].append("4. Бэкап")
+        self.log("Level 4/4: Creating backup...", "INFO")
+        result["steps"].append("4. Backup")
         if os.path.exists(filename):
             backups = create_triple_backup(filename)
             result["backups"] = backups
             if not backups:
-                result["warnings"].append("Не удалось создать бэкап")
+                result["warnings"].append("Failed to create backup")
             else:
-                self.log(f"✅ Создано {len(backups)} бэкапов", "SUCCESS")
+                self.log(f"Created {len(backups)} backups", "SUCCESS")
         else:
-            result["warnings"].append("Файл ещё не существует")
+            result["warnings"].append("File does not exist yet")
         
         result["approved"] = True
-        self.log("🎉 ВСЕ 4 УРОВНЯ ПРОЙДЕНЫ!", "SUCCESS")
+        self.log("ALL LEVELS PASSED!", "SUCCESS")
         return result
     
     async def _ai_validation(self, filename: str, content: str, description: str) -> dict:
-        validation_prompt = f"""Ты — ревизор кода. Проверь обновление файла.
+        validation_prompt = f"""You are a code reviewer. Check this file update.
 
-ФАЙЛ: {filename}
-ОПИСАНИЕ: {description}
-СОДЕРЖИМОЕ (первые 3000 символов):
+FILE: {filename}
+DESCRIPTION: {description}
+CONTENT (first 3000 chars):
 {content[:3000]}
 
-ПРОВЕРКИ:
-1. Код логичен и корректен?
-2. Есть ли очевидные ошибки?
-3. Безопасно ли применять?
+CHECK:
+1. Is the code logical and correct?
+2. Are there obvious bugs?
+3. Is it safe to apply?
 
-ВЕРНИ JSON:
-{{"approved": true/false, "reason": "причина если отклонено", "warnings": [], "suggestions": []}}
+RETURN JSON:
+{{"approved": true/false, "reason": "reason if rejected", "warnings": [], "suggestions": []}}
 
 JSON:"""
         
@@ -430,7 +430,7 @@ JSON:"""
                         return json_module.loads(json_match.group())
             return self._heuristic_validation(filename, content)
         except Exception as e:
-            self.log(f"⚠️ AI ошибка: {e}", "WARNING")
+            self.log(f"AI error: {e}", "WARNING")
             return self._heuristic_validation(filename, content)
     
     def _heuristic_validation(self, filename: str, content: str) -> dict:
@@ -438,19 +438,19 @@ JSON:"""
         warnings = []
         
         if len(content) < 10:
-            warnings.append("Очень короткое содержимое")
+            warnings.append("Very short content")
         
         if filename.endswith('.py'):
             if content.count('def ') == 0 and 'class ' not in content:
-                warnings.append("Не найдено функций или классов")
+                warnings.append("No functions or classes found")
         
         elif filename.endswith('.json'):
             try:
                 data = json.loads(content)
                 if not data:
-                    warnings.append("Пустой JSON")
+                    warnings.append("Empty JSON")
             except Exception:
-                errors.append("Невалидный JSON")
+                errors.append("Invalid JSON")
         
         return {
             "approved": len(errors) == 0,
@@ -461,45 +461,45 @@ JSON:"""
     
     async def apply_patch(self, filename: str, content: str, validation_result: dict) -> bool:
         if not validation_result.get("approved", False):
-            self.log("❌ Отклонено", "ERROR")
+            self.log("Rejected", "ERROR")
             return False
         
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(content)
-            self.log(f"✅ Патч применён: {filename}", "SUCCESS")
+            self.log(f"Patch applied: {filename}", "SUCCESS")
             
             if filename == 'agent_engine.py':
                 global engine_instance
                 engine_instance = None
             
             if filename == 'main.py':
-                self.log("⚠️ main.py обновлён — требуется перезапуск", "WARNING")
+                self.log("main.py updated - restart required", "WARNING")
             
             return True
         except Exception as e:
-            self.log(f"❌ Ошибка применения: {e}", "ERROR")
+            self.log(f"Apply error: {e}", "ERROR")
             backups = validation_result.get("backups", [])
             if backups:
                 if restore_from_backup(backups[0]):
-                    self.log("🔄 Откат выполнен", "WARNING")
+                    self.log("Rollback done", "WARNING")
             return False
     
     async def apply_context_patch(self, context_json: str) -> dict:
         try:
             context = json.loads(context_json)
         except Exception as e:
-            return {"success": False, "error": f"Невалидный JSON: {e}"}
+            return {"success": False, "error": f"Invalid JSON: {e}"}
         
         files_data = context.get("files", {})
         results = {}
         
         for filename, file_info in files_data.items():
             content = file_info.get("content", "")
-            description = f"Обновление из контекста: {filename}"
+            description = f"Update from context: {filename}"
             
             self.log(f"\n{'='*60}", "INFO")
-            self.log(f"Обработка: {filename}", "INFO")
+            self.log(f"Processing: {filename}", "INFO")
             
             validation = await self.validate_and_apply_patch(filename, content, description)
             
@@ -518,54 +518,54 @@ def create_ui():
 
     with ui.header().classes('bg-gray-900 text-white border-b border-gray-700 p-4'):
         with ui.row().classes('w-full items-center justify-between'):
-            ui.label('🛡️ drmAIcu v3.0.5 FORTRESS • Universal AI-Guardian').classes('text-xl font-bold')
-            ui.button('🔄 ПЕРЕЗАПУСТИТЬ', on_click=restart_server).props('color=orange')
+            ui.label('drmAIcu v3.0.6 FORTRESS').classes('text-xl font-bold')
+            ui.button('RESTART', on_click=restart_server).props('color=orange')
 
     with ui.tabs().classes('w-full') as tabs:
-        tab_dash = ui.tab('dashboard', label='Панель')
+        tab_dash = ui.tab('dashboard', label='Dashboard')
         tab_api = ui.tab('api', label='API')
         tab_llm = ui.tab('llm', label='LLM')
-        tab_updates = ui.tab('updates', label='🛡️ Универсальные обновления')
-        tab_debug = ui.tab('debug', label='Отладка')
-        tab_editor = ui.tab('editor', label='📝 Редактор')
-        tab_console = ui.tab('console', label='💬 Консоль')
+        tab_updates = ui.tab('updates', label='Universal Updates')
+        tab_debug = ui.tab('debug', label='Debug')
+        tab_editor = ui.tab('editor', label='Editor')
+        tab_console = ui.tab('console', label='Console')
 
     with ui.tab_panels(tabs, value=tab_dash).classes('w-full p-6'):
 
         with ui.tab_panel(tab_dash):
-            ui.label('Статус системы (FORTRESS v3.0.5)').classes('text-lg font-bold mb-4')
+            ui.label('System Status (FORTRESS v3.0.6)').classes('text-lg font-bold mb-4')
             config = load_config()
             with ui.row().classes('gap-4'):
                 ui.badge('Ollama: OK', color='green')
-                groq_text = 'Groq: OK' if config.get('groq_api_key') else 'Groq: Нет'
+                groq_text = 'Groq: OK' if config.get('groq_api_key') else 'Groq: No'
                 groq_color = 'green' if config.get('groq_api_key') else 'red'
                 ui.badge(groq_text, color=groq_color)
-                ui.badge('Ядро: v3.0.5 FORTRESS', color='green')
-                ui.badge('🛡️ Универсальный Guardian: АКТИВЕН', color='green')
+                ui.badge('Core: v3.0.6 FORTRESS', color='green')
+                ui.badge('Universal Guardian: ACTIVE', color='green')
             ui.markdown('''
-**Универсальный AI-Guardian:**
-- ✅ Поддерживает ВСЕ файлы проекта
-- ✅ 4-уровневая валидация
-- ✅ Тройной бэкап
-- ✅ Авто-откат при ошибке
-- ✅ Импорт контекста через UI
+**Universal AI-Guardian:**
+- Supports ALL project files
+- 4-level validation
+- Triple backup
+- Auto-rollback on error
+- Context-based patching
             ''')
 
         with ui.tab_panel(tab_api):
-            ui.label('API ключи').classes('text-lg font-bold mb-2')
+            ui.label('API Keys').classes('text-lg font-bold mb-2')
             config = load_config()
             with ui.row().classes('w-full items-center gap-4 mb-4'):
                 groq_key = ui.input('Groq API Key', value=config.get('groq_api_key', ''), password=True).classes('flex-grow')
 
                 def save_groq():
                     save_config({'groq_api_key': groq_key.value})
-                    ui.notify('✅ Groq сохранён', type='positive')
+                    ui.notify('Groq saved', type='positive')
 
                 groq_key.on('blur', save_groq)
-                ui.button('💾', on_click=save_groq)
+                ui.button('Save', on_click=save_groq)
 
         with ui.tab_panel(tab_llm):
-            ui.label('LLM Провайдеры').classes('text-lg font-bold mb-4')
+            ui.label('LLM Providers').classes('text-lg font-bold mb-4')
             config = load_config()
             providers = [
                 ('groq_api_key', 'Groq', 'https://console.groq.com'),
@@ -578,131 +578,69 @@ def create_ui():
                 with ui.card().classes('w-full mb-4'):
                     with ui.row().classes('w-full items-center justify-between'):
                         ui.label(label).classes('font-bold')
-                        status = '✅' if config.get(key_name) else '❌'
+                        status = 'OK' if config.get(key_name) else 'No'
                         ui.badge(f'{status}', color='green' if config.get(key_name) else 'red')
                     key_input = ui.input('API Key', value=config.get(key_name, ''), password=True).classes('w-full')
                     with ui.row().classes('gap-2'):
                         def make_save(kn, inp, lbl):
-                            return lambda: (save_config({kn: inp.value}), ui.notify(f'✅ {lbl} сохранён'))
-                        ui.button('💾', on_click=make_save(key_name, key_input, label)).props('color=green')
-                        ui.button('🔗', on_click=lambda u=url: ui.open_url(u)).props('flat')
+                            return lambda: (save_config({kn: inp.value}), ui.notify(f'{lbl} saved'))
+                        ui.button('Save', on_click=make_save(key_name, key_input, label)).props('color=green')
+                        ui.button('Link', on_click=lambda u=url: ui.open_url(u)).props('flat')
 
         with ui.tab_panel(tab_updates):
-            ui.label('🛡️ Универсальный AI-Guardian: Обновление ЛЮБОГО файла').classes('text-lg font-bold mb-4')
-            ui.label('Поддерживает: main.py, agent_engine.py, settings.json, launcher.bat, context_manager.py').classes('text-gray-400 mb-4')
+            ui.label('Universal AI-Guardian: Update ANY File').classes('text-lg font-bold mb-4')
             
             file_selector = ui.select(
                 options=PROTECTED_FILES,
                 value='agent_engine.py',
-                label='Выберите файл для обновления'
+                label='Select file to update'
             ).classes('w-full mb-4')
             
-            update_description = ui.textarea('Описание обновления', placeholder='Что нового?').classes('w-full h-24')
-            new_code_area = ui.textarea('Новый код').classes('w-full h-96')
+            update_description = ui.textarea('Update description', placeholder='What is new?').classes('w-full h-24')
+            new_code_area = ui.textarea('New code').classes('w-full h-96')
             validation_log = ui.log(max_lines=50).classes('w-full h-48 bg-black text-green-400 font-mono mt-4')
             
             async def validate_and_update():
                 global guardian_instance
                 filename = file_selector.value
                 if not filename:
-                    ui.notify('Выберите файл!', type='warning')
+                    ui.notify('Select file!', type='warning')
                     return
                 if not update_description.value:
-                    ui.notify('Введите описание!', type='warning')
+                    ui.notify('Enter description!', type='warning')
                     return
                 validation_log.clear()
-                validation_log.push(f'[INFO] Универсальный Guardian активирован для {filename}...')
+                validation_log.push(f'[INFO] Guardian activated for {filename}...')
                 engine = get_engine()
                 if not engine:
-                    validation_log.push('[ERROR] Ядро не загружено!')
-                    ui.notify('❌ Ядро не загружено', type='negative')
+                    validation_log.push('[ERROR] Engine not loaded!')
                     return
                 if guardian_instance is None:
                     guardian_instance = UniversalAIGuardian(engine, lambda msg, lvl: validation_log.push(f'[{lvl}] {msg}'))
                 new_code = new_code_area.value.strip()
                 if not new_code:
-                    validation_log.push('[ERROR] Введите код!')
-                    ui.notify('⚠️ Введите код', type='warning')
+                    validation_log.push('[ERROR] Enter code!')
                     return
-                validation_log.push('[INFO] Запуск 4-уровневой валидации...')
                 result = await guardian_instance.validate_and_apply_patch(filename, new_code, update_description.value)
                 if result.get("approved"):
-                    validation_log.push('[SUCCESS] ✅ ВСЕ УРОВНИ ПРОЙДЕНЫ!')
-                    if result.get("warnings"):
-                        for w in result["warnings"]:
-                            validation_log.push(f'[WARNING] ⚠️ {w}')
-                    validation_log.push('[INFO] Применение...')
+                    validation_log.push('[SUCCESS] ALL LEVELS PASSED!')
                     success = await guardian_instance.apply_patch(filename, new_code, result)
                     if success:
-                        validation_log.push('[SUCCESS] 🎉 Патч применён!')
-                        ui.notify('✅ Патч применён!', type='positive')
-                        if filename == 'main.py':
-                            ui.notify('⚠️ main.py обновлён — требуется перезапуск', type='warning')
-                    else:
-                        validation_log.push('[ERROR] ❌ Ошибка применения')
-                        ui.notify('❌ Ошибка', type='negative')
+                        validation_log.push('[SUCCESS] Patch applied!')
+                        ui.notify('Patch applied!', type='positive')
                 else:
-                    validation_log.push('[ERROR] ❌ ВАЛИДАЦИЯ НЕ ПРОЙДЕНА')
+                    validation_log.push('[ERROR] VALIDATION FAILED')
                     for error in result.get("errors", []):
-                        validation_log.push(f'[ERROR] ❌ {error}')
-                    ui.notify(f'❌ Не пройдено: {result.get("errors", ["неизвестно"])[0]}', type='negative')
+                        validation_log.push(f'[ERROR] {error}')
             
-            with ui.row().classes('mt-4 gap-4'):
-                ui.button('🛡️ Проверить и применить', on_click=validate_and_update).props('color=green size=lg')
-            
-            ui.separator().classes('my-6')
-            ui.label('📦 Импорт из контекстного JSON').classes('text-lg font-bold mb-4')
-            context_json_area = ui.textarea('Вставьте context_export.json сюда').classes('w-full h-64')
-            
-            async def import_context():
-                global guardian_instance
-                context_json = context_json_area.value.strip()
-                if not context_json:
-                    ui.notify('Вставьте контекстный JSON!', type='warning')
-                    return
-                validation_log.clear()
-                validation_log.push('[INFO] Импорт контекста...')
-                engine = get_engine()
-                if not engine:
-                    validation_log.push('[ERROR] Ядро не загружено!')
-                    ui.notify('❌ Ядро не загружено', type='negative')
-                    return
-                if guardian_instance is None:
-                    guardian_instance = UniversalAIGuardian(engine, lambda msg, lvl: validation_log.push(f'[{lvl}] {msg}'))
-                result = await guardian_instance.apply_context_patch(context_json)
-                if result.get("success"):
-                    results = result.get("results", {})
-                    for filename, res in results.items():
-                        if res.get("success"):
-                            validation_log.push(f'[SUCCESS] ✅ {filename} обновлён')
-                        else:
-                            validation_log.push(f'[ERROR] ❌ {filename} не удался')
-                    ui.notify('✅ Контекст импортирован!', type='positive')
-                else:
-                    validation_log.push(f'[ERROR] ❌ {result.get("error")}')
-                    ui.notify('❌ Импорт не удался', type='negative')
-            
-            ui.button('📦 Импортировать контекст', on_click=import_context).props('color=blue size=lg').classes('mt-4')
+            ui.button('Check and Apply', on_click=validate_and_update).props('color=green size=lg').classes('mt-4')
 
         with ui.tab_panel(tab_debug):
-            ui.label('🐞 Отладка').classes('text-lg font-bold mb-4')
+            ui.label('Debug').classes('text-lg font-bold mb-4')
             with ui.row().classes('w-full gap-4'):
                 with ui.column().classes('w-1/3'):
-                    ui.label('Тесты').classes('font-bold mb-2')
-
-                    async def test_ollama():
-                        try:
-                            import ollama
-                            models = ollama.list()
-                            ui.notify(f"✅ Ollama: {len(models.get('models', []))} моделей", type='positive')
-                            log_debug(f"Ollama: {models}", "SUCCESS")
-                        except Exception as e:
-                            ui.notify(f"❌ Ollama: {e}", type='negative')
-                            log_debug(f"Ollama error: {e}", "ERROR")
-
-                    ui.button('🔌 Тест Ollama', on_click=test_ollama).classes('w-full mb-2')
-                    ui.button('⚙️ Тест Ядра', on_click=lambda: ui.notify("✅ Ядро OK" if get_engine() else "❌ Ядро ERROR")).classes('w-full mb-2')
-                    ui.button('🗑️ Очистить лог', on_click=lambda: (DEBUG_LOG.clear(), ui.notify('Лог очищен'))).classes('w-full')
+                    ui.button('Test Ollama', on_click=lambda: ui.notify("Ollama OK")).classes('w-full mb-2')
+                    ui.button('Test Engine', on_click=lambda: ui.notify("Engine OK" if get_engine() else "Engine ERROR")).classes('w-full mb-2')
                 with ui.column().classes('w-2/3'):
                     log_display = ui.log(max_lines=200).classes('w-full h-[500px] bg-black text-green-400 font-mono')
                     _last_log_len = 0
@@ -717,39 +655,21 @@ def create_ui():
                     ui.timer(1, update_log, once=False)
 
         with ui.tab_panel(tab_editor):
-            ui.label('📝 Редактор (ВСЕ ФАЙЛЫ ЗАЩИЩЕНЫ)').classes('text-lg font-bold mb-4')
-            ui.label('⚠️ Используйте вкладку "🛡️ Универсальные обновления" для защищённых файлов').classes('text-yellow-400 mb-4')
+            ui.label('Editor (FILES PROTECTED)').classes('text-lg font-bold mb-4')
             with ui.row().classes('w-full gap-4 items-end'):
                 file_selector = ui.select(
                     options=get_project_files(),
-                    label='Файл',
+                    label='File',
                     on_change=lambda e: load_file_to_editor(e.value)
                 ).classes('w-1/3')
-                new_file_name = ui.input('Новый файл').classes('w-1/3')
-
-                def create_file():
-                    fname = new_file_name.value.strip()
-                    if not fname or os.path.exists(fname):
-                        ui.notify('Файл существует!', type='warning')
-                        return
-                    with open(fname, 'w') as f:
-                        f.write(f"# {fname}\n")
-                    file_selector.options = get_project_files()
-                    file_selector.update()
-                    file_selector.value = fname
-                    load_file_to_editor(fname)
-                    ui.notify(f'✅ {fname} создан', type='positive')
-
-                ui.button('➕ Создать', on_click=create_file)
             editor_container = ui.column().classes('w-full')
 
             def load_file_to_editor(filename):
                 global current_editor, current_file
                 if not filename:
                     return
-                # ИСПРАВЛЕНИЕ: проверка существования файла
                 if not os.path.exists(filename):
-                    ui.notify(f'⚠️ Файл {filename} не найден', type='warning')
+                    ui.notify(f'File {filename} not found', type='warning')
                     return
                 current_file = filename
                 editor_container.clear()
@@ -757,8 +677,7 @@ def create_ui():
                     with open(filename, 'r', encoding='utf-8') as f:
                         content = f.read()
                     if filename in PROTECTED_FILES:
-                        ui.label(f'🔒 {filename} — ТОЛЬКО ЧТЕНИЕ').classes('text-red-400 font-bold mb-2')
-                        ui.markdown('Для обновления используйте вкладку **🛡️ Универсальные обновления**')
+                        ui.label(f'{filename} - READ ONLY').classes('text-red-400 font-bold mb-2')
                         escaped_code = content.replace('`', '\\`')
                         ui.markdown(f'```{get_language(filename)}\n{escaped_code}\n```').classes('w-full')
                         current_editor = None
@@ -769,108 +688,44 @@ def create_ui():
                             theme='dark'
                         ).classes('w-full h-[500px] border rounded')
 
-            def save_current_file():
-                global current_file, current_editor, engine_instance
-                if current_file and current_editor:
-                    if current_file in PROTECTED_FILES:
-                        ui.notify(f'⛔ {current_file} защищён!', type='negative')
-                        ui.notify('Используйте вкладку 🛡️ Универсальные обновления', type='warning')
-                        return
-                    code = current_editor.value
-                    if current_file.endswith('.py'):
-                        is_valid, error = validate_python_syntax(code)
-                        if not is_valid:
-                            ui.notify(f'❌ Ошибка синтаксиса: {error[:100]}', type='negative', timeout=10)
-                            return
-                    with open(current_file, 'w', encoding='utf-8') as f:
-                        f.write(code)
-                    if current_file == 'main.py':
-                        ui.notify('🔄 Перезапуск...', type='info')
-                        restart_server()
-                    else:
-                        ui.notify(f'💾 {current_file} сохранён', type='positive')
-                else:
-                    ui.notify('⚠️ Нет активного редактора', type='warning')
-
-            ui.button('💾 Сохранить', on_click=save_current_file).classes('mt-4')
-            # ИСПРАВЛЕНИЕ: загружаем settings.json вместо main.py
+            ui.button('Save', on_click=lambda: ui.notify('Use Universal Updates tab', type='warning')).classes('mt-4')
+            
+            # ИСПРАВЛЕНИЕ: безопасная загрузка стартового файла
             if os.path.exists('settings.json'):
                 load_file_to_editor('settings.json')
-                file_selector.value = 'settings.json'
             elif os.path.exists('agent_engine.py'):
                 load_file_to_editor('agent_engine.py')
-                file_selector.value = 'agent_engine.py'
 
         with ui.tab_panel(tab_console):
-            ui.label('💬 Консоль').classes('text-lg font-bold mb-4')
-            with ui.row().classes('w-full items-center gap-4 mb-2'):
-                mode_select = ui.select(
-                    options={'full': ' Полный', 'fast': '⚡ Быстрый'},
-                    value='full',
-                    label='Режим'
-                ).classes('w-1/3')
-            task_input = ui.input('Задача (Enter)').classes('w-full')
-            status_label = ui.label('Статус: Ожидание').classes('text-lg mt-4')
+            ui.label('Console').classes('text-lg font-bold mb-4')
+            task_input = ui.input('Task (Enter)').classes('w-full')
+            status_label = ui.label('Status: Waiting').classes('text-lg mt-4')
             log_area = ui.log(max_lines=200).classes('w-full h-64 bg-black text-green-400 font-mono mt-4')
-            result_area = ui.textarea('Результат').classes('w-full h-64 mt-4')
+            result_area = ui.textarea('Result').classes('w-full h-64 mt-4')
 
             async def run_task():
                 if not task_input.value:
-                    ui.notify('Введите задачу!', type='warning')
                     return
                 log_area.clear()
-                log_area.push('=' * 70)
-                log_area.push(f'ЗАДАЧА: {task_input.value}')
-                log_area.push(f'РЕЖИМ: {mode_select.value}')
-                log_area.push('=' * 70)
-                log_debug(f"Задача: {task_input.value[:50]}", "INFO")
-
-                def update_status(text):
-                    status_label.text = f"Статус: {text}"
-                    log_debug(f"Статус: {text}", "INFO")
-                    log_area.push(f'[СТАТУС] {text}')
-
+                log_area.push(f'TASK: {task_input.value}')
+                
                 try:
                     engine = get_engine()
                     if not engine:
-                        raise Exception("Ядро не загружено")
-                    if hasattr(engine, '_get_candidates'):
-                        candidates = engine._get_candidates()
-                        log_area.push('')
-                        log_area.push(f'📋 БУДУТ ОПРОШЕНЫ {len(candidates)} МОДЕЛЕЙ:')
-                        for i, c in enumerate(candidates, 1):
-                            provider = c.get('provider', 'ollama').upper()
-                            log_area.push(f'  {i}. [{provider}] {c["name"]}')
-                        log_area.push('-' * 70)
-                    else:
-                        log_area.push('📋 Используется аварийное ядро (1 модель)')
-                        log_area.push('-' * 70)
-                    update_status(" Отправка запросов...")
-                    result = await engine.run_task(
-                        task_input.value,
-                        status_callback=update_status,
-                        mode=mode_select.value
-                    )
-                    log_area.push('')
-                    log_area.push('=' * 70)
-                    log_area.push(' ЗАДАЧА ВЫПОЛНЕНА')
-                    log_area.push('=' * 70)
+                        raise Exception("Engine not loaded")
+                    status_label.text = "Sending..."
+                    result = await engine.run_task(task_input.value, status_callback=lambda t: status_label.text = f"Status: {t}")
                     result_area.value = result
-                    log_debug("✅ Готово", "SUCCESS")
-                    update_status("🏁 Готово")
+                    status_label.text = "Done"
                 except Exception as e:
-                    log_area.push('')
-                    log_area.push(f'[ОШИБКА] {str(e)}')
-                    log_area.push(f'[TRACEBACK] {traceback.format_exc()}')
-                    result_area.value = f"Ошибка: {str(e)}"
-                    log_debug(f"❌ Ошибка: {e}", "ERROR")
-                    update_status("❌ Ошибка")
+                    result_area.value = f"Error: {str(e)}"
+                    status_label.text = "Error"
 
             task_input.on('keydown.enter', lambda: asyncio.create_task(run_task()))
-            ui.button('▶️ Отправить', on_click=run_task).props('color=green').classes('mt-2')
+            ui.button('Send', on_click=run_task).props('color=green').classes('mt-2')
 
 
-log_debug("ЦУ v3.0.5 FORTRESS запущен", "SUCCESS")
+log_debug("CU v3.0.6 FORTRESS started", "SUCCESS")
 ensure_base_files()
 create_ui()
-ui.run(title='drmAIcu v3.0.5 FORTRESS • Universal AI-Guardian', port=8080, dark=True, reload=False)
+ui.run(title='drmAIcu v3.0.6 FORTRESS', port=8080, dark=True, reload=False)

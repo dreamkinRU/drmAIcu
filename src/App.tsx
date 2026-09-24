@@ -729,6 +729,8 @@ export default function App() {
 
   // Console state
   const [groqKey, setGroqKey] = useState('');
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
+  const [providerMode, setProviderMode] = useState<'ollama' | 'groq' | 'all'>('all');
   const [consolePrompt, setConsolePrompt] = useState('');
   const [consoleResponses, setConsoleResponses] = useState<Array<{model: string, response: string, time: number}>>([]);
   const [judgeResult, setJudgeResult] = useState<{winner: string, reason: string, code: string} | null>(null);
@@ -777,25 +779,69 @@ export default function App() {
     return { response: data.choices[0].message.content, time };
   };
 
+  const sendToOllama = async (model: string, prompt: string, baseUrl: string): Promise<{response: string, time: number}> => {
+    const start = Date.now();
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are an expert programmer. Write clean, efficient code. Return ONLY code without explanations.' },
+          { role: 'user', content: prompt }
+        ],
+        stream: false
+      })
+    });
+    const data = await res.json();
+    const time = Date.now() - start;
+    if (data.error) throw new Error(data.error || 'Ollama error');
+    return { response: data.message?.content || '', time };
+  };
+
   const runConsoleTask = async () => {
-    if (!groqKey.trim()) { setConsoleError('Введи Groq API ключ'); return; }
     if (!consolePrompt.trim()) { setConsoleError('Введи запрос'); return; }
+    
+    // Проверка ключей в зависимости от режима
+    if ((providerMode === 'groq' || providerMode === 'all') && !groqKey.trim()) {
+      setConsoleError('Введи Groq API ключ (или переключись на Ollama)');
+      return;
+    }
+    
     setConsoleError('');
     setConsoleLoading(true);
     setConsoleResponses([]);
     setJudgeResult(null);
 
-    const models = [
-      { id: 'llama-3.1-8b-versatile', name: 'Llama 8B' },
-      { id: 'llama-3.1-70b-versatile', name: 'Llama 70B' },
-      { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' },
-    ];
+    // Определяем какие модели опрашивать
+    const tasks: Promise<{model: string, response: string, time: number}>[] = [];
+
+    if (providerMode === 'ollama' || providerMode === 'all') {
+      // Локальные модели Ollama
+      const ollamaModels = [
+        { id: 'qwen2.5-coder:1.5b', name: 'Ollama: Qwen 1.5B' },
+        { id: 'qwen2.5-coder:14b', name: 'Ollama: Qwen 14B' },
+      ];
+      ollamaModels.forEach(m => {
+        tasks.push(sendToOllama(m.id, consolePrompt, ollamaUrl).then(r => ({ ...r, model: m.name })));
+      });
+    }
+
+    if (providerMode === 'groq' || providerMode === 'all') {
+      // Облачные модели Groq
+      const groqModels = [
+        { id: 'llama-3.1-8b-versatile', name: 'Groq: Llama 8B' },
+        { id: 'llama-3.1-70b-versatile', name: 'Groq: Llama 70B' },
+        { id: 'mixtral-8x7b-32768', name: 'Groq: Mixtral 8x7B' },
+      ];
+      groqModels.forEach(m => {
+        tasks.push(sendToGroq(m.id, consolePrompt, groqKey).then(r => ({ ...r, model: m.name })));
+      });
+    }
 
     try {
       // Параллельная отправка всем моделям
-      const results = await Promise.allSettled(
-        models.map(m => sendToGroq(m.id, consolePrompt, groqKey).then(r => ({ ...r, model: m.name })))
-      );
+      const results = await Promise.allSettled(tasks);
 
       const responses: Array<{model: string, response: string, time: number}> = [];
       for (const r of results) {
@@ -815,7 +861,7 @@ export default function App() {
         return;
       }
 
-      // Арбитр — отправляем все ответы Llama 70B для выбора лучшего
+      // Арбитр — выбираем лучший провайдер для судьи
       const candidatesText = responses.map((r, i) =>
         `=== ВАРИАНТ #${i+1} (${r.model}, ${r.time}ms) ===\n${r.response}`
       ).join('\n\n');
@@ -833,7 +879,13 @@ ${candidatesText}
 
 JSON:`;
 
-      const judgeRes = await sendToGroq('llama-3.1-70b-versatile', judgePrompt, groqKey);
+      // Арбитр использует Groq если доступен, иначе Ollama
+      let judgeRes: {response: string, time: number};
+      if (groqKey.trim()) {
+        judgeRes = await sendToGroq('llama-3.1-70b-versatile', judgePrompt, groqKey);
+      } else {
+        judgeRes = await sendToOllama('qwen2.5-coder:14b', judgePrompt, ollamaUrl);
+      }
       try {
         const jsonMatch = judgeRes.response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
@@ -875,7 +927,7 @@ JSON:`;
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/20">AI</div>
             <div>
               <h1 className="text-lg font-bold tracking-tight">drmAIcu</h1>
-              <p className="text-[10px] text-gray-500">v3.0.4 FORTRESS • Universal AI-Guardian • 2026</p>
+              <p className="text-[10px] text-gray-500">v3.0.9 FORTRESS • Ollama + Groq • 2026</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -983,30 +1035,93 @@ JSON:`;
               </div>
             </div>
 
-            {/* API Key */}
+            {/* Provider Selection */}
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                Groq API Key
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">
+                Провайдеры моделей
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={groqKey}
-                  onChange={(e) => setGroqKey(e.target.value)}
-                  placeholder="gsk_..."
-                  className="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none"
-                />
-                <a
-                  href="https://console.groq.com/keys"
-                  target="_blank"
-                  className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 text-xs hover:text-white transition-all"
+              
+              {/* Provider Mode Toggle */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setProviderMode('ollama')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                    providerMode === 'ollama'
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
                 >
-                  Получить ключ →
-                </a>
+                  🏠 Только Ollama
+                </button>
+                <button
+                  onClick={() => setProviderMode('groq')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                    providerMode === 'groq'
+                      ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  ☁️ Только Groq
+                </button>
+                <button
+                  onClick={() => setProviderMode('all')}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                    providerMode === 'all'
+                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  ⚡ Все (Ollama + Groq)
+                </button>
               </div>
-              <p className="text-[10px] text-gray-500 mt-2">
-                Бесплатная регистрация на console.groq.com • Llama 8B/70B + Mixtral
-              </p>
+
+              {/* Ollama URL */}
+              {(providerMode === 'ollama' || providerMode === 'all') && (
+                <div className="mb-3">
+                  <label className="text-xs text-gray-500 mb-1 block">Ollama URL</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={ollamaUrl}
+                      onChange={(e) => setOllamaUrl(e.target.value)}
+                      placeholder="http://localhost:11434"
+                      className="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none font-mono"
+                    />
+                    <span className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center">
+                      🏠 Локально
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Запусти <code className="text-emerald-400">ollama serve</code> перед использованием
+                  </p>
+                </div>
+              )}
+
+              {/* Groq API Key */}
+              {(providerMode === 'groq' || providerMode === 'all') && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Groq API Key</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={groqKey}
+                      onChange={(e) => setGroqKey(e.target.value)}
+                      placeholder="gsk_..."
+                      className="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-cyan-500 focus:outline-none"
+                    />
+                    <a
+                      href="https://console.groq.com/keys"
+                      target="_blank"
+                      className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 text-xs hover:text-white transition-all"
+                    >
+                      Получить ключ →
+                    </a>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Бесплатно на console.groq.com • Llama 8B/70B + Mixtral
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Prompt */}
@@ -1023,7 +1138,7 @@ JSON:`;
               />
               <div className="flex items-center justify-between mt-3">
                 <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>🚀 3 модели параллельно</span>
+                  <span>🚀 {providerMode === 'ollama' ? '2 локальные' : providerMode === 'groq' ? '3 облачные' : '5 моделей'} параллельно</span>
                   <span>•</span>
                   <span>⚖️ Арбитр выберет лучший ответ</span>
                 </div>
@@ -1052,7 +1167,11 @@ JSON:`;
                 <div className="animate-pulse text-emerald-400 text-lg font-bold mb-2">
                   ⏳ Опрос моделей...
                 </div>
-                <p className="text-xs text-gray-400">Llama 8B • Llama 70B • Mixtral 8x7B</p>
+                <p className="text-xs text-gray-400">
+                  {providerMode === 'ollama' && '🏠 Ollama: Qwen 1.5B • Qwen 14B'}
+                  {providerMode === 'groq' && '☁️ Groq: Llama 8B • Llama 70B • Mixtral 8x7B'}
+                  {providerMode === 'all' && '🏠 Ollama: Qwen 1.5B, Qwen 14B • ☁️ Groq: Llama 8B, Llama 70B, Mixtral'}
+                </p>
               </div>
             )}
 
@@ -1118,11 +1237,15 @@ JSON:`;
                 <div className="grid sm:grid-cols-3 gap-3 text-xs text-gray-400">
                   <div className="flex items-start gap-2">
                     <span className="text-emerald-400 font-bold">1.</span>
-                    <span>Запрос отправляется <strong className="text-white">3 моделям</strong> параллельно через Groq API</span>
+                    <span>
+                      {providerMode === 'ollama' && 'Запрос отправляется <strong class="text-white">2 локальным моделям</strong> через Ollama API'}
+                      {providerMode === 'groq' && 'Запрос отправляется <strong class="text-white">3 облачным моделям</strong> через Groq API'}
+                      {providerMode === 'all' && 'Запрос отправляется <strong class="text-white">5 моделям</strong> (2 локальные + 3 облачные)'}
+                    </span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-emerald-400 font-bold">2.</span>
-                    <span>Все ответы показывает <strong className="text-white">арбитру</strong> (Llama 70B)</span>
+                    <span>Все ответы показывает <strong className="text-white">арбитру</strong> для оценки</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-emerald-400 font-bold">3.</span>
