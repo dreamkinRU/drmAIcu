@@ -924,9 +924,9 @@ JSON:`;
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/20">AI</div>
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 via-cyan-500 to-blue-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/30 animate-glow">AI</div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight">drmAIcu</h1>
+              <h1 className="text-lg font-bold tracking-tight gradient-text">drmAIcu</h1>
               <p className="text-[10px] text-gray-500">v3.0.9 FORTRESS • Ollama + Groq • 2026</p>
             </div>
           </div>
@@ -971,29 +971,22 @@ JSON:`;
       </nav>
 
       {/* MEGA DOWNLOAD BANNER — always visible */}
-      <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 py-4 px-4 shadow-lg shadow-emerald-500/20">
+      <div className="bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 animate-gradient py-4 px-4 shadow-2xl shadow-emerald-500/30">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🛡️</span>
+            <div className="text-4xl animate-pulse">🚀</div>
             <div>
-              <p className="text-white font-bold text-sm sm:text-base">drmAIcu v3.0.4 FORTRESS — РУССКИЙ интерфейс</p>
-              <p className="text-emerald-100 text-xs">Универсальный AI-Guardian • Все файлы • Автооткат</p>
+              <p className="text-white font-bold text-sm sm:text-base drop-shadow-lg">drmAIcu v3.0.9 FORTRESS</p>
+              <p className="text-emerald-100 text-xs drop-shadow">Ollama + Groq • Один интерфейс для всех моделей</p>
             </div>
           </div>
           <div className="flex gap-2">
             <a
-              href="/v3.0.4_ru.html"
+              href="/INSTALL_v3.0.9.md"
               target="_blank"
-              className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-lg whitespace-nowrap"
+              className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-xl hover:shadow-2xl hover:scale-105 whitespace-nowrap"
             >
-              📋 Инструкция →
-            </a>
-            <a
-              href="/main_v3.0.4_ru.py"
-              download
-              className="px-4 py-3 rounded-xl bg-white/10 border border-white/30 text-white font-bold text-sm hover:bg-white/20 transition-all whitespace-nowrap"
-            >
-              📥 Скачать RU
+              📖 Инструкция
             </a>
           </div>
         </div>
@@ -1036,39 +1029,39 @@ JSON:`;
             </div>
 
             {/* Provider Selection */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">
-                Провайдеры моделей
+            <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-gray-900/80 to-gray-800/50 p-5 shadow-xl card-hover">
+              <label className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 block">
+                🎯 Провайдеры моделей
               </label>
               
               {/* Provider Mode Toggle */}
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => setProviderMode('ollama')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all border-2 ${
                     providerMode === 'ollama'
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                      ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-600/20 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/20'
+                      : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
                   }`}
                 >
                   🏠 Только Ollama
                 </button>
                 <button
                   onClick={() => setProviderMode('groq')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all border-2 ${
                     providerMode === 'groq'
-                      ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                      ? 'bg-gradient-to-br from-cyan-500/30 to-cyan-600/20 border-cyan-500 text-cyan-300 shadow-lg shadow-cyan-500/20'
+                      : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
                   }`}
                 >
                   ☁️ Только Groq
                 </button>
                 <button
                   onClick={() => setProviderMode('all')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all border-2 ${
                     providerMode === 'all'
-                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                      ? 'bg-gradient-to-br from-purple-500/30 to-pink-600/20 border-purple-500 text-purple-300 shadow-lg shadow-purple-500/20'
+                      : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
                   }`}
                 >
                   ⚡ Все (Ollama + Groq)
@@ -1125,30 +1118,29 @@ JSON:`;
             </div>
 
             {/* Prompt */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                Запрос
+            <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-gray-900/80 to-gray-800/50 p-5 shadow-xl card-hover">
+              <label className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2 block">
+                💬 Запрос
               </label>
               <textarea
                 value={consolePrompt}
                 onChange={(e) => setConsolePrompt(e.target.value)}
                 placeholder="Опиши задачу для нейросети..."
                 rows={4}
-                className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none resize-none font-mono"
+                className="w-full px-4 py-3 rounded-lg bg-gray-800/80 border-2 border-gray-700 text-white text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none resize-none font-mono transition-all"
               />
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>🚀 {providerMode === 'ollama' ? '2 локальные' : providerMode === 'groq' ? '3 облачные' : '5 моделей'} параллельно</span>
-                  <span>•</span>
-                  <span>⚖️ Арбитр выберет лучший ответ</span>
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400">🚀 {providerMode === 'ollama' ? '2 локальные' : providerMode === 'groq' ? '3 облачные' : '5 моделей'}</span>
+                  <span className="px-2 py-1 rounded bg-cyan-500/10 text-cyan-400">⚖️ Арбитр выберет лучший</span>
                 </div>
                 <button
                   onClick={runConsoleTask}
                   disabled={consoleLoading}
-                  className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${
+                  className={`px-8 py-3 rounded-lg font-bold text-sm transition-all ${
                     consoleLoading
                       ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                      : 'bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white shadow-xl shadow-emerald-500/30 hover:scale-105'
                   }`}
                 >
                   {consoleLoading ? '⏳ Отправка...' : '▶ Отправить'}
@@ -1200,12 +1192,12 @@ JSON:`;
 
             {/* Judge Result */}
             {judgeResult && (
-              <div className="rounded-xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/5 to-cyan-500/5 p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-2xl">🏆</span>
+              <div className="rounded-xl border-2 border-emerald-500/50 bg-gradient-to-br from-emerald-500/10 via-cyan-500/5 to-blue-500/10 p-6 shadow-2xl shadow-emerald-500/20 animate-glow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="text-4xl animate-pulse">🏆</div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">Арбитр выбрал</h3>
-                    <p className="text-emerald-400 font-bold">{judgeResult.winner}</p>
+                    <h3 className="text-xl font-bold gradient-text">Арбитр выбрал</h3>
+                    <p className="text-emerald-400 font-bold text-lg">{judgeResult.winner}</p>
                   </div>
                 </div>
                 {judgeResult.reason && (
@@ -1223,7 +1215,7 @@ JSON:`;
                 </div>
                 <button
                   onClick={() => navigator.clipboard.writeText(judgeResult.code)}
-                  className="mt-3 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all"
+                  className="mt-4 px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white text-sm font-bold shadow-lg shadow-emerald-500/30 hover:scale-105 transition-all"
                 >
                   📋 Копировать код
                 </button>
