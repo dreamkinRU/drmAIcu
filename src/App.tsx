@@ -9,6 +9,8 @@ interface Agent {
   stack: string[];
   progress: number;
   lastActivity: string;
+  enabled: boolean;
+  description: string;
 }
 
 interface Provider {
@@ -16,6 +18,8 @@ interface Provider {
   status: 'online' | 'offline' | 'error';
   latency: number;
   models: number;
+  description: string;
+  url: string;
 }
 
 interface LogEntry {
@@ -50,19 +54,27 @@ interface Task {
 }
 
 // ===== ДАННЫЕ =====
-const agents: Agent[] = [
-  { id: 1, name: 'Агент №1 — Развитие системы', status: 'active', task: 'Исправление ошибок компиляции и импорта модулей', stack: ['Java', 'Python', 'VBA/Excel'], progress: 45, lastActivity: '2 мин назад' },
-  { id: 2, name: 'Агент №2 — Аналитика данных', status: 'frozen', task: 'На паузе', stack: ['Python', 'Pandas', 'SQL'], progress: 0, lastActivity: '—' },
-  { id: 3, name: 'Агент №3 — Автоматизация отчётов', status: 'frozen', task: 'На паузе', stack: ['Python', 'Excel VBA', 'TTS'], progress: 0, lastActivity: '—' },
+const initialAgents: Agent[] = [
+  { id: 1, name: 'Агент №1 — Развитие системы', status: 'active', task: 'Исправление ошибок компиляции и импорта модулей', stack: ['Java', 'Python', 'VBA/Excel'], progress: 45, lastActivity: '2 мин назад', enabled: true, description: 'Основной агент для развития инфраструктуры drmAIcu. Специализируется на Java/Python разработке, VBA/Excel автоматизации. Отвечает за исправление ошибок, оптимизацию кода и внедрение новых функций.' },
+  { id: 2, name: 'Агент №2 — Аналитика данных', status: 'frozen', task: 'На паузе', stack: ['Python', 'Pandas', 'SQL'], progress: 0, lastActivity: '—', enabled: false, description: 'Агент для анализа данных и построения отчётов. Работает с большими объёмами данных, создаёт визуализации, выполняет статистический анализ. Использует Pandas, NumPy, SQL для обработки данных.' },
+  { id: 3, name: 'Агент №3 — Автоматизация отчётов', status: 'frozen', task: 'На паузе', stack: ['Python', 'Excel VBA', 'TTS'], progress: 0, lastActivity: '—', enabled: false, description: 'Агент для автоматизации создания отчётов и голосовых уведомлений. Генерирует Excel-отчёты, создаёт презентации, озвучивает результаты через TTS. Интегрируется с Excel VBA и системами голосового синтеза.' },
+];
+
+const agentStore = [
+  { id: 'agent-ml', name: 'Агент ML — Машинное обучение', description: 'Специализируется на машинном обучении, нейронных сетях, обработке изображений и NLP.', stack: ['Python', 'TensorFlow', 'PyTorch', 'Scikit-learn'], category: 'AI/ML', price: 'Бесплатно' },
+  { id: 'agent-web', name: 'Агент Web — Веб-разработка', description: 'Full-stack веб-разработчик. React, Node.js, базы данных, API.', stack: ['JavaScript', 'React', 'Node.js', 'PostgreSQL'], category: 'Web', price: 'Бесплатно' },
+  { id: 'agent-devops', name: 'Агент DevOps — Инфраструктура', description: 'Автоматизация развёртывания, CI/CD, контейнеризация, мониторинг.', stack: ['Docker', 'Kubernetes', 'Jenkins', 'Terraform'], category: 'DevOps', price: 'Бесплатно' },
+  { id: 'agent-security', name: 'Агент Security — Безопасность', description: 'Аудит безопасности, пентестинг, анализ уязвимостей, шифрование.', stack: ['Python', 'OWASP', 'Metasploit', 'Cryptography'], category: 'Security', price: 'Премиум' },
+  { id: 'agent-mobile', name: 'Агент Mobile — Мобильная разработка', description: 'Разработка мобильных приложений для iOS и Android.', stack: ['React Native', 'Flutter', 'Swift', 'Kotlin'], category: 'Mobile', price: 'Бесплатно' },
 ];
 
 const providers: Provider[] = [
-  { name: 'Ollama', status: 'online', latency: 45, models: 12 },
-  { name: 'Groq', status: 'online', latency: 23, models: 8 },
-  { name: 'HuggingFace', status: 'online', latency: 120, models: 150 },
-  { name: 'OpenRouter', status: 'online', latency: 89, models: 45 },
-  { name: 'Gemini', status: 'offline', latency: 0, models: 0 },
-  { name: 'Together', status: 'error', latency: 0, models: 0 },
+  { name: 'Ollama', status: 'online', latency: 45, models: 12, description: 'Локальные модели. Работает без интернета. Требует установки Ollama.', url: 'http://localhost:11434' },
+  { name: 'Groq', status: 'online', latency: 23, models: 8, description: 'Быстрые облачные модели. Бесплатный тариф доступен.', url: 'https://console.groq.com' },
+  { name: 'HuggingFace', status: 'online', latency: 120, models: 150, description: 'Огромная библиотека моделей. Бесплатные и платные варианты.', url: 'https://huggingface.co' },
+  { name: 'OpenRouter', status: 'online', latency: 89, models: 45, description: 'Агрегатор моделей. Доступ к GPT-4, Claude и другим.', url: 'https://openrouter.ai' },
+  { name: 'Gemini', status: 'offline', latency: 0, models: 0, description: 'Google Gemini. Требуется API ключ от Google AI Studio.', url: 'https://makersuite.google.com' },
+  { name: 'Together', status: 'error', latency: 0, models: 0, description: 'Together AI. Ошибка подключения. Проверьте API ключ.', url: 'https://api.together.xyz' },
 ];
 
 const initialLogs: LogEntry[] = [
@@ -722,7 +734,7 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [taskList, setTaskList] = useState<Task[]>(initialTasks);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'console' | 'dashboard' | 'code' | 'logs' | 'vba' | 'tasks'>('console');
+  const [activeTab, setActiveTab] = useState<'console' | 'agents' | 'providers' | 'docs' | 'dashboard' | 'code' | 'logs' | 'tasks'>('console');
   const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set([1]));
   const [analyzedFile, setAnalyzedFile] = useState<'engine' | 'main' | 'launcher'>('engine');
   const currentIssues = analyzedFile === 'engine' ? codeIssues : analyzedFile === 'main' ? mainPyIssues : launcherIssues;
@@ -736,6 +748,12 @@ export default function App() {
   const [judgeResult, setJudgeResult] = useState<{winner: string, reason: string, code: string} | null>(null);
   const [consoleLoading, setConsoleLoading] = useState(false);
   const [consoleError, setConsoleError] = useState('');
+  const [agents, setAgents] = useState<Agent[]>(initialAgents);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [showAgentStore, setShowAgentStore] = useState(false);
+  const [providerFilter, setProviderFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [mdEditorContent, setMdEditorContent] = useState('# drmAIcu v3.0.9\n\nОписание проекта...');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -752,6 +770,65 @@ export default function App() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  // Agent management
+  const toggleAgent = (id: number) => {
+    setAgents(prev => prev.map(a => 
+      a.id === id ? { ...a, enabled: !a.enabled, status: !a.enabled ? 'active' : 'frozen' } : a
+    ));
+  };
+
+  const importAgent = (agentId: string) => {
+    const storeAgent = agentStore.find(a => a.id === agentId);
+    if (storeAgent) {
+      const newAgent: Agent = {
+        id: agents.length + 1,
+        name: storeAgent.name,
+        status: 'frozen',
+        task: 'Готов к активации',
+        stack: storeAgent.stack,
+        progress: 0,
+        lastActivity: 'Только что',
+        enabled: false,
+        description: storeAgent.description
+      };
+      setAgents(prev => [...prev, newAgent]);
+      setShowAgentStore(false);
+    }
+  };
+
+  // AI suggestions for MD
+  const getAiSuggestions = async () => {
+    if (!groqKey.trim()) {
+      setAiSuggestions(['Введите Groq API ключ для получения AI-подсказок']);
+      return;
+    }
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-70b-versatile',
+          messages: [
+            { role: 'system', content: 'Ты — технический писатель. Анализируй Markdown документ и предлагай улучшения. Отвечай на русском языке. Давай 3-5 конкретных предложений.' },
+            { role: 'user', content: `Проанализируй этот Markdown документ и предложи улучшения:\n\n${mdEditorContent}` }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+      const data = await res.json();
+      if (data.choices && data.choices[0]) {
+        const suggestions = data.choices[0].message.content.split('\n').filter((s: string) => s.trim());
+        setAiSuggestions(suggestions);
+      }
+    } catch (e) {
+      setAiSuggestions(['Ошибка получения подсказок']);
+    }
   };
 
   // Console functions
@@ -911,10 +988,12 @@ JSON:`;
 
   const tabs = [
     { id: 'console' as const, label: 'Консоль', icon: '▶' },
+    { id: 'agents' as const, label: 'Агенты', icon: '🤖' },
+    { id: 'providers' as const, label: 'Провайдеры', icon: '🌐' },
+    { id: 'docs' as const, label: 'Документация', icon: '📝' },
     { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
     { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.length + mainPyIssues.length + launcherIssues.length },
     { id: 'logs' as const, label: 'Логи', icon: '▤' },
-    { id: 'vba' as const, label: 'VBA', icon: '⧉' },
     { id: 'tasks' as const, label: 'Задачи', icon: '☑' },
   ];
 
@@ -970,25 +1049,22 @@ JSON:`;
         </div>
       </nav>
 
-      {/* MEGA DOWNLOAD BANNER — always visible */}
-      <div className="bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 animate-gradient py-4 px-4 shadow-2xl shadow-emerald-500/30">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* DOCS EDITOR BUTTON */}
+      <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 animate-gradient py-3 px-4 shadow-lg">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="text-4xl animate-pulse">🚀</div>
+            <span className="text-2xl">📝</span>
             <div>
-              <p className="text-white font-bold text-sm sm:text-base drop-shadow-lg">drmAIcu v3.0.9 FORTRESS</p>
-              <p className="text-emerald-100 text-xs drop-shadow">Ollama + Groq • Один интерфейс для всех моделей</p>
+              <p className="text-white font-bold text-sm">Редактор документации</p>
+              <p className="text-pink-100 text-xs">Создавайте и редактируйте MD файлы с AI-подсказками</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <a
-              href="/INSTALL_v3.0.9.md"
-              target="_blank"
-              className="px-6 py-3 rounded-xl bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-all shadow-xl hover:shadow-2xl hover:scale-105 whitespace-nowrap"
-            >
-              📖 Инструкция
-            </a>
-          </div>
+          <button
+            onClick={() => setActiveTab('docs')}
+            className="px-6 py-2.5 rounded-xl bg-white text-purple-700 font-bold text-sm hover:bg-purple-50 transition-all shadow-lg hover:scale-105 whitespace-nowrap"
+          >
+            Открыть редактор →
+          </button>
         </div>
       </div>
 
@@ -1254,23 +1330,65 @@ JSON:`;
           <div className="space-y-6">
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Агенты</p>
-                <p className="text-2xl font-bold text-emerald-400">1<span className="text-sm text-gray-500">/3</span></p>
+                <p className="text-2xl font-bold text-emerald-400">{agents.filter(a => a.enabled).length}<span className="text-sm text-gray-500">/{agents.length}</span></p>
+                <p className="text-[10px] text-gray-500 mt-1">включено</p>
               </div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Провайдеры</p>
-                <p className="text-2xl font-bold text-cyan-400">4<span className="text-sm text-gray-500">/6</span></p>
+                <p className="text-2xl font-bold text-cyan-400">{providers.filter(p => p.status === 'online').length}<span className="text-sm text-gray-500">/{providers.length}</span></p>
+                <p className="text-[10px] text-gray-500 mt-1">онлайн</p>
               </div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Задачи</p>
                 <p className="text-2xl font-bold text-yellow-400">{completedTasks}<span className="text-sm text-gray-500">/{taskList.length}</span></p>
+                <p className="text-[10px] text-gray-500 mt-1">выполнено</p>
               </div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Баги в коде</p>
                 <p className="text-2xl font-bold text-red-400">{codeIssues.length + mainPyIssues.length + launcherIssues.length}</p>
+                <p className="text-[10px] text-gray-500 mt-1">требуют исправления</p>
               </div>
             </div>
+
+            {/* Active Agents */}
+            <section>
+              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Активные агенты
+              </h2>
+              <div className="grid md:grid-cols-3 gap-3">
+                {agents.filter(a => a.enabled).map(agent => (
+                  <div key={agent.id} className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5 p-4 card-hover">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-bold text-white">{agent.name}</h3>
+                      <StatusBadge status={agent.status} />
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">{agent.task}</p>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {agent.stack.slice(0, 3).map(s => (
+                        <span key={s} className="px-1.5 py-0.5 bg-gray-700/50 rounded text-[10px] text-gray-300">{s}</span>
+                      ))}
+                    </div>
+                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full" style={{ width: `${agent.progress}%` }} />
+                    </div>
+                  </div>
+                ))}
+                {agents.filter(a => a.enabled).length === 0 && (
+                  <div className="col-span-3 text-center py-8 text-gray-500">
+                    <p className="text-sm">Нет активных агентов</p>
+                    <button
+                      onClick={() => setActiveTab('agents')}
+                      className="mt-2 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all"
+                    >
+                      Перейти к управлению агентами
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
 
             <section>
               <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -1548,39 +1666,236 @@ JSON:`;
           </div>
         )}
 
-        {/* ===== VBA ===== */}
-        {activeTab === 'vba' && (
-          <div className="space-y-4">
+        {/* ===== AGENTS ===== */}
+        {activeTab === 'agents' && (
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">VBA Модули</h2>
-              <div className="text-xs text-gray-500">Загружено: {vbaModules.filter(m => m.status === 'loaded').length}/{vbaModules.length}</div>
+              <h2 className="text-lg font-bold text-white">Управление агентами</h2>
+              <button
+                onClick={() => setShowAgentStore(true)}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold hover:scale-105 transition-all shadow-lg"
+              >
+                🛒 Магазин агентов
+              </button>
             </div>
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-              <div className="flex items-start gap-3">
-                <span className="text-red-400 text-lg">⚠</span>
-                <div>
-                  <p className="text-sm font-medium text-red-400">Известные проблемы импорта</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Ошибки: <code className="text-red-300 bg-red-500/10 px-1 rounded">drm.cls could not be loaded</code>,
-                    <code className="text-red-300 bg-red-500/10 px-1 rounded ml-1">Bad file name or number</code>
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">Скрипт находит маркеры, создаёт временные файлы, но не может загрузить их обратно в проект.</p>
+
+            {/* Agent Store Modal */}
+            {showAgentStore && (
+              <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowAgentStore(false)}>
+                <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold gradient-text">Магазин агентов</h3>
+                    <button onClick={() => setShowAgentStore(false)} className="text-gray-400 hover:text-white text-2xl">×</button>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {agentStore.map(agent => (
+                      <div key={agent.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 card-hover">
+                        <h4 className="font-bold text-white mb-2">{agent.name}</h4>
+                        <p className="text-sm text-gray-400 mb-3">{agent.description}</p>
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {agent.stack.map(s => (
+                            <span key={s} className="px-2 py-0.5 bg-gray-700 rounded text-[10px] text-gray-300">{s}</span>
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">{agent.category} • {agent.price}</span>
+                          <button
+                            onClick={() => importAgent(agent.id)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all"
+                          >
+                            ➕ Импортировать
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              {vbaModules.map((m) => <VBAModuleRow key={m.name} module={m} />)}
-            </div>
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Архитектура</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2 rounded bg-gray-800/50 border border-gray-700/50">
-                  <p className="text-emerald-400 font-mono">Python-ядро</p>
-                  <p className="text-gray-500 mt-1">main.py, agent_engine.py</p>
+            )}
+
+            {/* Agents List */}
+            <div className="grid gap-4">
+              {agents.map(agent => (
+                <div key={agent.id} className={`rounded-xl border-2 p-5 transition-all card-hover ${
+                  agent.enabled 
+                    ? 'border-emerald-500/50 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5' 
+                    : 'border-gray-700 bg-gray-900/50 opacity-70'
+                }`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-bold text-white">{agent.name}</h3>
+                        <StatusBadge status={agent.status} />
+                      </div>
+                      <p className="text-sm text-gray-400 mb-2">{agent.task}</p>
+                      <p className="text-xs text-gray-500 italic">{agent.description}</p>
+                    </div>
+                    <button
+                      onClick={() => toggleAgent(agent.id)}
+                      className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                        agent.enabled
+                          ? 'bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30'
+                          : 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30'
+                      }`}
+                    >
+                      {agent.enabled ? '⏸ Выключить' : '▶ Включить'}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {agent.stack.map(s => (
+                      <span key={s} className="px-2 py-0.5 bg-gray-700/50 rounded text-[10px] text-gray-300">{s}</span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-gray-500">
+                    <span>Прогресс: {agent.progress}%</span>
+                    <span>Активность: {agent.lastActivity}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${agent.enabled ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : 'bg-gray-600'}`}
+                      style={{ width: `${agent.progress}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="p-2 rounded bg-gray-800/50 border border-gray-700/50">
-                  <p className="text-cyan-400 font-mono">VBA/Excel</p>
-                  <p className="text-gray-500 mt-1">mod_Core, drm_* семейство</p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ===== PROVIDERS ===== */}
+        {activeTab === 'providers' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Провайдеры LLM</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setProviderFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    providerFilter === 'all' ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400'
+                  }`}
+                >
+                  Все
+                </button>
+                <button
+                  onClick={() => setProviderFilter('online')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    providerFilter === 'online' ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400'
+                  }`}
+                >
+                  Онлайн
+                </button>
+                <button
+                  onClick={() => setProviderFilter('offline')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    providerFilter === 'offline' ? 'bg-red-500/20 border border-red-500/50 text-red-400' : 'bg-gray-800 border border-gray-700 text-gray-400'
+                  }`}
+                >
+                  Оффлайн
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-gray-900/80 to-gray-800/50 p-5">
+              {providers
+                .filter(p => providerFilter === 'all' || (providerFilter === 'online' ? p.status === 'online' : p.status !== 'online'))
+                .map(provider => (
+                <div key={provider.name} className="py-4 border-b border-gray-800 last:border-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${
+                        provider.status === 'online' ? 'bg-emerald-400 animate-pulse' :
+                        provider.status === 'error' ? 'bg-red-400' : 'bg-gray-600'
+                      }`} />
+                      <div>
+                        <span className="text-sm font-bold text-white">{provider.name}</span>
+                        <StatusBadge status={provider.status} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-xs text-gray-400">{provider.latency > 0 ? `${provider.latency}ms` : '—'}</p>
+                        <p className="text-[10px] text-gray-500">Задержка</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-400">{provider.models > 0 ? provider.models : '—'}</p>
+                        <p className="text-[10px] text-gray-500">Моделей</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-2 ml-6">{provider.description}</p>
+                  <div className="flex items-center gap-2 ml-6">
+                    <a
+                      href={provider.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      🔗 {provider.url}
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
+              <h3 className="text-sm font-bold text-gray-300 mb-2">💡 Как использовать</h3>
+              <ul className="text-xs text-gray-400 space-y-1">
+                <li>• <strong className="text-emerald-400">Онлайн</strong> — провайдер настроен и готов к работе</li>
+                <li>• <strong className="text-yellow-400">Оффлайн</strong> — требуется настройка API ключа</li>
+                <li>• <strong className="text-red-400">Ошибка</strong> — проверьте подключение и API ключ</li>
+                <li>• <strong>Задержка</strong> — время отклика в миллисекундах (меньше = лучше)</li>
+                <li>• <strong>Моделей</strong> — количество доступных моделей у провайдера</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* ===== DOCS (MD Editor) ===== */}
+        {activeTab === 'docs' && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-bold text-white">Редактор документации</h2>
+            
+            <div className="grid lg:grid-cols-2 gap-4">
+              {/* MD Editor */}
+              <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-gray-300">📝 Markdown редактор</h3>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(mdEditorContent)}
+                    className="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 text-xs hover:text-white transition-all"
+                  >
+                    📋 Копировать
+                  </button>
+                </div>
+                <textarea
+                  value={mdEditorContent}
+                  onChange={(e) => setMdEditorContent(e.target.value)}
+                  className="w-full h-96 px-4 py-3 rounded-lg bg-gray-800/80 border-2 border-gray-700 text-white text-sm font-mono focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none resize-none"
+                  placeholder="# Заголовок&#10;&#10;Описание..."
+                />
+              </div>
+
+              {/* AI Suggestions */}
+              <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-gray-300">🤖 AI-подсказки</h3>
+                  <button
+                    onClick={getAiSuggestions}
+                    className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-xs font-bold hover:scale-105 transition-all"
+                  >
+                    ✨ Получить подсказки
+                  </button>
+                </div>
+                <div className="h-96 overflow-y-auto space-y-2">
+                  {aiSuggestions.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">Нажмите "Получить подсказки" для анализа документа</p>
+                  ) : (
+                    aiSuggestions.map((suggestion, i) => (
+                      <div key={i} className="p-3 rounded-lg bg-gray-800/50 border border-gray-700 text-sm text-gray-300">
+                        {suggestion}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
