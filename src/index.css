@@ -55,6 +55,11 @@
   animation: gradient-shift 3s ease infinite;
 }
 
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
 /* Font smoothing */
 body {
   -webkit-font-smoothing: antialiased;
