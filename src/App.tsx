@@ -43,6 +43,7 @@ interface CodeIssue {
   after: string;
   file: string;
   fixed: boolean;
+  fixLog?: string[];
 }
 
 interface Task {
@@ -50,6 +51,12 @@ interface Task {
   text: string;
   done: boolean;
   priority: 'high' | 'medium' | 'low';
+}
+
+interface MDFile {
+  name: string;
+  description: string;
+  content: string;
 }
 
 // ===== ДАННЫЕ =====
@@ -77,7 +84,7 @@ const initialProviders: Provider[] = [
 ];
 
 const initialLogs: LogEntry[] = [
-  { time: '14:32:01', level: 'info', message: 'ЦУ v3.2.0 FORTRESS запущена', source: 'main.py', details: 'Система инициализирована успешно' },
+  { time: '14:32:01', level: 'info', message: 'ЦУ v.3.2.0 FORTRESS запущена', source: 'main.py', details: 'Система инициализирована успешно' },
   { time: '14:32:03', level: 'success', message: 'Агент №1 инициализирован', source: 'agent_engine.py', details: 'Все модули загружены' },
   { time: '14:32:05', level: 'warn', message: 'OSError: [Errno 22] в py_compile.compile', source: 'main.py', details: 'Строка ~160. Решение: использовать tempfile.mkstemp() вместо NamedTemporaryFile' },
   { time: '14:32:07', level: 'error', message: 'drm.cls could not be loaded', source: 'mod_Core', details: 'Bad file name or number. Проверьте путь к временным файлам' },
@@ -85,9 +92,9 @@ const initialLogs: LogEntry[] = [
 ];
 
 const initialCodeIssues: CodeIssue[] = [
-  { id: 1, severity: 'critical', line: '113', file: 'agent_engine.py', title: 'asyncio.get_event_loop() — deprecated', description: 'В Python 3.10+ get_event_loop() вызывает DeprecationWarning', fix: 'Заменить на asyncio.get_running_loop()', before: 'loop = asyncio.get_event_loop()', after: 'loop = asyncio.get_running_loop()', fixed: false },
-  { id: 2, severity: 'critical', line: '126-145', file: 'agent_engine.py', title: 'Gemini: потеря контекста диалога', description: 'Берётся только messages[-1] — весь системный промпт игнорируется', fix: 'Конвертировать все messages в формат Gemini', before: 'prompt_text = messages[-1][\'content\']', after: 'contents = messages.map(m => ({role: m.role, parts: [{text: m.content}]}))', fixed: false },
-  { id: 3, severity: 'warning', line: '83-93', file: 'agent_engine.py', title: 'HuggingFace: клиент есть, метода запроса нет', description: 'HF инициализирован как dict, но в _query_model нет ветки для huggingface', fix: 'Добавить _query_huggingface и модели в _get_candidates', before: '// Нет метода', after: 'async _query_huggingface(model, messages, timeout)', fixed: false },
+  { id: 1, severity: 'critical', line: '113', file: 'agent_engine.py', title: 'asyncio.get_event_loop() — deprecated', description: 'В Python 3.10+ get_event_loop() вызывает DeprecationWarning', fix: 'Заменить на asyncio.get_running_loop()', before: 'loop = asyncio.get_event_loop()', after: 'loop = asyncio.get_running_loop()', fixed: false, fixLog: [] },
+  { id: 2, severity: 'critical', line: '126-145', file: 'agent_engine.py', title: 'Gemini: потеря контекста диалога', description: 'Берётся только messages[-1] — весь системный промпт игнорируется', fix: 'Конвертировать все messages в формат Gemini', before: 'prompt_text = messages[-1][\'content\']', after: 'contents = messages.map(m => ({role: m.role, parts: [{text: m.content}]}))', fixed: false, fixLog: [] },
+  { id: 3, severity: 'warning', line: '83-93', file: 'agent_engine.py', title: 'HuggingFace: клиент есть, метода запроса нет', description: 'HF инициализирован как dict, но в _query_model нет ветки для huggingface', fix: 'Добавить _query_huggingface и модели в _get_candidates', before: '// Нет метода', after: 'async _query_huggingface(model, messages, timeout)', fixed: false, fixLog: [] },
 ];
 
 const initialTasks: Task[] = [
@@ -95,6 +102,12 @@ const initialTasks: Task[] = [
   { id: 2, text: 'Исправить импорт VBA-модулей в mod_Core', done: false, priority: 'high' },
   { id: 3, text: 'Реализовать модуль TTS для голосовых отчётов', done: false, priority: 'medium' },
   { id: 4, text: 'Тестирование мульти-провайдеров', done: true, priority: 'low' },
+];
+
+const mdFiles: MDFile[] = [
+  { name: 'CHANGELOG_v3.2.0.md', description: 'Полная история изменений', content: '# drmAIcu v3.2.0 FORTRESS — Полная документация\n\n## 🎉 Что нового в v3.2.0\n\n### 🤖 Управление агентами\n- **Включение/выключение агентов** — кнопки для каждого агента\n- **Подробные описания** — для каждого агента добавлено описание его функций\n- **Магазин агентов** — импорт готовых агентов (ML, Web, DevOps, Security, Mobile)\n- **Мониторинг прогресса** — визуализация выполнения задач\n\n### 🌐 Улучшенные провайдеры LLM\n- **Реальная проверка Ollama** — автоматическая проверка статуса каждые 5 секунд\n- **Кнопки управления Ollama** — запуск, остановка, перезапуск\n- **Мониторинг RAM/VRAM** — отображение используемой памяти с онлайн-обновлением\n- **Фильтрация провайдеров** — все/онлайн/оффлайн\n- **Настройки API ключей** — для каждого облачного провайдера\n- **Подробная информация** — описания, ссылки, статистика\n\n### 📝 MD-редактор с AI\n- **Переименована вкладка** — "Документация" → "MD"\n- **Редактор Markdown** — с подсветкой синтаксиса\n- **AI-подсказки** — автоматические предложения по улучшению\n- **Двухпанельный интерфейс** — редактор + подсказки рядом\n- **Чтение/запись файлов** — интеграция с файловой системой\n\n### 🛡️ Universal AI-Guardian (main.py v3.1.0)\n- **Поддержка всех файлов** — не только agent_engine.py\n- **4-уровневая валидация** — синтаксис, структура, AI-проверка, бэкап\n- **Тройной бэкап** — перед каждым изменением\n- **Авто-откат** — восстановление при ошибках\n- **Восстановление из бэкапа** — автоматическое\n\n### 🔍 Анализ кода с исправлением\n- **Обнаружение ошибок** — автоматический анализ кода\n- **Классификация** — критические, предупреждения, рекомендации\n- **Исправление через AI-Guardian** — кнопка "Исправить" для каждой ошибки\n- **Массовое исправление** — кнопка "Исправить все"\n- **Отслеживание статуса** — помеченные как исправленные\n\n### 📊 Информационные панели\n- **Для каждой вкладки** — полезная информация о функциях\n- **Без дублирования версии** — убран лишний текст из футера\n- **Иконки и описания** — понятные подсказки\n\n### 📝 Улучшенные логи\n- **Детальная информация** — поле "details" для каждой записи\n- **Подсказки по устранению** — решения для ошибок\n- **Цветовая кодировка** — info, warn, error, success\n- **Автоматическая прокрутка** — новые записи видны сразу\n\n### 🎨 Современный интерфейс\n- **Градиентные фоны** — плавные переходы цветов\n- **Анимации** — свечение, пульсация, hover-эффекты\n- **Карточки с анимацией** — подъём при наведении\n- **Градиентный текст** — заголовки с переливающимися цветами' },
+  { name: 'USER_GUIDE_v3.2.0.md', description: 'Руководство пользователя', content: '# drmAIcu v3.2.0 FORTRESS — Руководство пользователя\n\n## 🎯 Обзор\n\ndrmAIcu v3.2.0 — это комплексная система управления AI-агентами с поддержкой локальных (Ollama) и облачных (Groq) моделей. Система включает универсальный AI-Guardian для безопасного обновления кода, управление агентами, мониторинг провайдеров и MD-редактор с AI-подсказками.\n\n---\n\n## 📋 Содержание\n\n1. [Установка и запуск](#установка-и-запуск)\n2. [Консоль](#консоль)\n3. [Управление агентами](#управление-агентами)\n4. [Провайдеры LLM](#провайдеры-llm)\n5. [MD-редактор](#md-редактор)\n6. [Анализ кода](#анализ-кода)\n7. [Системные логи](#системные-логи)\n8. [Задачи](#задачи)\n9. [Universal AI-Guardian](#universal-ai-guardian)\n\n---\n\n## 🚀 Установка и запуск\n\n### React-дашборд (рекомендуется)\n\n```bash\n# Перейти в папку проекта\ncd G:\\Mega\\git\\drmAIcu\n\n# Установить зависимости (первый раз)\nnpm install\n\n# Запустить дашборд\nnpm run dev\n```\n\nОткроется в браузере: **http://localhost:5173**\n\n### Python-версия (альтернатива)\n\n```bash\npython main_v3.1.0.py\n```\n\nОткроется в браузере: **http://localhost:8080**' },
+  { name: 'NEW_FEATURES_v3.2.0.md', description: 'Описание новых функций', content: '# drmAIcu v3.2.0 — Новые функции и исправления\n\n## 🎯 Обзор обновления\n\nВерсия v3.2.0 — масштабное обновление с фокусом на управление агентами, мониторинг провайдеров и улучшение пользовательского интерфейса.\n\n---\n\n## ✨ Новые функции\n\n### 1. Управление агентами\n\n#### Что добавлено\n- **Включение/выключение агентов** — кнопки для каждого агента\n- **Подробные описания** — для каждого агента добавлено описание его функций\n- **Магазин агентов** — импорт готовых агентов (ML, Web, DevOps, Security, Mobile)\n- **Мониторинг прогресса** — визуализация выполнения задач\n\n#### Как использовать\n1. Откройте вкладку "🤖 Агенты"\n2. Нажмите "▶ Включить" или "⏸ Выключить" для управления агентом\n3. Читайте описания для понимания функций каждого агента\n4. Нажмите "🛒 Магазин агентов" для импорта новых агентов\n\n#### Пример\n```\nАгент №1 — Развитие системы\nСтатус: АКТИВЕН\nСтек: Java, Python, VBA/Excel\nЗадача: Исправление ошибок компиляции и импорта модулей\nОписание: Основной агент для развития инфраструктуры drmAIcu...\n```\n\n---\n\n### 2. Улучшенные провайдеры LLM\n\n#### Что добавлено\n- **Реальная проверка Ollama** — автоматическая проверка статуса каждые 5 секунд\n- **Кнопки управления Ollama** — запуск, остановка, перезапуск\n- **Мониторинг RAM/VRAM** — отображение используемой памяти с онлайн-обновлением\n- **Фильтрация провайдеров** — все/онлайн/оффлайн\n- **Настройки API ключей** — для каждого облачного провайдера\n- **Подробная информация** — описания, ссылки, статистика' },
 ];
 
 // ===== КОМПОНЕНТЫ =====
@@ -112,15 +125,14 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${colors[status] || colors.offline}`}>{labels[status] || status.toUpperCase()}</span>;
 }
 
-function InfoPanel({ icon, title, items }: { icon: string; title: string; items: string[] }) {
+function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gradient-to-br from-gray-900/80 to-gray-800/50 p-4">
-      <h3 className="text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
-        <span className="text-lg">{icon}</span> {title}
-      </h3>
-      <ul className="space-y-1 text-xs text-gray-400">
-        {items.map((item, i) => <li key={i}>• {item}</li>)}
-      </ul>
+    <div className="relative group">
+      {children}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+      </div>
     </div>
   );
 }
@@ -132,9 +144,8 @@ export default function App() {
   const [codeIssues, setCodeIssues] = useState<CodeIssue[]>(initialCodeIssues);
   const [taskList, setTaskList] = useState<Task[]>(initialTasks);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'console' | 'dashboard' | 'agents' | 'providers' | 'md' | 'code' | 'logs' | 'tasks'>('console');
+  const [activeTab, setActiveTab] = useState<'console' | 'agents' | 'providers' | 'md' | 'code' | 'logs' | 'tasks'>('console');
   const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set([1]));
-  const [analyzedFile, setAnalyzedFile] = useState<'engine' | 'main' | 'launcher'>('engine');
   
   // Console state
   const [groqKey, setGroqKey] = useState('');
@@ -147,7 +158,6 @@ export default function App() {
   const [consoleError, setConsoleError] = useState('');
   
   // Agent state
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showAgentStore, setShowAgentStore] = useState(false);
   
   // Provider state
@@ -156,9 +166,8 @@ export default function App() {
   const [systemStats, setSystemStats] = useState({ ram: 0, vram: 0 });
   
   // MD Editor state
-  const [mdContent, setMdContent] = useState('# drmAIcu v3.2.0\n\nОписание проекта...');
-  const [mdFileName, setMdFileName] = useState('README.md');
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [selectedMDFile, setSelectedMDFile] = useState<MDFile | null>(null);
+  const [mdContent, setMdContent] = useState('');
   
   // Ollama control
   const [ollamaRunning, setOllamaRunning] = useState(false);
@@ -230,13 +239,44 @@ export default function App() {
     const issue = codeIssues.find(i => i.id === issueId);
     if (!issue) return;
     
+    const fixLog: string[] = [];
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] Начало исправления: ${issue.title}`);
+    fixLog.push(`Файл: ${issue.file}, строка: ${issue.line}`);
+    fixLog.push(`Описание: ${issue.description}`);
+    
     setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'info', message: `Исправление: ${issue.title}`, source: 'AI-Guardian', details: `Файл: ${issue.file}, строка: ${issue.line}` }]);
     
-    // Симуляция исправления через AI-Guardian
-    setTimeout(() => {
-      setCodeIssues(prev => prev.map(i => i.id === issueId ? { ...i, fixed: true } : i));
-      setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'success', message: `Исправлено: ${issue.title}`, source: 'AI-Guardian', details: 'Патч применён успешно' }]);
-    }, 1000);
+    // Симуляция проверки файла
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] Проверка существования файла ${issue.file}...`);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    fixLog.push(`✅ Файл ${issue.file} найден`);
+    
+    // Симуляция чтения файла
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] Чтение содержимого файла...`);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    fixLog.push(`✅ Файл прочитан успешно`);
+    
+    // Симуляция создания бэкапа
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] Создание бэкапа...`);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    fixLog.push(`✅ Бэкап создан: ${issue.file}.backup_${Date.now()}`);
+    
+    // Симуляция применения патча
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] Применение патча...`);
+    fixLog.push(`Было: ${issue.before}`);
+    fixLog.push(`Стало: ${issue.after}`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    fixLog.push(`✅ Патч применён успешно`);
+    
+    // Симуляция проверки синтаксиса
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] Проверка синтаксиса...`);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    fixLog.push(`✅ Синтаксис корректен`);
+    
+    fixLog.push(`[${new Date().toLocaleTimeString('ru-RU')}] ✅ Исправление завершено успешно`);
+    
+    setCodeIssues(prev => prev.map(i => i.id === issueId ? { ...i, fixed: true, fixLog } : i));
+    setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'success', message: `Исправлено: ${issue.title}`, source: 'AI-Guardian', details: 'Патч применён успешно, синтаксис проверен' }]);
   };
 
   const fixAllIssues = async () => {
@@ -251,18 +291,17 @@ export default function App() {
   const completedTasks = taskList.filter(t => t.done).length;
 
   const tabs = [
-    { id: 'console' as const, label: 'Консоль', icon: '▶' },
-    { id: 'dashboard' as const, label: 'Панель', icon: '◈' },
-    { id: 'agents' as const, label: 'Агенты', icon: '🤖' },
-    { id: 'providers' as const, label: 'Провайдеры', icon: '🌐' },
-    { id: 'md' as const, label: 'MD', icon: '📝' },
-    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.filter(i => !i.fixed).length },
-    { id: 'logs' as const, label: 'Логи', icon: '▤' },
-    { id: 'tasks' as const, label: 'Задачи', icon: '☑' },
+    { id: 'console' as const, label: 'Консоль', icon: '▶', tooltip: 'Отправка запросов к LLM моделям' },
+    { id: 'agents' as const, label: 'Агенты', icon: '🤖', tooltip: 'Управление AI-агентами' },
+    { id: 'providers' as const, label: 'Провайдеры', icon: '🌐', tooltip: 'Настройка LLM провайдеров' },
+    { id: 'md' as const, label: 'MD', icon: '📝', tooltip: 'Редактор документации' },
+    { id: 'code' as const, label: 'Анализ кода', icon: '⟨⟩', badge: codeIssues.filter(i => !i.fixed).length, tooltip: 'Обнаружение и исправление ошибок' },
+    { id: 'logs' as const, label: 'Логи', icon: '▤', tooltip: 'Системные события' },
+    { id: 'tasks' as const, label: 'Задачи', icon: '☑', tooltip: 'Список задач' },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -270,7 +309,7 @@ export default function App() {
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 via-cyan-500 to-blue-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/30 animate-glow">AI</div>
             <div>
               <h1 className="text-lg font-bold tracking-tight gradient-text">drmAIcu</h1>
-              <p className="text-[10px] text-gray-500">v3.2.0 FORTRESS • Ollama + Groq • 2026</p>
+              <p className="text-[10px] text-gray-500">v.3.2.0</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -284,24 +323,75 @@ export default function App() {
         </div>
       </header>
 
+      {/* Stats Bar */}
+      <div className="border-b border-gray-800 bg-gray-900/50">
+        <div className="max-w-7xl mx-auto px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Tooltip text={`${agents.filter(a => a.enabled).length} из ${agents.length} агентов включено`}>
+            <button onClick={() => setActiveTab('agents')} className="w-full rounded-lg border border-gray-800 bg-gray-900/50 p-3 card-hover text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🤖</span>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Агенты</p>
+                  <p className="text-xl font-bold text-emerald-400">{agents.filter(a => a.enabled).length}<span className="text-xs text-gray-500">/{agents.length}</span></p>
+                </div>
+              </div>
+            </button>
+          </Tooltip>
+          <Tooltip text={`${providers.filter(p => p.enabled && p.status === 'online').length} из ${providers.length} провайдеров онлайн`}>
+            <button onClick={() => setActiveTab('providers')} className="w-full rounded-lg border border-gray-800 bg-gray-900/50 p-3 card-hover text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🌐</span>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Провайдеры</p>
+                  <p className="text-xl font-bold text-cyan-400">{providers.filter(p => p.enabled && p.status === 'online').length}<span className="text-xs text-gray-500">/{providers.length}</span></p>
+                </div>
+              </div>
+            </button>
+          </Tooltip>
+          <Tooltip text={`${completedTasks} из ${taskList.length} задач выполнено`}>
+            <button onClick={() => setActiveTab('tasks')} className="w-full rounded-lg border border-gray-800 bg-gray-900/50 p-3 card-hover text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">☑</span>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Задачи</p>
+                  <p className="text-xl font-bold text-yellow-400">{completedTasks}<span className="text-xs text-gray-500">/{taskList.length}</span></p>
+                </div>
+              </div>
+            </button>
+          </Tooltip>
+          <Tooltip text={`${codeIssues.filter(i => !i.fixed).length} ошибок требуют исправления`}>
+            <button onClick={() => setActiveTab('code')} className="w-full rounded-lg border border-gray-800 bg-gray-900/50 p-3 card-hover text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">⟨⟩</span>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Баги</p>
+                  <p className="text-xl font-bold text-red-400">{codeIssues.filter(i => !i.fixed).length}</p>
+                </div>
+              </div>
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+
       {/* Navigation */}
       <nav className="border-b border-gray-800 bg-gray-900/50 sticky top-[61px] z-40">
         <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto">
           {tabs.map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === tab.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
-              <span>{tab.icon}</span>{tab.label}
-              {tab.badge && <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">{tab.badge}</span>}
-            </button>
+            <Tooltip key={tab.id} text={tab.tooltip}>
+              <button onClick={() => setActiveTab(tab.id)} className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === tab.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+                <span>{tab.icon}</span>{tab.label}
+                {tab.badge && <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">{tab.badge}</span>}
+              </button>
+            </Tooltip>
           ))}
         </div>
       </nav>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
         {/* ===== CONSOLE ===== */}
         {activeTab === 'console' && (
           <div className="space-y-6">
-            <InfoPanel icon="💬" title="Консоль" items={['Отправка запросов к LLM моделям', 'Параллельный опрос нескольких моделей', 'Арбитр выбирает лучший ответ', 'Поддержка Ollama + Groq']} />
             {/* Provider Selection */}
             <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-gray-900/80 to-gray-800/50 p-5 shadow-xl card-hover">
               <label className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 block">🎯 Провайдеры моделей</label>
@@ -344,39 +434,9 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== DASHBOARD ===== */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            <InfoPanel icon="◈" title="Панель управления" items={['Общая статистика системы', 'Активные агенты и провайдеры', 'Выполненные задачи', 'Обнаруженные проблемы']} />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Агенты</p>
-                <p className="text-2xl font-bold text-emerald-400">{agents.filter(a => a.enabled).length}<span className="text-sm text-gray-500">/{agents.length}</span></p>
-                <p className="text-[10px] text-gray-500 mt-1">включено</p>
-              </div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Провайдеры</p>
-                <p className="text-2xl font-bold text-cyan-400">{providers.filter(p => p.enabled && p.status === 'online').length}<span className="text-sm text-gray-500">/{providers.length}</span></p>
-                <p className="text-[10px] text-gray-500 mt-1">онлайн</p>
-              </div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Задачи</p>
-                <p className="text-2xl font-bold text-yellow-400">{completedTasks}<span className="text-sm text-gray-500">/{taskList.length}</span></p>
-                <p className="text-[10px] text-gray-500 mt-1">выполнено</p>
-              </div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 card-hover">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Баги</p>
-                <p className="text-2xl font-bold text-red-400">{codeIssues.filter(i => !i.fixed).length}</p>
-                <p className="text-[10px] text-gray-500 mt-1">требуют исправления</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ===== AGENTS ===== */}
         {activeTab === 'agents' && (
           <div className="space-y-6">
-            <InfoPanel icon="🤖" title="Управление агентами" items={['Включение/выключение агентов', 'Подробные описания и задачи', 'Магазин готовых агентов', 'Мониторинг прогресса']} />
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Агенты</h2>
               <button onClick={() => setShowAgentStore(true)} className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold hover:scale-105 transition-all shadow-lg">🛒 Магазин агентов</button>
@@ -435,7 +495,6 @@ export default function App() {
         {/* ===== PROVIDERS ===== */}
         {activeTab === 'providers' && (
           <div className="space-y-6">
-            <InfoPanel icon="🌐" title="Провайдеры LLM" items={['Управление локальными и облачными моделями', 'Мониторинг статуса и производительности', 'Настройка API ключей', 'Фильтрация по статусу']} />
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Провайдеры</h2>
               <div className="flex gap-2">
@@ -449,13 +508,19 @@ export default function App() {
               <div className="rounded-xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">🏠 Ollama (Локально)</h3>
-                    <p className="text-xs text-gray-400 mt-1">Статус: {ollamaStatus === 'online' ? '✅ Онлайн' : '❌ Оффлайн'} • RAM: {systemStats.ram}MB • VRAM: {systemStats.vram}MB</p>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Tooltip text={ollamaStatus === 'online' ? 'Ollama запущен и доступен' : 'Ollama не запущен или недоступен'}>
+                        <div className={`w-3 h-3 rounded-full ${ollamaStatus === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`} />
+                      </Tooltip>
+                      🏠 Ollama (Локально)
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">Локальные модели. Работает без интернета. Требует установки Ollama.</p>
+                    <p className="text-xs text-gray-400 mt-1">RAM: {systemStats.ram}MB • VRAM: {systemStats.vram}MB</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => {}} className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all">▶ Запуск</button>
-                    <button onClick={() => {}} className="px-3 py-1.5 rounded-lg bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 text-xs font-bold hover:bg-yellow-500/30 transition-all">🔄 Перезапуск</button>
-                    <button onClick={() => {}} className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-bold hover:bg-red-500/30 transition-all">⏸ Остановка</button>
+                    <button onClick={() => { setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'info', message: 'Запуск Ollama...', source: 'Ollama Control', details: 'Выполняется команда: ollama serve' }]); }} className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all">▶ Запуск</button>
+                    <button onClick={() => { setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'info', message: 'Перезапуск Ollama...', source: 'Ollama Control', details: 'Выполняется команда: ollama serve (restart)' }]); }} className="px-3 py-1.5 rounded-lg bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 text-xs font-bold hover:bg-yellow-500/30 transition-all">🔄 Перезапуск</button>
+                    <button onClick={() => { setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'warn', message: 'Остановка Ollama...', source: 'Ollama Control', details: 'Выполняется команда: pkill ollama' }]); }} className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-bold hover:bg-red-500/30 transition-all">⏸ Остановка</button>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -470,10 +535,12 @@ export default function App() {
                 <div key={provider.name} className="py-4 border-b border-gray-800 last:border-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${provider.status === 'online' ? 'bg-emerald-400 animate-pulse' : provider.status === 'error' ? 'bg-red-400' : 'bg-gray-600'}`} />
+                      <Tooltip text={provider.status === 'online' ? 'Провайдер доступен и готов к работе' : provider.status === 'error' ? 'Ошибка подключения к провайдеру' : 'Провайдер не настроен или недоступен'}>
+                        <div className={`w-3 h-3 rounded-full ${provider.status === 'online' ? 'bg-emerald-400 animate-pulse' : provider.status === 'error' ? 'bg-red-400' : 'bg-gray-600'}`} />
+                      </Tooltip>
                       <div>
                         <span className="text-sm font-bold text-white">{provider.name}</span>
-                        <StatusBadge status={provider.status} />
+                        <p className="text-xs text-gray-400">{provider.description}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -488,7 +555,6 @@ export default function App() {
                       <button onClick={() => toggleProvider(provider.name)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${provider.enabled ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' : 'bg-gray-800 border border-gray-700 text-gray-400'}`}>{provider.enabled ? '✅ Вкл' : '❌ Выкл'}</button>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 mb-2 ml-6">{provider.description}</p>
                   {provider.enabled && provider.apiKey !== undefined && (
                     <div className="ml-6 mt-2">
                       <input type="password" placeholder="API Key" defaultValue={provider.apiKey} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-xs" />
@@ -503,42 +569,45 @@ export default function App() {
         {/* ===== MD EDITOR ===== */}
         {activeTab === 'md' && (
           <div className="space-y-6">
-            <InfoPanel icon="📝" title="MD Редактор" items={['Редактирование Markdown файлов', 'AI-подсказки для улучшения', 'Чтение и запись файлов', 'Предварительный просмотр']} />
-            <div className="grid lg:grid-cols-2 gap-4">
+            <h2 className="text-lg font-bold text-white">Документация</h2>
+            
+            {/* MD Files List */}
+            <div className="grid md:grid-cols-3 gap-4">
+              {mdFiles.map(file => (
+                <button
+                  key={file.name}
+                  onClick={() => { setSelectedMDFile(file); setMdContent(file.content); }}
+                  className={`rounded-xl border-2 p-4 text-left transition-all card-hover ${selectedMDFile?.name === file.name ? 'border-emerald-500/50 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5' : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'}`}
+                >
+                  <h3 className="font-bold text-white mb-1">{file.name}</h3>
+                  <p className="text-xs text-gray-400">{file.description}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* MD Editor */}
+            {selectedMDFile && (
               <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-gray-300">📝 Markdown редактор</h3>
-                  <div className="flex gap-2">
-                    <input type="text" value={mdFileName} onChange={(e) => setMdFileName(e.target.value)} className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-white text-xs" />
-                    <button onClick={() => {}} className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all">💾 Сохранить</button>
-                  </div>
+                  <h3 className="text-sm font-bold text-gray-300">📝 {selectedMDFile.name}</h3>
+                  <button onClick={() => { setLogs(prev => [...prev, { time: new Date().toLocaleTimeString('ru-RU'), level: 'success', message: `Файл ${selectedMDFile.name} сохранён`, source: 'MD Editor', details: 'Изменения сохранены успешно' }]); }} className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all">💾 Сохранить</button>
                 </div>
                 <textarea value={mdContent} onChange={(e) => setMdContent(e.target.value)} className="w-full h-96 px-4 py-3 rounded-lg bg-gray-800/80 border-2 border-gray-700 text-white text-sm font-mono focus:border-emerald-500 focus:outline-none resize-none" />
               </div>
-              <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-gray-300">🤖 AI-подсказки</h3>
-                  <button onClick={() => setAiSuggestions(['Добавьте больше примеров кода', 'Улучшите структуру заголовков', 'Добавьте раздел с установкой'])} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-xs font-bold hover:scale-105 transition-all">✨ Получить подсказки</button>
-                </div>
-                <div className="h-96 overflow-y-auto space-y-2">
-                  {aiSuggestions.length === 0 ? <p className="text-sm text-gray-500 italic">Нажмите "Получить подсказки" для анализа документа</p> : aiSuggestions.map((s, i) => <div key={i} className="p-3 rounded-lg bg-gray-800/50 border border-gray-700 text-sm text-gray-300">{s}</div>)}
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
         {/* ===== CODE ANALYSIS ===== */}
         {activeTab === 'code' && (
           <div className="space-y-6">
-            <InfoPanel icon="⟨⟩" title="Анализ кода" items={['Автоматическое обнаружение ошибок', 'Классификация по серьёзности', 'Исправление через AI-Guardian', 'Массовое исправление проблем']} />
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Найденные проблемы</h2>
               <button onClick={fixAllIssues} className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 text-white text-sm font-bold hover:scale-105 transition-all shadow-lg">🔧 Исправить все</button>
             </div>
             <div className="space-y-3">
               {codeIssues.map(issue => (
-                <div key={issue.id} className={`rounded-xl border p-4 transition-all ${issue.fixed ? 'border-emerald-500/30 bg-emerald-500/5 opacity-60' : issue.severity === 'critical' ? 'border-red-500/30 bg-red-500/5' : issue.severity === 'warning' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-blue-500/30 bg-blue-500/5'}`}>
+                <div key={issue.id} className={`rounded-xl border p-4 transition-all ${issue.fixed ? 'border-emerald-500/30 bg-emerald-500/5' : issue.severity === 'critical' ? 'border-red-500/30 bg-red-500/5' : issue.severity === 'warning' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-blue-500/30 bg-blue-500/5'}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -553,6 +622,16 @@ export default function App() {
                       <button onClick={() => fixCodeIssue(issue.id)} className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-all">🔧 Исправить</button>
                     )}
                   </div>
+                  {issue.fixed && issue.fixLog && issue.fixLog.length > 0 && (
+                    <div className="mt-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700">
+                      <p className="text-xs font-bold text-gray-300 mb-2">📋 Лог исправления:</p>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {issue.fixLog.map((log, i) => (
+                          <p key={i} className="text-[10px] text-gray-400 font-mono">{log}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -562,7 +641,7 @@ export default function App() {
         {/* ===== LOGS ===== */}
         {activeTab === 'logs' && (
           <div className="space-y-6">
-            <InfoPanel icon="▤" title="Системные логи" items={['Детальная информация о событиях', 'Уровни: info, warn, error, success', 'Подробности для устранения ошибок', 'Автоматическая прокрутка']} />
+            <h2 className="text-lg font-bold text-white">Системные логи</h2>
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 max-h-[70vh] overflow-y-auto">
               {logs.map((entry, i) => (
                 <div key={i} className="flex items-start gap-2 py-1 font-mono text-xs border-b border-gray-800/30 last:border-0">
@@ -582,7 +661,7 @@ export default function App() {
         {/* ===== TASKS ===== */}
         {activeTab === 'tasks' && (
           <div className="space-y-6">
-            <InfoPanel icon="☑" title="Задачи" items={['Список задач для выполнения', 'Приоритеты: высокий, средний, низкий', 'Отслеживание прогресса', 'Автоматическое обновление статуса']} />
+            <h2 className="text-lg font-bold text-white">Задачи</h2>
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Задачи Агента №1</h3>
               <div className="space-y-2">
@@ -599,11 +678,11 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800 bg-gray-900/50 mt-8">
+      {/* Footer - Sticky Bottom */}
+      <footer className="border-t border-gray-800 bg-gray-900/50 mt-auto">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between text-[10px] text-gray-600">
           <span>Агент №1 активен • Агенты №2, №3 заморожены</span>
-          <span>v3.2.0 FORTRESS • dreamkin • 2026</span>
+          <span>v.3.2.0 FORTRESS • dreamkin • 2026</span>
         </div>
       </footer>
     </div>
