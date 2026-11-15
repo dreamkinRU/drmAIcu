@@ -1,5 +1,43 @@
+# Node modules (исключаем все зависимости)
 node_modules/
-.next/
-dist/
-build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Логи и временные файлы
 *.log
+*.tmp
+.restart.flag
+
+# Бэкапы (слишком тяжелые для GitHub)
+backups/
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Архивы патчей
+patch/archive/
+
+# Локальные настройки с секретами
+settings.local.json
+
+# Vite build
+dist/
+.vite/
