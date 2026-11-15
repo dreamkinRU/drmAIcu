@@ -276,16 +276,34 @@ def apply_patch(raw):
     data = resolve(raw)
     pid = str(data.get('patch_id', 'unknown'))
     tgt = data.get('target_file', '')
+    ptype = data.get('type', 'unknown')
+    log('Applying patch ' + pid + ' to ' + tgt + ' (type: ' + ptype + ')', 'INFO')
     path, new, err = compute_new(data)
     if err:
         log('Patch ' + pid + ' rejected: ' + err, 'ERROR')
         return {'success': False, 'error': err}
     backs = backup(path)
     tmp = path + '.tmp'
+    expected_sha = sha(new)
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(new)
         os.replace(tmp, path)
+        
+        # Проверка целостности после записи
+        with open(path, 'r', encoding='utf-8') as f:
+            written_content = f.read()
+        actual_sha = sha(written_content)
+        
+        if actual_sha != expected_sha:
+            log('Checksum mismatch after write! Expected: ' + expected_sha[:16] + ', Got: ' + actual_sha[:16], 'ERROR')
+            # Автооткат
+            if backs:
+                shutil.copy2(backs[-1], path)
+                log('Auto-rollback from backup: ' + backs[-1], 'WARNING')
+            return {'success': False, 'error': 'Целостность файла нарушена после записи (автооткат)'}
+        
+        log('File integrity verified: ' + expected_sha[:16], 'SUCCESS')
     except Exception as e:
         if os.path.exists(tmp):
             os.remove(tmp)

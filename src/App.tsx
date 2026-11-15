@@ -87,7 +87,6 @@ export default function App() {
   const [isPulling, setIsPulling] = useState(false);
   const [patches, setPatches] = useState<PatchInfo[]>([]);
   const [patchStats, setPatchStats] = useState<any>({total: 0, applied: 0, pending: 0, errors: 0, backups_count: 0});
-  const [restarting, setRestarting] = useState(false);
   const [selectedPatch, setSelectedPatch] = useState<PatchInfo | null>(null);
   const [patchPreview, setPatchPreview] = useState<any>(null);
   const [applyingPatch, setApplyingPatch] = useState(false);
@@ -98,27 +97,8 @@ export default function App() {
   const [projectLoading, setProjectLoading] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [projectSearch, setProjectSearch] = useState('');
-
-  const restartSystem = async () => {
-    if (!confirm('Перезапустить всю систему?\n\nPython и React будут перезапущены автоматически.')) return;
-    setRestarting(true);
-    try {
-      const res = await fetch('/api/system/restart', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.message);
-        setTimeout(() => window.location.reload(), 8000);
-      } else {
-        alert('Ошибка: ' + data.error);
-      }
-    } catch (e) {
-      alert('Ошибка сети. Система, возможно, перезапускается...');
-      setTimeout(() => window.location.reload(), 8000);
-    } finally {
-      setRestarting(false);
-    }
-  };
   const [projectDuplicatesOnly, setProjectDuplicatesOnly] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [projectImportantOnly, setProjectImportantOnly] = useState(false);
   const [selectedProjectFile, setSelectedProjectFile] = useState<ProjectFile | null>(null);
   const [projectFileContent, setProjectFileContent] = useState('');
@@ -200,11 +180,6 @@ export default function App() {
   };
   const loadRealMDFile = async (file: MDFile) => {
     setSelectedMDFile(file);
-              <Tooltip text="Перезапустить Python и React" position="bottom">
-                <button onClick={restartSystem} disabled={restarting} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${restarting ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-orange-500/20 border border-orange-500/50 text-orange-400 hover:bg-orange-500/30'}`}>
-                  {restarting ? '⏳ Перезапуск...' : '🔄 Перезапуск'}
-                </button>
-              </Tooltip>
     setMdFileExists(true);
     try {
       const res = await fetch(`/api/md/${encodeURIComponent(file.name)}`);
@@ -225,7 +200,14 @@ export default function App() {
     setSelectedPatch(patch);
     setPatchPreview(null);
     try {
-      const res = await fetch('/api/patches/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_file: patch.target_file, full_file_content: (patch as any).full_file_content || '', patch_id: patch.patch_id }) });
+      const res = await fetch('/api/patches/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          patch_id: patch.patch_id,
+          type: patch.patch_type,
+          target_file: patch.target_file,
+          full_file_content: (patch as any).full_file_content || '',
+          diff: (patch as any).diff || '',
+          filename: patch.filename
+        }) });
       const data = await res.json();
       setPatchPreview(data);
     } catch (e) { setPatchPreview({success: false, error: 'Ошибка сети'}); }
@@ -234,7 +216,14 @@ export default function App() {
     if (!confirm(`Применить патч ${patch.patch_id}?`)) return;
     setApplyingPatch(true);
     try {
-      const res = await fetch('/api/patches/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_file: patch.target_file, full_file_content: (patch as any).full_file_content || '', patch_id: patch.patch_id }) });
+      const res = await fetch('/api/patches/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          patch_id: patch.patch_id,
+          type: patch.patch_type,
+          target_file: patch.target_file,
+          full_file_content: (patch as any).full_file_content || '',
+          diff: (patch as any).diff || '',
+          filename: patch.filename
+        }) });
       const data = await res.json();
       if (data.success) { setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ ${data.message}`]); alert('Патч применен! Перезагрузка...'); setTimeout(() => window.location.reload(), 2000); } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); } finally { setApplyingPatch(false); }
@@ -250,6 +239,19 @@ export default function App() {
   const archivePatch = async (filename: string) => { try { const res = await fetch('/api/patches/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({filename}) }); const data = await res.json(); if (data.success) { loadPatches(); setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] 📦 ${data.message}`]); } } catch (e) { alert('Ошибка сети'); } };
   const deletePatch = async (filename: string) => { if (!confirm(`Удалить ${filename}?`)) return; try { const res = await fetch('/api/patches/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({filename}) }); const data = await res.json(); if (data.success) { loadPatches(); setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🗑 ${data.message}`]); } } catch (e) { alert('Ошибка сети'); } };
   const applyAllPending = async () => { if (!confirm(`Применить все патчи (${patchStats.pending} шт.)?`)) return; setApplyingPatch(true); try { const res = await fetch('/api/patches/apply-all', {method: 'POST'}); const data = await res.json(); if (data.success) { alert(`Применено: ${data.results.filter((r: any) => r.success).length}`); window.location.reload(); } } catch (e) { alert('Ошибка сети'); } finally { setApplyingPatch(false); } };
+
+  
+  const restartSystem = async () => {
+    if (!confirm('Перезапустить всю систему?\n\nPython и React будут перезапущены автоматически.')) return;
+    setRestarting(true);
+    try {
+      const res = await fetch('/api/system/restart', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) { alert(data.message); setTimeout(() => window.location.reload(), 8000); }
+      else { alert('Ошибка: ' + data.error); }
+    } catch (e) { alert('Ошибка сети. Система, возможно, перезапускается...'); setTimeout(() => window.location.reload(), 8000); }
+    finally { setRestarting(false); }
+  };
 
   const scanProject = async () => {
     setProjectLoading(true);
@@ -449,6 +451,11 @@ export default function App() {
               <div className="px-4 py-2 rounded-lg bg-gray-800/50 border-2 border-emerald-500/30">
                 <span className="font-mono text-lg text-emerald-400 tabular-nums font-bold">{currentTime.toLocaleTimeString('ru-RU')}</span>
               </div>
+              <Tooltip text="Перезапустить Python и React" position="bottom">
+                <button onClick={restartSystem} disabled={restarting} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${restarting ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-orange-500/20 border border-orange-500/50 text-orange-400 hover:bg-orange-500/30'}`}>
+                  {restarting ? '⏳ Перезапуск...' : '🔄 Перезапуск'}
+                </button>
+              </Tooltip>
             </div>
           </div>
         </div>
