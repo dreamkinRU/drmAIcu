@@ -1,0 +1,9 @@
+{
+  "patch_id": "007-1",
+  "type": "unified_diff",
+  "target_file": "main.py",
+  "description": "Автоматическая архивация патча при успешном применении",
+  "author": "Qwen",
+  "created_at": "2026-11-15T12:30:00",
+  "diff": "--- a/main.py\n+++ b/main.py\n@@ -445,6 +445,18 @@ def apply_patch(patch_data: dict) -> dict:\n             })\n             save_manifest(manifest)\n             \n+            # Автоматическая архивация успешного патча\n+            patch_filename = patch_data.get('filename', '')\n+            if patch_filename:\n+                src = os.path.join(PATCH_DIR, patch_filename)\n+                dst = os.path.join(ARCHIVE_DIR, patch_filename)\n+                if os.path.exists(src) and not os.path.exists(dst):\n+                    try:\n+                        shutil.move(src, dst)\n+                        log_debug(f\"Patch {patch_filename} auto-archived\", \"SUCCESS\")\n+                    except Exception as e:\n+                        log_debug(f\"Auto-archive failed: {e}\", \"WARNING\")\n+            \n             log_debug(f\"Patch {patch_id} applied to {target_file}\", \"SUCCESS\")\n             \n             return {\n"
+}

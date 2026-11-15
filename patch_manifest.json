@@ -100,6 +100,18 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_161910_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "006",
+      "target_file": "main.py",
+      "patch_type": "full_replace",
+      "applied_at": "2026-11-15T16:53:24.743392",
+      "checksum": "ff785b018865a816a9540f87d43fd2f269e2366495326eb3632a52f2a790ba1f",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_165324.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_165324_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -156,6 +168,12 @@
       "patch_id": "008-ui-complete",
       "target_file": "main.py",
       "timestamp": "2026-11-15T16:19:10.740925"
+    },
+    {
+      "action": "apply",
+      "patch_id": "006",
+      "target_file": "main.py",
+      "timestamp": "2026-11-15T16:53:24.743392"
     }
   ],
   "rollbacks": []
