@@ -1,0 +1,12 @@
+======================================== 
+CENTRALIZOVANNYY OTCHET OSHIBOK drmAIcu 
+Data: 11.11.2026 21:48:11.88 
+======================================== 
+ 
+[1] STATUS PORTOV (5173 i 8080): 
+  TCP    0.0.0.0:8080           0.0.0.0:0              LISTENING       23736
+  TCP    [::1]:5173             [::]:0                 LISTENING       29340
+ 
+[2] VERSII SISTEMY: 
+v22.23.1
+10.9.8
