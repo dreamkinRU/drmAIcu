@@ -668,3 +668,40 @@ if __name__ in {'__main__', '__mp_main__'}:
     get_engine()
     create_ui()
     ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)
+
+# ==========================================
+# СИСТЕМНЫЕ ENDPOINTS (ПЕРЕЗАПУСК)
+# ==========================================
+
+@app.post("/api/system/restart")
+def api_system_restart():
+    """Перезапуск системы: убивает окна по заголовку и пишет флаг для лаунчера"""
+    try:
+        import subprocess
+        log_debug("=== RESTART REQUESTED VIA PANEL ===", "WARNING")
+        
+        # Пишем флаг перезапуска для циклического лаунчера
+        with open(RESTART_FLAG, 'w') as f:
+            f.write('restart')
+        
+        # Убиваем окна по заголовку (решает проблему пустых окон)
+        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu Core'], capture_output=True)
+        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu UI'], capture_output=True)
+        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu Core *'], capture_output=True)
+        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu UI *'], capture_output=True)
+        
+        # Убиваем процессы по портам (на случай если заголовки не совпали)
+        subprocess.run(['taskkill', '/F', '/IM', 'node.exe'], capture_output=True)
+        
+        log_debug("Restart flag written, windows killed", "SUCCESS")
+        
+        # Задержка перед выходом, чтобы ответ успел дойти до клиента
+        def do_exit():
+            time.sleep(1.5)
+            os._exit(0)
+        threading.Thread(target=do_exit, daemon=True).start()
+        
+        return JSONResponse({"success": True, "message": "Перезапуск инициирован. Система перезагрузится через несколько секунд."})
+    except Exception as e:
+        log_debug(f"Restart error: {e}", "ERROR")
+        return JSONResponse({"success": False, "error": str(e)})

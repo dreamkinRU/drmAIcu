@@ -87,6 +87,7 @@ export default function App() {
   const [isPulling, setIsPulling] = useState(false);
   const [patches, setPatches] = useState<PatchInfo[]>([]);
   const [patchStats, setPatchStats] = useState<any>({total: 0, applied: 0, pending: 0, errors: 0, backups_count: 0});
+  const [restarting, setRestarting] = useState(false);
   const [selectedPatch, setSelectedPatch] = useState<PatchInfo | null>(null);
   const [patchPreview, setPatchPreview] = useState<any>(null);
   const [applyingPatch, setApplyingPatch] = useState(false);
@@ -97,6 +98,26 @@ export default function App() {
   const [projectLoading, setProjectLoading] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [projectSearch, setProjectSearch] = useState('');
+
+  const restartSystem = async () => {
+    if (!confirm('Перезапустить всю систему?\n\nPython и React будут перезапущены автоматически.')) return;
+    setRestarting(true);
+    try {
+      const res = await fetch('/api/system/restart', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        setTimeout(() => window.location.reload(), 8000);
+      } else {
+        alert('Ошибка: ' + data.error);
+      }
+    } catch (e) {
+      alert('Ошибка сети. Система, возможно, перезапускается...');
+      setTimeout(() => window.location.reload(), 8000);
+    } finally {
+      setRestarting(false);
+    }
+  };
   const [projectDuplicatesOnly, setProjectDuplicatesOnly] = useState(false);
   const [projectImportantOnly, setProjectImportantOnly] = useState(false);
   const [selectedProjectFile, setSelectedProjectFile] = useState<ProjectFile | null>(null);
@@ -179,6 +200,11 @@ export default function App() {
   };
   const loadRealMDFile = async (file: MDFile) => {
     setSelectedMDFile(file);
+              <Tooltip text="Перезапустить Python и React" position="bottom">
+                <button onClick={restartSystem} disabled={restarting} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${restarting ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-orange-500/20 border border-orange-500/50 text-orange-400 hover:bg-orange-500/30'}`}>
+                  {restarting ? '⏳ Перезапуск...' : '🔄 Перезапуск'}
+                </button>
+              </Tooltip>
     setMdFileExists(true);
     try {
       const res = await fetch(`/api/md/${encodeURIComponent(file.name)}`);

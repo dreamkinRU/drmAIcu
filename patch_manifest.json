@@ -183,6 +183,61 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_183858_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "010",
+      "target_file": "src/App.tsx",
+      "applied_at": "2026-11-15T18:47:34.237041",
+      "checksum": "0abc70f53f0cdc486785e936db621402228dea7b44f8c37999182be002e96cb3",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_184734.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_184734_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "015",
+      "target_file": "main.py",
+      "applied_at": "2026-11-15T18:57:23.255080",
+      "checksum": "b38bc1250766252a282be7f9c7d4ed6b729fa579a4db0f31aa9a6ecb616e95f2",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_185723.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_185723_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "016",
+      "target_file": "launcher.bat",
+      "applied_at": "2026-11-15T18:57:46.862009",
+      "checksum": "9c2544e26c08112d444c6e21c406b3d2068fd93ca62ed2ac7f71695088b8bdef",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_185746.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_185746_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "017",
+      "target_file": "src/App.tsx",
+      "applied_at": "2026-11-15T18:58:03.988342",
+      "checksum": "0883b8e87ffe92d6f9c960835e74f8f707bccaa8f9d71a2e423d85b551d59404",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_185803.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_185803_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "018",
+      "target_file": "src/App.tsx",
+      "applied_at": "2026-11-15T19:04:55.549054",
+      "checksum": "f589dbef725dad1d6e47d3c496ad25157f3caa074757ec59f089722fb9cb6aff",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_190455.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_190455_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -281,6 +336,36 @@
       "patch_id": "008",
       "target_file": "src/App.tsx",
       "timestamp": "2026-11-15T18:38:58.502708"
+    },
+    {
+      "action": "apply",
+      "patch_id": "010",
+      "target_file": "src/App.tsx",
+      "timestamp": "2026-11-15T18:47:34.237041"
+    },
+    {
+      "action": "apply",
+      "patch_id": "015",
+      "target_file": "main.py",
+      "timestamp": "2026-11-15T18:57:23.255080"
+    },
+    {
+      "action": "apply",
+      "patch_id": "016",
+      "target_file": "launcher.bat",
+      "timestamp": "2026-11-15T18:57:46.862009"
+    },
+    {
+      "action": "apply",
+      "patch_id": "017",
+      "target_file": "src/App.tsx",
+      "timestamp": "2026-11-15T18:58:03.988872"
+    },
+    {
+      "action": "apply",
+      "patch_id": "018",
+      "target_file": "src/App.tsx",
+      "timestamp": "2026-11-15T19:04:55.549682"
     }
   ],
   "rollbacks": []
