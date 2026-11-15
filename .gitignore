@@ -1,43 +1,46 @@
-# Node modules (исключаем все зависимости)
+# === Node.js / Frontend ===
 node_modules/
+.vite/
+dist/
+*.local
 
-# Python
+# === Python ===
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 venv/
 .venv/
+env/
 
-# Логи и временные файлы
-*.log
-*.tmp
-.restart.flag
-
-# Бэкапы (слишком тяжелые для GitHub)
-backups/
-*.bak
-
-# IDE
+# === IDE и ОС ===
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Архивы патчей
+# === Чувствительные данные и конфиги ===
+settings.json
+.env
+*.pem
+*.key
+
+# === Временные файлы и логи ===
+*.log
+report.txt
+diag.bat
+!patch_system.txt
+
+# === Локальные бэкапы и архивы (не нужны в Git) ===
+backups/
+project_archive/
 patch/archive/
 
-# Локальные настройки с секретами
-settings.local.json
-
-# Vite build
-dist/
-.vite/
+# === Устаревшие файлы-дубликаты (из твоего списка) ===
+main_v*.py
+public/main*.py
+public/*.html
+public/patches.html
+public/context.html
