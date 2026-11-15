@@ -1,5 +1,5 @@
 # main.py
-# Version 3.2.0 DIFF-ENGINE
+# Version 3.2.1 FINAL-FIX
 
 from nicegui import ui, app
 import json
@@ -26,14 +26,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === АБСОЛЮТНЫЕ ПУТИ ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'settings.json')
 ENGINE_FILE = os.path.join(BASE_DIR, 'agent_engine.py')
 RESTART_FLAG = os.path.join(BASE_DIR, 'restart.flag')
 DEBUG_LOG = []
 BACKUP_DIR = os.path.join(BASE_DIR, 'backups')
-CHECKSUM_FILE = os.path.join(BASE_DIR, 'backups', 'checksums.json')
 PATCH_DIR = os.path.join(BASE_DIR, 'patch')
 ARCHIVE_DIR = os.path.join(PATCH_DIR, 'archive')
 MANIFEST_FILE = os.path.join(BASE_DIR, 'patch_manifest.json')
@@ -103,20 +101,9 @@ def read_file_safe(filepath: str) -> str:
 def compute_checksum(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
-def compute_file_hash(filepath: str) -> str:
-    try:
-        with open(filepath, 'rb') as f:
-            return hashlib.md5(f.read()).hexdigest()
-    except:
-        return ""
-
-def human_size(size_bytes: int) -> str:
-    if size_bytes < 1024: return f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024: return f"{size_bytes / 1024:.1f} KB"
-    else: return f"{size_bytes / (1024 * 1024):.1f} MB"
-
 # === ДВИЖОК UNIFIED DIFF ===
 def apply_unified_diff(file_content: str, diff_text: str) -> str:
+    """Применяет unified diff к содержимому файла"""
     lines = file_content.split('\n')
     diff_lines = diff_text.split('\n')
     
@@ -150,6 +137,35 @@ def apply_unified_diff(file_content: str, diff_text: str) -> str:
         else:
             i += 1
     return '\n'.join(lines)
+
+def validate_diff(diff_text: str, target_file: str) -> dict:
+    """Валидирует diff перед применением"""
+    try:
+        full_path = os.path.join(BASE_DIR, target_file)
+        if not os.path.exists(full_path):
+            return {'valid': False, 'error': f'Файл {target_file} не существует'}
+        
+        content = read_file_safe(full_path)
+        new_content = apply_unified_diff(content, diff_text)
+        
+        diff_lines = diff_text.split('\n')
+        added = sum(1 for l in diff_lines if l.startswith('+') and not l.startswith('+++'))
+        removed = sum(1 for l in diff_lines if l.startswith('-') and not l.startswith('---'))
+        hunks = sum(1 for l in diff_lines if l.startswith('@@'))
+        
+        return {
+            'valid': True,
+            'stats': {
+                'hunks': hunks,
+                'added': added,
+                'removed': removed,
+                'old_size': len(content),
+                'new_size': len(new_content)
+            },
+            'preview': new_content
+        }
+    except Exception as e:
+        return {'valid': False, 'error': f'Ошибка валидации диффа: {str(e)}'}
 
 # === ВАЛИДАЦИЯ ===
 def validate_python_syntax(code: str) -> tuple:
@@ -284,7 +300,6 @@ def get_engine():
     with _engine_lock:
         if engine_instance is not None:
             return engine_instance
-            
     config = {"ollama_url": "http://localhost:11434"}
     if os.path.exists(CONFIG_FILE):
         try:
@@ -292,12 +307,10 @@ def get_engine():
                 config = json.load(f)
         except Exception:
             pass
-            
     if 'agent_engine' in sys.modules:
         importlib.reload(sys.modules['agent_engine'])
     else:
         import agent_engine
-        
     try:
         engine_instance = sys.modules['agent_engine'].AgentEngine(config, log_callback=log_debug)
         log_debug("Engine loaded successfully", "SUCCESS")
@@ -307,7 +320,22 @@ def get_engine():
         restore_from_backup(ENGINE_FILE)
         return None
 
-# === УТИЛИТЫ ДЛЯ ПАТЧЕЙ ===
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"groq_api_key": "", "ollama_url": "http://localhost:11434", "openrouter_api_key": "", "gemini_api_key": ""}
+
+def save_config(data):
+    current = load_config()
+    current.update(data)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(current, f, indent=4, ensure_ascii=False)
+
+# === ПАТЧИ ===
 def load_manifest() -> dict:
     if os.path.exists(MANIFEST_FILE):
         try:
@@ -325,46 +353,32 @@ def list_patches() -> list:
     patches = []
     manifest = load_manifest()
     applied_ids = {p['patch_id'] for p in manifest.get('applied', [])}
-    
     if not os.path.exists(PATCH_DIR):
         return patches
-    
     for filename in sorted(os.listdir(PATCH_DIR)):
         if not filename.endswith('.json') or filename.startswith('.') or filename.startswith('_'):
             continue
-        
         filepath = os.path.join(PATCH_DIR, filename)
         if not os.path.isfile(filepath):
             continue
-        
         try:
             content = read_file_safe(filepath)
             data = json.loads(content)
-            
             patch_id = str(data.get('patch_id', filename.replace('.json', '').replace('patch_', '')))
             patch_type = data.get('type', 'full_replace')
             target_file = data.get('target_file', 'unknown')
-            description = data.get('description', 'Без описания')
+            description = data.get('description', '')
             author = data.get('author', 'Unknown')
             created_at = data.get('created_at', '')
-            
             full_content = data.get('full_file_content', '')
             diff_content = data.get('diff', '')
-            
             is_applied = patch_id in applied_ids
             file_exists = os.path.exists(os.path.join(BASE_DIR, target_file)) if target_file != 'unknown' else False
-            
             patches.append({
-                'filename': filename,
-                'filepath': filepath,
-                'patch_id': patch_id,
-                'patch_type': patch_type,
-                'target_file': target_file,
-                'description': description,
-                'author': author,
-                'created_at': created_at,
-                'is_applied': is_applied,
-                'file_exists': file_exists,
+                'filename': filename, 'filepath': filepath, 'patch_id': patch_id,
+                'patch_type': patch_type, 'target_file': target_file,
+                'description': description, 'author': author, 'created_at': created_at,
+                'is_applied': is_applied, 'file_exists': file_exists,
                 'content_length': len(full_content) if patch_type == 'full_replace' else len(diff_content),
                 'has_content': bool(full_content) if patch_type == 'full_replace' else bool(diff_content),
                 'full_file_content': full_content if patch_type == 'full_replace' else '',
@@ -372,64 +386,50 @@ def list_patches() -> list:
             })
         except Exception as e:
             patches.append({
-                'filename': filename,
-                'filepath': filepath,
+                'filename': filename, 'filepath': filepath,
                 'patch_id': filename.replace('.json', '').replace('patch_', ''),
-                'patch_type': 'error',
-                'target_file': 'error',
-                'description': f'Ошибка чтения: {str(e)[:100]}',
-                'author': 'ERROR',
-                'created_at': '',
-                'is_applied': False,
-                'file_exists': False,
-                'content_length': 0,
-                'has_content': False,
-                'error': str(e),
-                'full_file_content': '',
-                'diff': ''
+                'patch_type': 'error', 'target_file': 'error',
+                'description': f'Ошибка: {str(e)[:100]}', 'author': 'ERROR',
+                'created_at': '', 'is_applied': False, 'file_exists': False,
+                'content_length': 0, 'has_content': False, 'error': str(e),
+                'full_file_content': '', 'diff': ''
             })
-    
     patches.sort(key=lambda p: p['patch_id'])
     return patches
 
 def preview_patch(patch_data: dict) -> dict:
-    patch_type = patch_data.get('type', 'full_replace')
-    target_file = patch_data.get('target_file', '')
+    """Предпросмотр патча - поддержка обоих типов"""
+    # Автоопределение типа
+    patch_type = patch_data.get('type', '')
+    if not patch_type:
+        if patch_data.get('diff'):
+            patch_type = 'unified_diff'
+        elif patch_data.get('full_file_content'):
+            patch_type = 'full_replace'
+        else:
+            return {'success': False, 'error': 'Не указан тип патча и нет содержимого'}
     
+    target_file = patch_data.get('target_file', '')
     if not target_file:
         return {'success': False, 'error': 'Нет target_file'}
-        
     full_path = os.path.join(BASE_DIR, target_file)
     if not os.path.exists(full_path):
         return {'success': False, 'error': f'Файл {target_file} не существует'}
-        
     with open(full_path, 'r', encoding='utf-8') as f:
         original_content = f.read()
-        
+    
     if patch_type == 'unified_diff':
         diff_text = patch_data.get('diff', '')
         if not diff_text:
             return {'success': False, 'error': 'Нет diff содержимого'}
-        try:
-            new_content = apply_unified_diff(original_content, diff_text)
-            valid, error = validate_file(target_file, new_content)
-            if not valid:
-                return {'success': False, 'error': f'Валидация не пройдена: {error}'}
-            
-            old_lines = len(original_content.split('\n'))
-            new_lines = len(new_content.split('\n'))
-            
-            return {
-                'success': True,
-                'valid': True,
-                'patch_type': 'unified_diff',
-                'target_file': target_file,
-                'old_lines': old_lines,
-                'new_lines': new_lines,
-                'message': f'✅ Diff валиден. Изменение: {old_lines} → {new_lines} строк.'
-            }
-        except Exception as e:
-            return {'success': False, 'error': f'Ошибка применения diff: {str(e)}'}
+        validation = validate_diff(diff_text, target_file)
+        if not validation['valid']:
+            return validation
+        return {
+            'success': True, 'valid': True, 'patch_type': 'unified_diff',
+            'target_file': target_file, 'stats': validation['stats'],
+            'message': f"✅ Дифф валиден. +{validation['stats']['added']} -{validation['stats']['removed']} в {validation['stats']['hunks']} ханках"
+        }
     else:
         content = patch_data.get('full_file_content', '')
         if not content:
@@ -437,79 +437,67 @@ def preview_patch(patch_data: dict) -> dict:
         valid, error = validate_file(target_file, content)
         if not valid:
             return {'success': False, 'error': f'Валидация не пройдена: {error}'}
-        
         old_lines = len(original_content.split('\n'))
         new_lines = len(content.split('\n'))
         return {
-            'success': True,
-            'valid': True,
-            'patch_type': 'full_replace',
-            'target_file': target_file,
-            'old_lines': old_lines,
-            'new_lines': new_lines,
+            'success': True, 'valid': True, 'patch_type': 'full_replace',
+            'target_file': target_file, 'old_lines': old_lines, 'new_lines': new_lines,
             'message': f'✅ Патч валиден. {old_lines} → {new_lines} строк.'
         }
 
 def apply_patch(patch_data: dict) -> dict:
-    patch_type = patch_data.get('type', 'full_replace')
+    """Применение патча - поддержка обоих типов"""
+    # Автоопределение типа
+    patch_type = patch_data.get('type', '')
+    if not patch_type:
+        if patch_data.get('diff'):
+            patch_type = 'unified_diff'
+        elif patch_data.get('full_file_content'):
+            patch_type = 'full_replace'
+        else:
+            return {'success': False, 'error': 'Не указан тип патча и нет содержимого'}
+    
     target_file = patch_data.get('target_file', '')
     patch_id = patch_data.get('patch_id', 'unknown')
-    
     if not target_file:
         return {'success': False, 'error': 'Нет target_file'}
-        
     full_path = os.path.join(BASE_DIR, target_file)
     if not os.path.exists(full_path):
         return {'success': False, 'error': f'Файл {target_file} не существует'}
-        
     with open(full_path, 'r', encoding='utf-8') as f:
         original_content = f.read()
-        
+    
     if patch_type == 'unified_diff':
         diff_text = patch_data.get('diff', '')
         if not diff_text:
             return {'success': False, 'error': 'Нет diff содержимого'}
-        
         try:
             new_content = apply_unified_diff(original_content, diff_text)
         except Exception as e:
             return {'success': False, 'error': f'Ошибка применения diff: {str(e)}'}
-            
         valid, error = validate_file(target_file, new_content)
         if not valid:
             return {'success': False, 'error': f'Валидация после применения не пройдена: {error}'}
-            
         backups = create_triple_backup(full_path)
         temp_file = full_path + '.tmp'
         try:
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(new_content)
             os.replace(temp_file, full_path)
-            
             manifest = load_manifest()
             manifest['applied'].append({
-                'patch_id': patch_id,
-                'target_file': target_file,
-                'patch_type': 'unified_diff',
-                'applied_at': datetime.now().isoformat(),
-                'checksum': compute_checksum(new_content),
-                'backups': backups
+                'patch_id': patch_id, 'target_file': target_file,
+                'patch_type': 'unified_diff', 'applied_at': datetime.now().isoformat(),
+                'checksum': compute_checksum(new_content), 'backups': backups
             })
             manifest['history'].append({
-                'action': 'apply_diff',
-                'patch_id': patch_id,
-                'target_file': target_file,
-                'timestamp': datetime.now().isoformat()
+                'action': 'apply_diff', 'patch_id': patch_id,
+                'target_file': target_file, 'timestamp': datetime.now().isoformat()
             })
             save_manifest(manifest)
-            
             log_debug(f"Diff patch {patch_id} applied to {target_file}", "SUCCESS")
-            return {
-                'success': True,
-                'patch_type': 'unified_diff',
-                'message': f'Дифф-патч {patch_id} успешно применен к {target_file}',
-                'backups': backups
-            }
+            return {'success': True, 'patch_type': 'unified_diff',
+                    'message': f'Дифф-патч {patch_id} применён к {target_file}', 'backups': backups}
         except Exception as e:
             if os.path.exists(temp_file):
                 try: os.remove(temp_file)
@@ -519,42 +507,29 @@ def apply_patch(patch_data: dict) -> dict:
         content = patch_data.get('full_file_content', '')
         if not content:
             return {'success': False, 'error': 'Нет full_file_content'}
-            
         valid, error = validate_file(target_file, content)
         if not valid:
             return {'success': False, 'error': f'Валидация не пройдена: {error}'}
-            
         backups = create_triple_backup(full_path)
         temp_file = full_path + '.tmp'
         try:
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(content)
             os.replace(temp_file, full_path)
-            
             manifest = load_manifest()
             manifest['applied'].append({
-                'patch_id': patch_id,
-                'target_file': target_file,
-                'patch_type': 'full_replace',
-                'applied_at': datetime.now().isoformat(),
-                'checksum': compute_checksum(content),
-                'backups': backups
+                'patch_id': patch_id, 'target_file': target_file,
+                'patch_type': 'full_replace', 'applied_at': datetime.now().isoformat(),
+                'checksum': compute_checksum(content), 'backups': backups
             })
             manifest['history'].append({
-                'action': 'apply',
-                'patch_id': patch_id,
-                'target_file': target_file,
-                'timestamp': datetime.now().isoformat()
+                'action': 'apply', 'patch_id': patch_id,
+                'target_file': target_file, 'timestamp': datetime.now().isoformat()
             })
             save_manifest(manifest)
-            
             log_debug(f"Patch {patch_id} applied to {target_file}", "SUCCESS")
-            return {
-                'success': True,
-                'patch_type': 'full_replace',
-                'message': f'Патч {patch_id} успешно применен к {target_file}',
-                'backups': backups
-            }
+            return {'success': True, 'patch_type': 'full_replace',
+                    'message': f'Патч {patch_id} применён к {target_file}', 'backups': backups}
         except Exception as e:
             if os.path.exists(temp_file):
                 try: os.remove(temp_file)
@@ -564,39 +539,24 @@ def apply_patch(patch_data: dict) -> dict:
 def rollback_last_patch() -> dict:
     manifest = load_manifest()
     if not manifest.get('applied'):
-        return {'success': False, 'error': 'Нет примененных патчей для отката'}
-    
+        return {'success': False, 'error': 'Нет примененных патчей'}
     last = manifest['applied'][-1]
     target_file = last['target_file']
     patch_id = last['patch_id']
-    
     filename = os.path.basename(target_file)
     latest_backup = os.path.join(BACKUP_DIR, f"{filename}_LATEST.bak")
-    
     if not os.path.exists(latest_backup):
         return {'success': False, 'error': f'Бэкап не найден: {latest_backup}'}
-    
     try:
         temp_file = os.path.join(BASE_DIR, target_file) + '.tmp'
         shutil.copy2(latest_backup, temp_file)
         os.replace(temp_file, os.path.join(BASE_DIR, target_file))
-        
         manifest['applied'].pop()
-        manifest['rollbacks'].append({
-            'patch_id': patch_id,
-            'target_file': target_file,
-            'rolled_back_at': datetime.now().isoformat()
-        })
-        manifest['history'].append({
-            'action': 'rollback',
-            'patch_id': patch_id,
-            'target_file': target_file,
-            'timestamp': datetime.now().isoformat()
-        })
+        manifest['rollbacks'].append({'patch_id': patch_id, 'target_file': target_file, 'rolled_back_at': datetime.now().isoformat()})
+        manifest['history'].append({'action': 'rollback', 'patch_id': patch_id, 'target_file': target_file, 'timestamp': datetime.now().isoformat()})
         save_manifest(manifest)
-        
-        log_debug(f"Rolled back patch {patch_id} for {target_file}", "SUCCESS")
-        return {'success': True, 'message': f'Патч {patch_id} откатен. Файл {target_file} восстановлен.'}
+        log_debug(f"Rolled back patch {patch_id}", "SUCCESS")
+        return {'success': True, 'message': f'Патч {patch_id} откатен'}
     except Exception as e:
         return {'success': False, 'error': f'Ошибка отката: {str(e)}'}
 
@@ -631,65 +591,41 @@ def get_stats() -> dict:
     pending = total - applied
     errors = len([p for p in patches if 'error' in p])
     return {
-        'total': total,
-        'applied': applied,
-        'pending': pending,
-        'errors': errors,
+        'total': total, 'applied': applied, 'pending': pending, 'errors': errors,
         'history_count': len(manifest.get('history', [])),
         'rollbacks_count': len(manifest.get('rollbacks', [])),
         'backups_count': len(os.listdir(BACKUP_DIR)) if os.path.exists(BACKUP_DIR) else 0
     }
 
-# ==========================================
-# FASTAPI ENDPOINTS
-# ==========================================
-
+# === ENDPOINTS ===
 @app.get("/api/status")
 def api_status():
+    config = load_config()
     ollama_ok = False
     try:
         import requests
-        r = requests.get("http://localhost:11434/api/tags", timeout=2)
+        r = requests.get(f"{config.get('ollama_url', 'http://localhost:11434')}/api/tags", timeout=2)
         ollama_ok = r.status_code == 200
     except Exception:
         pass
     return JSONResponse({
         "ollama": "online" if ollama_ok else "offline",
         "guardian": "active",
-        "version": "3.2.0 DIFF-ENGINE",
-        "providers": {"groq": False, "openrouter": False, "gemini": False}
+        "version": "3.2.1 FINAL-FIX",
+        "providers": {
+            "groq": bool(config.get('groq_api_key')),
+            "openrouter": bool(config.get('openrouter_api_key')),
+            "gemini": bool(config.get('gemini_api_key'))
+        }
     })
 
 @app.get("/api/logs")
 def api_logs():
     return JSONResponse({"logs": DEBUG_LOG[-100:]})
 
-@app.get("/api/md/{filename:path}")
-def api_get_md(filename: str):
-    safe_name = os.path.join(BASE_DIR, filename.replace("..", ""))
-    if os.path.exists(safe_name):
-        try:
-            with open(safe_name, 'r', encoding='utf-8') as f:
-                return JSONResponse({"content": f.read(), "name": filename})
-        except Exception as e:
-            return JSONResponse({"content": "", "name": filename, "error": str(e)})
-    return JSONResponse({"content": "", "name": filename, "error": "File not found"})
-
-@app.post("/api/md/{filename:path}")
-def api_save_md(filename: str, payload: dict):
-    safe_name = os.path.join(BASE_DIR, filename.replace("..", ""))
-    try:
-        with open(safe_name, 'w', encoding='utf-8') as f:
-            f.write(payload.get("content", ""))
-        log_debug(f"MD file saved: {safe_name}", "SUCCESS")
-        return JSONResponse({"success": True})
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)})
-
 @app.post("/api/task")
 async def api_run_task(payload: dict):
     prompt = payload.get("prompt", "")
-    log_debug(f"API Task received: {prompt[:50]}...", "INFO")
     engine = get_engine()
     if not engine:
         return JSONResponse({"error": "Engine not loaded", "result": "Ошибка загрузки движка"})
@@ -697,7 +633,6 @@ async def api_run_task(payload: dict):
         result = await engine.run_task(prompt, mode="full")
         return JSONResponse({"success": True, "result": result})
     except Exception as e:
-        log_debug(f"Task error: {e}", "ERROR")
         return JSONResponse({"success": False, "error": str(e), "result": "Ошибка выполнения"})
 
 @app.get("/api/patches/list")
@@ -770,17 +705,13 @@ def api_patches_apply_all(payload: dict):
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
-# ==========================================
-# UI
-# ==========================================
-
 def create_ui():
     ui.dark_mode().enable()
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.2.0 DIFF-ENGINE').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.2.1 FINAL-FIX').classes('text-xl font-bold')
 
 if __name__ in {"__main__", "__mp_main__"}:
     ensure_base_files()
-    log_debug("Starting drmAIcu Core v3.2.0 DIFF-ENGINE...", "INFO")
+    log_debug("Starting drmAIcu Core v3.2.1 FINAL-FIX...", "INFO")
     get_engine()
     ui.run(title="drmAIcu Core", port=8080, reload=False, show=False, favicon="🤖")
