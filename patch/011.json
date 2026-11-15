@@ -1,0 +1,10 @@
+{
+  "patch_id": "011",
+  "type": "unified_diff",
+  "target_file": "src/App.tsx",
+  "description": "Исправлена передача type в API-запросах apply и preview. Теперь diff-патчи применяются корректно.",
+  "author": "Qwen",
+  "created_at": "2026-11-15T19:00:00",
+  "checksum": "",
+  "diff": "--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -207,6 +207,7 @@\n       const res = await fetch('/api/patches/preview', {\n         method: 'POST',\n         headers: { 'Content-Type': 'application/json' },\n         body: JSON.stringify({\n+          type: patch.patch_type,\n           target_file: patch.target_file,\n           full_file_content: (patch as any).full_file_content || '',\n           diff: (patch as any).diff || '',\n@@ -219,6 +220,7 @@\n       const res = await fetch('/api/patches/apply', {\n         method: 'POST',\n         headers: { 'Content-Type': 'application/json' },\n         body: JSON.stringify({\n+          type: patch.patch_type,\n           target_file: patch.target_file,\n           full_file_content: (patch as any).full_file_content || '',\n           diff: (patch as any).diff || '',\n"
+}

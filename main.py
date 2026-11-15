@@ -1,5 +1,5 @@
 # main.py
-# Version 3.2.0 DIFF-ENGINE
+# Version 3.2.0 DIFF-SUPPORT
 
 from nicegui import ui, app
 import json
@@ -37,10 +37,13 @@ CHECKSUM_FILE = os.path.join(BASE_DIR, 'backups', 'checksums.json')
 PATCH_DIR = os.path.join(BASE_DIR, 'patch')
 ARCHIVE_DIR = os.path.join(PATCH_DIR, 'archive')
 MANIFEST_FILE = os.path.join(BASE_DIR, 'patch_manifest.json')
+PROJECT_ARCHIVE = os.path.join(BASE_DIR, 'project_archive')
+IMPORTANT_FILE = os.path.join(BASE_DIR, '.project-important.json')
 
 os.makedirs(BACKUP_DIR, exist_ok=True)
 os.makedirs(PATCH_DIR, exist_ok=True)
 os.makedirs(ARCHIVE_DIR, exist_ok=True)
+os.makedirs(PROJECT_ARCHIVE, exist_ok=True)
 
 if os.path.exists(RESTART_FLAG):
     try:
@@ -77,6 +80,16 @@ class AgentEngine:
         return valid[0]["code"] if valid else "All models failed"
 '''
 
+# === КРИТИЧНЫЕ ФАЙЛЫ ===
+CRITICAL_FILES = {
+    'main.py', 'agent_engine.py', 'settings.json', 'launcher.bat',
+    'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json',
+    'index.html', 'README.md', 'App.tsx', 'main.tsx', 'index.css'
+}
+CRITICAL_PATHS = {'src/', 'patch/', 'backups/', 'docs/'}
+SKIP_FOLDERS = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea'}
+
+# === ЛОГИРОВАНИЕ ===
 def log_debug(message: str, level: str = "INFO"):
     timestamp = datetime.now().strftime("%H:%M:%S")
     entry = {"time": timestamp, "level": level.lower(), "message": message, "source": "Core"}
@@ -85,8 +98,9 @@ def log_debug(message: str, level: str = "INFO"):
         DEBUG_LOG.pop(0)
     print(f"[{timestamp}] [{level}] {message}")
 
+# === УТИЛИТЫ ЧТЕНИЯ/ЗАПИСИ ===
 def read_file_safe(filepath: str) -> str:
-    encodings = ['utf-8', 'utf-8-sig', 'cp1251', 'windows-1251', 'latin-1']
+    encodings = ['utf-8', 'utf-8-sig', 'cp1251', 'windows-1251', 'latin-1', 'iso-8859-1']
     for enc in encodings:
         try:
             with open(filepath, 'r', encoding=enc) as f:
@@ -100,6 +114,10 @@ def read_file_safe(filepath: str) -> str:
             return ""
     raise ValueError(f"Не удалось прочитать файл: {filepath}")
 
+def write_file_safe(filepath: str, content: str):
+    with open(filepath, 'w', encoding='utf-8-sig') as f:
+        f.write(content)
+
 def compute_checksum(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
@@ -111,47 +129,123 @@ def compute_file_hash(filepath: str) -> str:
         return ""
 
 def human_size(size_bytes: int) -> str:
-    if size_bytes < 1024: return f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024: return f"{size_bytes / 1024:.1f} KB"
-    else: return f"{size_bytes / (1024 * 1024):.1f} MB"
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
-# === ДВИЖОК UNIFIED DIFF ===
-def apply_unified_diff(file_content: str, diff_text: str) -> str:
-    lines = file_content.split('\n')
-    diff_lines = diff_text.split('\n')
+# === ПАРСЕР UNIFIED DIFF ===
+def parse_unified_diff(diff_text: str) -> dict:
+    lines = diff_text.split('\n')
+    old_file = None
+    new_file = None
+    hunks = []
+    current_hunk = None
     
     i = 0
-    while i < len(diff_lines):
-        line = diff_lines[i]
-        if line.startswith('@@'):
+    while i < len(lines):
+        line = lines[i]
+        
+        if line.startswith('--- '):
+            old_file = line[4:].strip()
+            if old_file.startswith('a/'):
+                old_file = old_file[2:]
+        elif line.startswith('+++ '):
+            new_file = line[4:].strip()
+            if new_file.startswith('b/'):
+                new_file = new_file[2:]
+        elif line.startswith('@@ '):
             match = re.match(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@', line)
             if match:
-                old_start = int(match.group(1)) - 1
-                j = i + 1
-                while j < len(diff_lines) and not diff_lines[j].startswith('@@'):
-                    j += 1
-                
-                new_hunk_lines = []
-                old_idx = old_start
-                
-                for k in range(i + 1, j):
-                    hunk_line = diff_lines[k]
-                    if hunk_line.startswith(' '):
-                        if old_idx < len(lines):
-                            new_hunk_lines.append(lines[old_idx])
-                        old_idx += 1
-                    elif hunk_line.startswith('-'):
-                        old_idx += 1
-                    elif hunk_line.startswith('+'):
-                        new_hunk_lines.append(hunk_line[1:])
-                
-                lines = lines[:old_start] + new_hunk_lines + lines[old_idx:]
-            i = j
-        else:
-            i += 1
-    return '\n'.join(lines)
+                current_hunk = {
+                    'old_start': int(match.group(1)),
+                    'old_count': int(match.group(2)) if match.group(2) else 1,
+                    'new_start': int(match.group(3)),
+                    'new_count': int(match.group(4)) if match.group(4) else 1,
+                    'lines': []
+                }
+                hunks.append(current_hunk)
+        elif current_hunk is not None:
+            if line.startswith('-'):
+                current_hunk['lines'].append({'type': 'remove', 'content': line[1:]})
+            elif line.startswith('+'):
+                current_hunk['lines'].append({'type': 'add', 'content': line[1:]})
+            elif line.startswith(' ') or line == '':
+                current_hunk['lines'].append({'type': 'context', 'content': line[1:] if line else ''})
+        
+        i += 1
+    
+    return {
+        'old_file': old_file,
+        'new_file': new_file,
+        'hunks': hunks
+    }
 
-# === ВАЛИДАЦИЯ ===
+def apply_unified_diff(file_content: str, diff_text: str) -> str:
+    parsed = parse_unified_diff(diff_text)
+    
+    if not parsed['hunks']:
+        raise ValueError("Дифф не содержит изменений")
+    
+    original_lines = file_content.split('\n')
+    hunks = sorted(parsed['hunks'], key=lambda h: h['old_start'], reverse=True)
+    
+    for hunk in hunks:
+        old_start = hunk['old_start'] - 1
+        
+        new_lines = []
+        pos = old_start
+        for line_info in hunk['lines']:
+            if line_info['type'] == 'context':
+                if pos < len(original_lines):
+                    new_lines.append(original_lines[pos])
+                    pos += 1
+            elif line_info['type'] == 'remove':
+                if pos < len(original_lines):
+                    pos += 1
+            elif line_info['type'] == 'add':
+                new_lines.append(line_info['content'])
+        
+        original_lines[old_start:pos] = new_lines
+    
+    return '\n'.join(original_lines)
+
+def validate_diff(diff_text: str, target_file: str) -> dict:
+    try:
+        parsed = parse_unified_diff(diff_text)
+        
+        if not parsed['hunks']:
+            return {'valid': False, 'error': 'Дифф не содержит изменений'}
+        
+        full_path = os.path.join(BASE_DIR, target_file)
+        if not os.path.exists(full_path):
+            return {'valid': False, 'error': f'Файл {target_file} не существует'}
+        
+        content = read_file_safe(full_path)
+        new_content = apply_unified_diff(content, diff_text)
+        
+        added = sum(1 for h in parsed['hunks'] for l in h['lines'] if l['type'] == 'add')
+        removed = sum(1 for h in parsed['hunks'] for l in h['lines'] if l['type'] == 'remove')
+        
+        return {
+            'valid': True,
+            'stats': {
+                'hunks': len(parsed['hunks']),
+                'added': added,
+                'removed': removed,
+                'old_size': len(content),
+                'new_size': len(new_content)
+            },
+            'preview': new_content
+        }
+    except Exception as e:
+        return {'valid': False, 'error': f'Ошибка валидации диффа: {str(e)}'}
+
+# === ВАЛИДАЦИЯ ФАЙЛОВ ===
 def validate_python_syntax(code: str) -> tuple:
     try:
         ast.parse(code)
@@ -257,8 +351,7 @@ def restore_from_backup(filepath: str) -> bool:
 
 def ensure_base_files():
     if not os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"ollama_url": "http://localhost:11434"}, f, indent=4)
+        save_config({})
     if not os.path.exists(ENGINE_FILE):
         log_debug("agent_engine.py not found, creating emergency engine", "WARNING")
         with open(ENGINE_FILE, 'w', encoding='utf-8') as f:
@@ -273,6 +366,8 @@ def ensure_base_files():
     
     if not v1 or not v2:
         log_debug("agent_engine.py CORRUPTED! Restoring...", "ERROR")
+        if e1: log_debug(f"Syntax error: {e1}", "ERROR")
+        if e2: log_debug(f"Structure error: {e2}", "ERROR")
         restore_from_backup(ENGINE_FILE)
 
 # === ДВИЖОК ===
@@ -285,14 +380,7 @@ def get_engine():
         if engine_instance is not None:
             return engine_instance
             
-    config = {"ollama_url": "http://localhost:11434"}
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-        except Exception:
-            pass
-            
+    config = load_config()
     if 'agent_engine' in sys.modules:
         importlib.reload(sys.modules['agent_engine'])
     else:
@@ -304,8 +392,30 @@ def get_engine():
         return engine_instance
     except Exception as e:
         log_debug(f"Engine error: {e}", "ERROR")
+        log_debug(f"Traceback: {traceback.format_exc()}", "ERROR")
         restore_from_backup(ENGINE_FILE)
         return None
+
+# === КОНФИГУРАЦИЯ ===
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "groq_api_key": "",
+        "ollama_url": "http://localhost:11434",
+        "openrouter_api_key": "",
+        "gemini_api_key": ""
+    }
+
+def save_config(data):
+    current = load_config()
+    current.update(data)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(current, f, indent=4, ensure_ascii=False)
 
 # === УТИЛИТЫ ДЛЯ ПАТЧЕЙ ===
 def load_manifest() -> dict:
@@ -396,58 +506,62 @@ def preview_patch(patch_data: dict) -> dict:
     patch_type = patch_data.get('type', 'full_replace')
     target_file = patch_data.get('target_file', '')
     
-    if not target_file:
-        return {'success': False, 'error': 'Нет target_file'}
-        
-    full_path = os.path.join(BASE_DIR, target_file)
-    if not os.path.exists(full_path):
-        return {'success': False, 'error': f'Файл {target_file} не существует'}
-        
-    with open(full_path, 'r', encoding='utf-8') as f:
-        original_content = f.read()
-        
     if patch_type == 'unified_diff':
-        diff_text = patch_data.get('diff', '')
-        if not diff_text:
+        diff_content = patch_data.get('diff', '')
+        if not diff_content:
             return {'success': False, 'error': 'Нет diff содержимого'}
-        try:
-            new_content = apply_unified_diff(original_content, diff_text)
-            valid, error = validate_file(target_file, new_content)
-            if not valid:
-                return {'success': False, 'error': f'Валидация не пройдена: {error}'}
-            
-            old_lines = len(original_content.split('\n'))
-            new_lines = len(new_content.split('\n'))
-            
-            return {
-                'success': True,
-                'valid': True,
-                'patch_type': 'unified_diff',
-                'target_file': target_file,
-                'old_lines': old_lines,
-                'new_lines': new_lines,
-                'message': f'✅ Diff валиден. Изменение: {old_lines} → {new_lines} строк.'
-            }
-        except Exception as e:
-            return {'success': False, 'error': f'Ошибка применения diff: {str(e)}'}
+        
+        validation = validate_diff(diff_content, target_file)
+        if not validation['valid']:
+            return validation
+        
+        return {
+            'success': True,
+            'valid': True,
+            'patch_type': 'unified_diff',
+            'target_file': target_file,
+            'stats': validation['stats'],
+            'message': f"✅ Дифф валиден. {validation['stats']['added']} добавлено, {validation['stats']['removed']} удалено в {validation['stats']['hunks']} ханках"
+        }
     else:
         content = patch_data.get('full_file_content', '')
-        if not content:
-            return {'success': False, 'error': 'Нет full_file_content'}
+        if not target_file or not content:
+            return {'success': False, 'error': 'Нет target_file или full_file_content'}
+        
+        file_exists = os.path.exists(os.path.join(BASE_DIR, target_file))
+        old_content = ''
+        if file_exists:
+            try:
+                with open(os.path.join(BASE_DIR, target_file), 'r', encoding='utf-8') as f:
+                    old_content = f.read()
+            except Exception:
+                try:
+                    with open(os.path.join(BASE_DIR, target_file), 'r', encoding='cp1251') as f:
+                        old_content = f.read()
+                except Exception as e:
+                    return {'success': False, 'error': f'Не удалось прочитать файл: {e}'}
+        
         valid, error = validate_file(target_file, content)
         if not valid:
-            return {'success': False, 'error': f'Валидация не пройдена: {error}'}
+            return {'success': False, 'error': f'Валидация не пройдена: {error}', 'valid': False}
         
-        old_lines = len(original_content.split('\n'))
-        new_lines = len(content.split('\n'))
+        old_lines = len(old_content.splitlines()) if old_content else 0
+        new_lines = len(content.splitlines())
+        size_diff = len(content) - len(old_content)
+        
         return {
             'success': True,
             'valid': True,
             'patch_type': 'full_replace',
             'target_file': target_file,
+            'file_exists': file_exists,
+            'old_size': len(old_content),
+            'new_size': len(content),
             'old_lines': old_lines,
             'new_lines': new_lines,
-            'message': f'✅ Патч валиден. {old_lines} → {new_lines} строк.'
+            'size_diff': size_diff,
+            'lines_diff': new_lines - old_lines,
+            'message': f'✅ Патч валиден. Файл: {target_file} ({old_lines} → {new_lines} строк)'
         }
 
 def apply_patch(patch_data: dict) -> dict:
@@ -455,33 +569,26 @@ def apply_patch(patch_data: dict) -> dict:
     target_file = patch_data.get('target_file', '')
     patch_id = patch_data.get('patch_id', 'unknown')
     
-    if not target_file:
-        return {'success': False, 'error': 'Нет target_file'}
-        
-    full_path = os.path.join(BASE_DIR, target_file)
-    if not os.path.exists(full_path):
-        return {'success': False, 'error': f'Файл {target_file} не существует'}
-        
-    with open(full_path, 'r', encoding='utf-8') as f:
-        original_content = f.read()
-        
     if patch_type == 'unified_diff':
-        diff_text = patch_data.get('diff', '')
-        if not diff_text:
+        diff_content = patch_data.get('diff', '')
+        if not diff_content:
             return {'success': False, 'error': 'Нет diff содержимого'}
         
+        validation = validate_diff(diff_content, target_file)
+        if not validation['valid']:
+            return validation
+        
+        full_path = os.path.join(BASE_DIR, target_file)
         try:
-            new_content = apply_unified_diff(original_content, diff_text)
-        except Exception as e:
-            return {'success': False, 'error': f'Ошибка применения diff: {str(e)}'}
+            backups = create_triple_backup(full_path)
+            content = read_file_safe(full_path)
+            new_content = apply_unified_diff(content, diff_content)
             
-        valid, error = validate_file(target_file, new_content)
-        if not valid:
-            return {'success': False, 'error': f'Валидация после применения не пройдена: {error}'}
+            valid, error = validate_file(target_file, new_content)
+            if not valid:
+                return {'success': False, 'error': f'Валидация после применения не пройдена: {error}'}
             
-        backups = create_triple_backup(full_path)
-        temp_file = full_path + '.tmp'
-        try:
+            temp_file = full_path + '.tmp'
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(new_content)
             os.replace(temp_file, full_path)
@@ -493,7 +600,8 @@ def apply_patch(patch_data: dict) -> dict:
                 'patch_type': 'unified_diff',
                 'applied_at': datetime.now().isoformat(),
                 'checksum': compute_checksum(new_content),
-                'backups': backups
+                'backups': backups,
+                'stats': validation['stats']
             })
             manifest['history'].append({
                 'action': 'apply_diff',
@@ -504,32 +612,34 @@ def apply_patch(patch_data: dict) -> dict:
             save_manifest(manifest)
             
             log_debug(f"Diff patch {patch_id} applied to {target_file}", "SUCCESS")
+            
             return {
                 'success': True,
                 'patch_type': 'unified_diff',
                 'message': f'Дифф-патч {patch_id} успешно применен к {target_file}',
+                'stats': validation['stats'],
                 'backups': backups
             }
         except Exception as e:
-            if os.path.exists(temp_file):
-                try: os.remove(temp_file)
-                except: pass
-            return {'success': False, 'error': f'Ошибка записи: {str(e)}'}
+            log_debug(f"Diff apply error: {e}", "ERROR")
+            return {'success': False, 'error': f'Ошибка применения диффа: {e}'}
     else:
         content = patch_data.get('full_file_content', '')
-        if not content:
-            return {'success': False, 'error': 'Нет full_file_content'}
-            
+        if not target_file or not content:
+            return {'success': False, 'error': 'Нет target_file или full_file_content'}
+        
         valid, error = validate_file(target_file, content)
         if not valid:
             return {'success': False, 'error': f'Валидация не пройдена: {error}'}
-            
-        backups = create_triple_backup(full_path)
-        temp_file = full_path + '.tmp'
+        
+        backups = create_triple_backup(os.path.join(BASE_DIR, target_file))
+        
+        temp_file = os.path.join(BASE_DIR, target_file) + '.tmp'
         try:
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(content)
-            os.replace(temp_file, full_path)
+            
+            os.replace(temp_file, os.path.join(BASE_DIR, target_file))
             
             manifest = load_manifest()
             manifest['applied'].append({
@@ -549,6 +659,7 @@ def apply_patch(patch_data: dict) -> dict:
             save_manifest(manifest)
             
             log_debug(f"Patch {patch_id} applied to {target_file}", "SUCCESS")
+            
             return {
                 'success': True,
                 'patch_type': 'full_replace',
@@ -557,9 +668,12 @@ def apply_patch(patch_data: dict) -> dict:
             }
         except Exception as e:
             if os.path.exists(temp_file):
-                try: os.remove(temp_file)
-                except: pass
-            return {'success': False, 'error': f'Ошибка записи: {str(e)}'}
+                try:
+                    os.remove(temp_file)
+                except Exception:
+                    pass
+            log_debug(f"Patch apply error: {e}", "ERROR")
+            return {'success': False, 'error': f'Ошибка применения: {e}'}
 
 def rollback_last_patch() -> dict:
     manifest = load_manifest()
@@ -596,17 +710,25 @@ def rollback_last_patch() -> dict:
         save_manifest(manifest)
         
         log_debug(f"Rolled back patch {patch_id} for {target_file}", "SUCCESS")
-        return {'success': True, 'message': f'Патч {patch_id} откатен. Файл {target_file} восстановлен.'}
+        
+        return {
+            'success': True,
+            'message': f'Патч {patch_id} откатен. Файл {target_file} восстановлен из бэкапа.'
+        }
     except Exception as e:
-        return {'success': False, 'error': f'Ошибка отката: {str(e)}'}
+        log_debug(f"Rollback error: {e}", "ERROR")
+        return {'success': False, 'error': f'Ошибка отката: {e}'}
 
 def archive_patch(filename: str) -> dict:
     src = os.path.join(PATCH_DIR, filename)
     dst = os.path.join(ARCHIVE_DIR, filename)
+    
     if not os.path.exists(src):
         return {'success': False, 'error': 'Файл не найден'}
+    
     if os.path.exists(dst):
         return {'success': False, 'error': 'Уже в архиве'}
+    
     try:
         shutil.move(src, dst)
         return {'success': True, 'message': f'{filename} перемещен в архив'}
@@ -626,10 +748,12 @@ def delete_patch(filename: str) -> dict:
 def get_stats() -> dict:
     patches = list_patches()
     manifest = load_manifest()
+    
     total = len(patches)
     applied = len([p for p in patches if p['is_applied']])
     pending = total - applied
     errors = len([p for p in patches if 'error' in p])
+    
     return {
         'total': total,
         'applied': applied,
@@ -640,24 +764,175 @@ def get_stats() -> dict:
         'backups_count': len(os.listdir(BACKUP_DIR)) if os.path.exists(BACKUP_DIR) else 0
     }
 
+# === СКАНИРОВАНИЕ ПРОЕКТА ===
+def scan_project() -> dict:
+    files = []
+    duplicates_map = {}
+    important_files = load_important_files()
+    
+    for root, dirs, filenames in os.walk(BASE_DIR):
+        dirs[:] = [d for d in dirs if d not in SKIP_FOLDERS]
+        
+        for filename in filenames:
+            filepath = os.path.join(root, filename)
+            rel_path = os.path.relpath(filepath, BASE_DIR)
+            
+            if filename in ('patch_manifest.json', 'checksums.json', '.project-important.json'):
+                continue
+            
+            try:
+                stat = os.stat(filepath)
+                size = stat.st_size
+                mtime = datetime.fromtimestamp(stat.st_mtime).isoformat()
+                
+                file_hash = compute_file_hash(filepath)
+                category = categorize_file(filename, rel_path, size)
+                
+                is_critical = filename in CRITICAL_FILES or any(rel_path.startswith(p) for p in CRITICAL_PATHS)
+                is_important = rel_path in important_files
+                
+                file_info = {
+                    'path': rel_path,
+                    'filename': filename,
+                    'size': size,
+                    'size_human': human_size(size),
+                    'modified': mtime,
+                    'category': category,
+                    'hash': file_hash,
+                    'is_critical': is_critical,
+                    'is_important': is_important,
+                    'extension': os.path.splitext(filename)[1].lower(),
+                    'icon': get_file_icon(filename)
+                }
+                
+                files.append(file_info)
+                
+                if file_hash:
+                    if file_hash not in duplicates_map:
+                        duplicates_map[file_hash] = []
+                    duplicates_map[file_hash].append(rel_path)
+                    
+            except Exception as e:
+                files.append({
+                    'path': rel_path,
+                    'filename': filename,
+                    'error': str(e),
+                    'category': 'error',
+                    'icon': '❓'
+                })
+    
+    for file_info in files:
+        if file_info.get('hash') and len(duplicates_map.get(file_info['hash'], [])) > 1:
+            file_info['is_duplicate'] = True
+            file_info['duplicates'] = [p for p in duplicates_map[file_info['hash']] if p != file_info['path']]
+        else:
+            file_info['is_duplicate'] = False
+            file_info['duplicates'] = []
+    
+    stats = {
+        'total': len(files),
+        'total_size': sum(f.get('size', 0) for f in files),
+        'total_size_human': human_size(sum(f.get('size', 0) for f in files)),
+        'by_category': {},
+        'by_extension': {},
+        'duplicates_count': sum(1 for f in files if f.get('is_duplicate')),
+        'duplicates_groups': sum(1 for v in duplicates_map.values() if len(v) > 1),
+        'critical_count': sum(1 for f in files if f.get('is_critical')),
+        'important_count': sum(1 for f in files if f.get('is_important')),
+        'trash_count': sum(1 for f in files if f.get('category') == 'trash'),
+        'backup_count': sum(1 for f in files if f.get('category') == 'backup')
+    }
+    
+    for f in files:
+        cat = f.get('category', 'unknown')
+        stats['by_category'][cat] = stats['by_category'].get(cat, 0) + 1
+        
+        ext = f.get('extension', 'unknown')
+        stats['by_extension'][ext] = stats['by_extension'].get(ext, 0) + 1
+    
+    return {'files': files, 'stats': stats}
+
+def categorize_file(filename: str, rel_path: str, size: int) -> str:
+    if filename in CRITICAL_FILES:
+        return 'critical'
+    if any(rel_path.startswith(p) for p in CRITICAL_PATHS):
+        return 'critical'
+    if filename.endswith('.bak') or '_LATEST.bak' in filename:
+        return 'backup'
+    if filename.endswith('.tmp'):
+        return 'trash'
+    if filename in ('.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db'):
+        return 'trash'
+    if size == 0:
+        return 'trash'
+    if rel_path.startswith('patch/archive/'):
+        return 'archive'
+    if rel_path.startswith('backups/'):
+        return 'backup'
+    if rel_path.startswith('project_archive/'):
+        return 'archive'
+    if filename.endswith('.md'):
+        return 'docs'
+    if filename.endswith(('.py', '.tsx', '.ts', '.jsx', '.js', '.vba', '.bas')):
+        return 'code'
+    if filename.endswith(('.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf')):
+        return 'config'
+    if filename.endswith(('.log', '.txt')):
+        return 'logs'
+    if filename.endswith(('.bat', '.cmd', '.sh')):
+        return 'scripts'
+    if filename.endswith(('.html', '.css', '.scss')):
+        return 'web'
+    return 'other'
+
+def get_file_icon(filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    icons = {
+        '.py': '🐍', '.tsx': '⚛️', '.ts': '📘', '.jsx': '⚛️', '.js': '📜',
+        '.json': '📋', '.md': '📝', '.bat': '⚙️', '.cmd': '⚙️',
+        '.html': '🌐', '.css': '🎨', '.txt': '📄', '.log': '📃',
+        '.bak': '💾', '.tmp': '🗑', '.vba': '📊', '.bas': '📊'
+    }
+    return icons.get(ext, '📄')
+
+def load_important_files() -> set:
+    if os.path.exists(IMPORTANT_FILE):
+        try:
+            with open(IMPORTANT_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return set(data.get('important', []))
+        except:
+            pass
+    return set()
+
+def save_important_files(files: set):
+    with open(IMPORTANT_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'important': list(files)}, f, indent=2)
+
 # ==========================================
 # FASTAPI ENDPOINTS
 # ==========================================
 
 @app.get("/api/status")
 def api_status():
+    config = load_config()
     ollama_ok = False
     try:
         import requests
-        r = requests.get("http://localhost:11434/api/tags", timeout=2)
+        r = requests.get(f"{config.get('ollama_url', 'http://localhost:11434')}/api/tags", timeout=2)
         ollama_ok = r.status_code == 200
     except Exception:
         pass
+    
     return JSONResponse({
         "ollama": "online" if ollama_ok else "offline",
         "guardian": "active",
-        "version": "3.2.0 DIFF-ENGINE",
-        "providers": {"groq": False, "openrouter": False, "gemini": False}
+        "version": "3.2.0 DIFF-SUPPORT",
+        "providers": {
+            "groq": bool(config.get('groq_api_key')),
+            "openrouter": bool(config.get('openrouter_api_key')),
+            "gemini": bool(config.get('gemini_api_key'))
+        }
     })
 
 @app.get("/api/logs")
@@ -671,8 +946,12 @@ def api_get_md(filename: str):
         try:
             with open(safe_name, 'r', encoding='utf-8') as f:
                 return JSONResponse({"content": f.read(), "name": filename})
-        except Exception as e:
-            return JSONResponse({"content": "", "name": filename, "error": str(e)})
+        except Exception:
+            try:
+                with open(safe_name, 'r', encoding='cp1251') as f:
+                    return JSONResponse({"content": f.read(), "name": filename})
+            except Exception as e:
+                return JSONResponse({"content": "", "name": filename, "error": str(e)})
     return JSONResponse({"content": "", "name": filename, "error": "File not found"})
 
 @app.post("/api/md/{filename:path}")
@@ -700,38 +979,77 @@ async def api_run_task(payload: dict):
         log_debug(f"Task error: {e}", "ERROR")
         return JSONResponse({"success": False, "error": str(e), "result": "Ошибка выполнения"})
 
+@app.get("/api/ollama/models")
+def get_ollama_models():
+    try:
+        import requests
+        config = load_config()
+        r = requests.get(f"{config.get('ollama_url', 'http://localhost:11434')}/api/tags", timeout=5)
+        if r.status_code == 200:
+            models_data = r.json().get("models", [])
+            formatted_models = [
+                {"name": m["name"], "size_gb": round(m.get("size", 0) / (1024**3), 2)} 
+                for m in models_data
+            ]
+            return JSONResponse({"success": True, "models": formatted_models})
+        return JSONResponse({"success": False, "error": "Ollama не отвечает"})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/ollama/pull")
+async def pull_ollama_model(payload: dict):
+    model_name = payload.get("name", "").strip()
+    if not model_name:
+        return JSONResponse({"success": False, "error": "Имя модели не указано"})
+    
+    log_debug(f"Запуск загрузки модели: {model_name}", "INFO")
+    
+    try:
+        import ollama
+        await asyncio.to_thread(ollama.pull, model_name)
+        log_debug(f"Модель {model_name} успешно загружена!", "SUCCESS")
+        return JSONResponse({"success": True, "message": f"Модель {model_name} готова к использованию"})
+    except Exception as e:
+        log_debug(f"Ошибка загрузки модели {model_name}: {e}", "ERROR")
+        return JSONResponse({"success": False, "error": str(e)})
+
 @app.get("/api/patches/list")
 def api_patches_list():
     try:
-        return JSONResponse({"success": True, "patches": list_patches()})
+        patches = list_patches()
+        return JSONResponse({"success": True, "patches": patches})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.get("/api/patches/stats")
 def api_patches_stats():
     try:
-        return JSONResponse({"success": True, "stats": get_stats()})
+        stats = get_stats()
+        return JSONResponse({"success": True, "stats": stats})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.post("/api/patches/preview")
 def api_patches_preview(payload: dict):
     try:
-        return JSONResponse(preview_patch(payload))
+        result = preview_patch(payload)
+        return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.post("/api/patches/apply")
 def api_patches_apply(payload: dict):
     try:
-        return JSONResponse(apply_patch(payload))
+        result = apply_patch(payload)
+        return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.post("/api/patches/rollback")
 def api_patches_rollback():
     try:
-        return JSONResponse(rollback_last_patch())
+        result = rollback_last_patch()
+        return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
@@ -740,20 +1058,23 @@ def api_patches_archive(payload: dict):
     filename = payload.get("filename", "")
     if not filename:
         return JSONResponse({"success": False, "error": "filename не указан"})
-    return JSONResponse(archive_patch(filename))
+    result = archive_patch(filename)
+    return JSONResponse(result)
 
 @app.post("/api/patches/delete")
 def api_patches_delete(payload: dict):
     filename = payload.get("filename", "")
     if not filename:
         return JSONResponse({"success": False, "error": "filename не указан"})
-    return JSONResponse(delete_patch(filename))
+    result = delete_patch(filename)
+    return JSONResponse(result)
 
 @app.post("/api/patches/apply-all")
 def api_patches_apply_all(payload: dict):
     try:
         patches = list_patches()
         pending = [p for p in patches if not p['is_applied'] and p.get('has_content')]
+        
         results = []
         for patch_info in pending:
             try:
@@ -766,9 +1087,120 @@ def api_patches_apply_all(payload: dict):
             except Exception as e:
                 results.append({'patch_id': patch_info['patch_id'], 'success': False, 'error': str(e)})
                 break
+        
         return JSONResponse({"success": True, "results": results})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
+
+@app.get("/api/project/scan")
+def api_project_scan():
+    try:
+        result = scan_project()
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.get("/api/project/file")
+def api_project_file(path: str):
+    full_path = os.path.join(BASE_DIR, path)
+    if not os.path.exists(full_path):
+        return JSONResponse({"success": False, "error": "Файл не найден"})
+    
+    try:
+        content = read_file_safe(full_path)
+        return JSONResponse({"success": True, "content": content, "size": len(content)})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/project/archive")
+def api_project_archive(payload: dict):
+    filepath = payload.get('path', '')
+    if not filepath:
+        return JSONResponse({"success": False, "error": "path не указан"})
+    
+    full_path = os.path.join(BASE_DIR, filepath)
+    if not os.path.exists(full_path):
+        return JSONResponse({"success": False, "error": "Файл не найден"})
+    
+    filename = os.path.basename(filepath)
+    if filename in CRITICAL_FILES or any(filepath.startswith(p) for p in CRITICAL_PATHS):
+        return JSONResponse({"success": False, "error": "Нельзя архивировать критичный файл"})
+    
+    os.makedirs(PROJECT_ARCHIVE, exist_ok=True)
+    date_folder = datetime.now().strftime('%Y%m%d_%H%M%S')
+    archive_path = os.path.join(PROJECT_ARCHIVE, date_folder, filename)
+    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+    
+    try:
+        shutil.move(full_path, archive_path)
+        log_debug(f"File archived: {filepath}", "SUCCESS")
+        return JSONResponse({"success": True, "message": f"Файл перемещён в архив: project_archive/{date_folder}/"})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/project/restore")
+def api_project_restore(payload: dict):
+    archive_path = payload.get('archive_path', '')
+    if not archive_path:
+        return JSONResponse({"success": False, "error": "archive_path не указан"})
+    
+    full_archive = os.path.join(BASE_DIR, archive_path)
+    if not os.path.exists(full_archive):
+        return JSONResponse({"success": False, "error": "Архив не найден"})
+    
+    filename = os.path.basename(archive_path)
+    restore_path = os.path.join(BASE_DIR, filename)
+    
+    if os.path.exists(restore_path):
+        return JSONResponse({"success": False, "error": f"Файл {filename} уже существует в корне"})
+    
+    try:
+        shutil.move(full_archive, restore_path)
+        log_debug(f"File restored: {filename}", "SUCCESS")
+        return JSONResponse({"success": True, "message": f"Файл восстановлен: {filename}"})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/project/delete")
+def api_project_delete(payload: dict):
+    filepath = payload.get('path', '')
+    if not filepath:
+        return JSONResponse({"success": False, "error": "path не указан"})
+    
+    full_path = os.path.join(BASE_DIR, filepath)
+    if not os.path.exists(full_path):
+        return JSONResponse({"success": False, "error": "Файл не найден"})
+    
+    filename = os.path.basename(filepath)
+    if filename in CRITICAL_FILES or any(filepath.startswith(p) for p in CRITICAL_PATHS):
+        return JSONResponse({"success": False, "error": "Нельзя удалять критичный файл"})
+    
+    try:
+        os.remove(full_path)
+        log_debug(f"File deleted: {filepath}", "WARNING")
+        return JSONResponse({"success": True, "message": f"Файл удалён: {filepath}"})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/project/important")
+def api_project_important(payload: dict):
+    path = payload.get('path', '')
+    action = payload.get('action', 'toggle')
+    
+    important = load_important_files()
+    
+    if action == 'add':
+        important.add(path)
+    elif action == 'remove':
+        important.discard(path)
+    else:
+        if path in important:
+            important.discard(path)
+        else:
+            important.add(path)
+    
+    save_important_files(important)
+    return JSONResponse({"success": True, "important": list(important)})
 
 # ==========================================
 # UI
@@ -777,10 +1209,17 @@ def api_patches_apply_all(payload: dict):
 def create_ui():
     ui.dark_mode().enable()
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.2.0 DIFF-ENGINE').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.2.0').classes('text-xl font-bold')
 
 if __name__ in {"__main__", "__mp_main__"}:
     ensure_base_files()
-    log_debug("Starting drmAIcu Core v3.2.0 DIFF-ENGINE...", "INFO")
+    log_debug("Starting drmAIcu Core v3.2.0 DIFF-SUPPORT...", "INFO")
     get_engine()
-    ui.run(title="drmAIcu Core", port=8080, reload=False, show=False, favicon="🤖")
+    
+    ui.run(
+        title="drmAIcu Core",
+        port=8080,
+        reload=False,
+        show=False,
+        favicon="🤖"
+    )

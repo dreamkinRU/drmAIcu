@@ -112,6 +112,30 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_165324_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "007-full",
+      "target_file": "main.py",
+      "patch_type": "full_replace",
+      "applied_at": "2026-11-15T17:14:40.681770",
+      "checksum": "ce070e9d324b07cfd668031733252605b45cbd9fded18bce72fd5f1e555bb75c",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_171440.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_171440_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "009",
+      "target_file": "launcher.bat",
+      "patch_type": "full_replace",
+      "applied_at": "2026-11-15T17:42:09.683318",
+      "checksum": "9c2544e26c08112d444c6e21c406b3d2068fd93ca62ed2ac7f71695088b8bdef",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_174209.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_174209_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -174,6 +198,18 @@
       "patch_id": "006",
       "target_file": "main.py",
       "timestamp": "2026-11-15T16:53:24.743392"
+    },
+    {
+      "action": "apply",
+      "patch_id": "007-full",
+      "target_file": "main.py",
+      "timestamp": "2026-11-15T17:14:40.682786"
+    },
+    {
+      "action": "apply",
+      "patch_id": "009",
+      "target_file": "launcher.bat",
+      "timestamp": "2026-11-15T17:42:09.683318"
     }
   ],
   "rollbacks": []
