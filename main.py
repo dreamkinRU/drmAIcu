@@ -1,7 +1,7 @@
-# main.py v3.3.0 DISK-READER
+# main.py v3.5.0 MULTI-ATOMIC
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -99,42 +99,78 @@ def backup(path):
     return out
 
 
+def find_block(lines, block, hint):
+    if not block:
+        return hint
+    n = len(block)
+    if hint is None:
+        hint = 0
+    hint = max(0, min(hint, len(lines)))
+    if 0 <= hint <= len(lines) - n and lines[hint:hint + n] == block:
+        return hint
+    matches = [i for i in range(len(lines) - n + 1) if lines[i:i + n] == block]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        return matches
+    sb = [s.rstrip() for s in block]
+    fm = [i for i in range(len(lines) - n + 1) if [x.rstrip() for x in lines[i:i + n]] == sb]
+    if len(fm) == 1:
+        return fm[0]
+    if len(fm) > 1:
+        return fm
+    return -1
+
+
 def apply_diff(content, diff):
     lines = content.split('\n')
     dl = diff.split('\n')
+    hunks = []
     i = 0
+    while i < len(dl) and not dl[i].startswith('@@'):
+        i += 1
     while i < len(dl):
         if dl[i].startswith('@@'):
-            m = re.match(r'@@ -(\d+)', dl[i])
+            m = re.match(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@', dl[i])
             if not m:
                 i += 1
                 continue
-            start = int(m.group(1)) - 1
+            old_start = int(m.group(1))
             j = i + 1
             while j < len(dl) and not dl[j].startswith('@@'):
                 j += 1
-            block = []
-            pos = start
-            for k in range(i + 1, j):
-                s = dl[k]
-                if s.startswith('--- ') or s.startswith('+++ '):
-                    continue
-                if s.startswith(' '):
-                    if pos < len(lines):
-                        block.append(lines[pos])
-                    pos += 1
-                elif s.startswith('-'):
-                    pos += 1
-                elif s.startswith('+'):
-                    block.append(s[1:])
-                elif s == '':
-                    if pos < len(lines):
-                        block.append(lines[pos])
-                    pos += 1
-            lines = lines[:start] + block + lines[pos:]
+            hunks.append((old_start, dl[i + 1:j]))
             i = j
         else:
             i += 1
+    ops = []
+    for old_start, body in hunks:
+        old_block = []
+        new_block = []
+        for s in body:
+            if s.startswith('--- ') or s.startswith('+++ ') or s.startswith('\\'):
+                continue
+            if s.startswith(' '):
+                old_block.append(s[1:])
+                new_block.append(s[1:])
+            elif s.startswith('-'):
+                old_block.append(s[1:])
+            elif s.startswith('+'):
+                new_block.append(s[1:])
+            elif s == '':
+                old_block.append('')
+                new_block.append('')
+        pos = find_block(lines, old_block, old_start - 1)
+        if isinstance(pos, list):
+            raise ValueError('Ханк неоднозначен: контекст найден в ' + str(len(pos)) + ' местах ' + str(pos[:5]) + '. Уточни контекст патча.')
+        if pos == -1:
+            p2 = find_block(lines, new_block, old_start - 1)
+            if p2 != -1:
+                continue
+            raise ValueError('Ханк не найден: контекст не совпадает (подсказка строки ' + str(old_start) + '). Файл изменён — патч устарел.')
+        ops.append((pos, pos + len(old_block), new_block))
+    for start, end, nb in sorted(ops, key=lambda x: -x[0]):
+        lines = lines[:start] + nb + lines[end:]
     return '\n'.join(lines)
 
 
@@ -160,8 +196,7 @@ def find_patch_file(pid, fname=''):
             return p
     if not pid:
         return None
-    cands = [pid + '.json', 'patch_' + pid + '.json']
-    for c in cands:
+    for c in (pid + '.json', 'patch_' + pid + '.json'):
         p = os.path.join(PATCH_DIR, c)
         if os.path.exists(p):
             return p
@@ -184,7 +219,7 @@ def find_patch_file(pid, fname=''):
 def resolve(data):
     pid = str(data.get('patch_id', ''))
     fname = data.get('filename', '')
-    has_body = bool(data.get('diff')) or bool(data.get('full_file_content'))
+    has_body = bool(data.get('operations')) or bool(data.get('diff')) or bool(data.get('full_file_content'))
     if not has_body:
         p = find_patch_file(pid, fname)
         if p:
@@ -195,6 +230,13 @@ def resolve(data):
             except Exception as e:
                 log('Read patch failed: ' + str(e), 'ERROR')
     return data
+
+
+def normalize_ops(data):
+    ops = data.get('operations')
+    if isinstance(ops, list) and ops:
+        return ops
+    return [{k: data.get(k) for k in ('type', 'target_file', 'diff', 'full_file_content') if data.get(k) is not None}]
 
 
 def list_patches():
@@ -214,109 +256,174 @@ def list_patches():
         try:
             d = json.loads(read_text(p))
             pid = str(d.get('patch_id', f[:-5]))
-            pt = d.get('type', '')
-            if not pt:
-                pt = 'unified_diff' if d.get('diff') else 'full_replace'
-            body = d.get('full_file_content', '') if pt == 'full_replace' else d.get('diff', '')
-            tgt = d.get('target_file', 'unknown')
+            ops = normalize_ops(d)
+            multi = isinstance(d.get('operations'), list) and len(d.get('operations')) > 1
+            pt = 'multi' if multi else (d.get('type', '') or ('unified_diff' if d.get('diff') else 'full_replace'))
+            targets = [str(o.get('target_file', 'unknown')) for o in ops]
+            if multi:
+                tgt = targets[0] + ' +' + str(len(targets) - 1) + ' (' + str(len(targets)) + ' файлов)'
+            else:
+                tgt = targets[0]
+            body = d.get('full_file_content', '') if pt in ('full_replace', 'create') else d.get('diff', '')
+            clen = len(body) if not multi else sum(len(str(o.get('full_file_content', '') or o.get('diff', ''))) for o in ops)
             out.append({'filename': f, 'filepath': p, 'patch_id': pid, 'patch_type': pt,
                         'target_file': tgt, 'description': d.get('description', ''),
                         'author': d.get('author', '?'), 'created_at': d.get('created_at', ''),
-                        'is_applied': pid in done,
-                        'file_exists': os.path.exists(os.path.join(BASE, tgt)),
-                        'content_length': len(body), 'has_content': bool(body),
-                        'full_file_content': d.get('full_file_content', ''), 'diff': d.get('diff', '')})
+                        'is_applied': pid in done, 'multi': multi, 'op_count': len(targets),
+                        'file_exists': os.path.exists(os.path.join(BASE, targets[0])),
+                        'content_length': clen, 'has_content': bool(ops),
+                        'full_file_content': d.get('full_file_content', ''), 'diff': d.get('diff', ''),
+                        'operations': ops})
         except Exception as e:
             out.append({'filename': f, 'filepath': p, 'patch_id': f[:-5], 'patch_type': 'error',
                         'target_file': 'error', 'description': 'Bad JSON: ' + str(e)[:80],
-                        'author': 'ERR', 'created_at': '', 'is_applied': False, 'file_exists': False,
-                        'content_length': 0, 'has_content': False, 'error': str(e),
-                        'full_file_content': '', 'diff': ''})
+                        'author': 'ERR', 'created_at': '', 'is_applied': False, 'multi': False, 'op_count': 0,
+                        'file_exists': False, 'content_length': 0, 'has_content': False, 'error': str(e),
+                        'full_file_content': '', 'diff': '', 'operations': []})
     return out
 
 
-def compute_new(data):
-    tgt = data.get('target_file', '')
+def compute_new(o):
+    tgt = o.get('target_file', '')
     if not tgt:
         return None, None, 'Нет target_file'
     path = os.path.join(BASE, tgt)
-    pt = data.get('type', '')
+    pt = o.get('type', '')
     if not pt:
-        pt = 'unified_diff' if data.get('diff') else 'full_replace'
-    if pt == 'unified_diff':
-        d = data.get('diff', '')
+        if o.get('diff'):
+            pt = 'unified_diff'
+        elif o.get('full_file_content'):
+            pt = 'full_replace'
+    if pt == 'create':
+        new = o.get('full_file_content', '')
+        if not new:
+            return None, None, 'Нет full_file_content для создания'
+        if os.path.exists(path):
+            return None, None, 'Файл уже существует: ' + tgt + '. Используйте full_replace.'
+    elif pt == 'unified_diff':
+        d = o.get('diff', '')
         if not d:
             return None, None, 'Нет diff'
         if not os.path.exists(path):
-            return None, None, 'Файл не существует: ' + tgt
-        new = apply_diff(read_text(path), d)
+            return None, None, 'Файл не существует: ' + tgt + '. Используйте create.'
+        try:
+            new = apply_diff(read_text(path), d)
+        except Exception as e:
+            return None, None, 'Diff не применим (' + tgt + '): ' + str(e)
     else:
-        new = data.get('full_file_content', '')
+        new = o.get('full_file_content', '')
         if not new:
             return None, None, 'Нет full_file_content'
     ok, err = validate(tgt, new)
     if not ok:
-        return None, None, 'Валидация: ' + err
+        return None, None, 'Валидация (' + tgt + '): ' + err
     return path, new, None
+
+
+def compute_ops(data):
+    res = []
+    for o in normalize_ops(data):
+        path, new, err = compute_new(o)
+        res.append({'target_file': o.get('target_file', ''), 'type': o.get('type', 'full_replace'),
+                    'path': path, 'new': new, 'err': err})
+    return res
 
 
 def preview_patch(raw):
     data = resolve(raw)
-    path, new, err = compute_new(data)
-    if err:
-        return {'success': False, 'error': err}
-    old = read_text(path) if os.path.exists(path) else ''
-    return {'success': True, 'valid': True, 'target_file': data.get('target_file'),
-            'old_size': len(old), 'new_size': len(new),
-            'old_lines': len(old.split('\n')), 'new_lines': len(new.split('\n')),
-            'message': 'OK: ' + str(len(old.split('\n'))) + ' -> ' + str(len(new.split('\n'))) + ' строк'}
+    ops = compute_ops(data)
+    errs = [o['err'] for o in ops if o['err']]
+    if errs:
+        return {'success': False, 'error': ' | '.join(errs)}
+    detail = []
+    for o in ops:
+        old = read_text(o['path']) if os.path.exists(o['path']) else ''
+        detail.append({'target_file': o['target_file'], 'op': o['type'],
+                       'old_lines': len(old.split('\n')), 'new_lines': len(o['new'].split('\n')),
+                       'old_size': len(old), 'new_size': len(o['new'])})
+    return {'success': True, 'valid': True, 'multi': len(ops) > 1, 'operations': detail,
+            'message': 'OK: ' + str(len(ops)) + ' файл(ов) валидны'}
+
+
+def test_apply(raw):
+    data = resolve(raw)
+    pid = str(data.get('patch_id', 'unknown'))
+    ops = compute_ops(data)
+    errs = [o['err'] for o in ops if o['err']]
+    if errs:
+        return {'success': False, 'error': ' | '.join(errs)}
+    detail = []
+    for o in ops:
+        old = read_text(o['path']) if os.path.exists(o['path']) else ''
+        ol = len(old.split('\n'))
+        nl = len(o['new'].split('\n'))
+        detail.append({'target_file': o['target_file'], 'op': o['type'], 'old_lines': ol, 'new_lines': nl,
+                       'lines_added': max(0, nl - ol), 'lines_removed': max(0, ol - nl)})
+    return {'success': True, 'patch_id': pid, 'multi': len(ops) > 1, 'operations': detail,
+            'message': 'Тест пройден: ' + str(len(ops)) + ' файл(ов)'}
 
 
 def apply_patch(raw):
     data = resolve(raw)
     pid = str(data.get('patch_id', 'unknown'))
-    tgt = data.get('target_file', '')
-    ptype = data.get('type', 'unknown')
-    log('Applying patch ' + pid + ' to ' + tgt + ' (type: ' + ptype + ')', 'INFO')
-    path, new, err = compute_new(data)
-    if err:
-        log('Patch ' + pid + ' rejected: ' + err, 'ERROR')
-        return {'success': False, 'error': err}
-    backs = backup(path)
-    tmp = path + '.tmp'
-    expected_sha = sha(new)
+    ops = compute_ops(data)
+    errs = [o['err'] for o in ops if o['err']]
+    if errs:
+        log('Patch ' + pid + ' rejected (phase1): ' + ' | '.join(errs), 'ERROR')
+        return {'success': False, 'error': ' | '.join(errs)}
+    log('Applying patch ' + pid + ' (' + str(len(ops)) + ' file(s))', 'INFO')
+    planned = []
+    for o in ops:
+        dir_name = os.path.dirname(o['path'])
+        if dir_name and not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+        backs = backup(o['path'])
+        planned.append({'path': o['path'], 'new': o['new'], 'backs': backs,
+                        'tgt': o['target_file'], 'sha': sha(o['new'])})
+    written = []
     try:
-        with open(tmp, 'w', encoding='utf-8') as f:
-            f.write(new)
-        os.replace(tmp, path)
-        
-        # Проверка целостности после записи
-        with open(path, 'r', encoding='utf-8') as f:
-            written_content = f.read()
-        actual_sha = sha(written_content)
-        
-        if actual_sha != expected_sha:
-            log('Checksum mismatch after write! Expected: ' + expected_sha[:16] + ', Got: ' + actual_sha[:16], 'ERROR')
-            # Автооткат
-            if backs:
-                shutil.copy2(backs[-1], path)
-                log('Auto-rollback from backup: ' + backs[-1], 'WARNING')
-            return {'success': False, 'error': 'Целостность файла нарушена после записи (автооткат)'}
-        
-        log('File integrity verified: ' + expected_sha[:16], 'SUCCESS')
+        for pl in planned:
+            tmp = pl['path'] + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write(pl['new'])
+            os.replace(tmp, pl['path'])
+            with open(pl['path'], 'r', encoding='utf-8') as f:
+                actual = sha(f.read())
+            if actual != pl['sha']:
+                raise ValueError('Checksum mismatch: ' + pl['tgt'])
+            written.append(pl)
+        oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'], 'backups': pl['backs']} for pl in planned]
+        allb = [x for pl in planned for x in pl['backs']]
+        combined = sha(json.dumps(oprecs, sort_keys=True))
+        man = load_manifest()
+        man['applied'].append({'patch_id': pid, 'target_file': planned[0]['tgt'] if len(planned) == 1 else '+'.join(pl['tgt'] for pl in planned),
+                               'operations': oprecs, 'applied_at': datetime.now().isoformat(),
+                               'checksum': combined, 'backups': allb})
+        man['history'].append({'action': 'apply', 'patch_id': pid, 'files': [pl['tgt'] for pl in planned],
+                               'timestamp': datetime.now().isoformat()})
+        save_manifest(man)
+        log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
+        return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам)', 'backups': allb}
     except Exception as e:
-        if os.path.exists(tmp):
-            os.remove(tmp)
-        return {'success': False, 'error': 'Запись: ' + str(e)}
-    man = load_manifest()
-    man['applied'].append({'patch_id': pid, 'target_file': tgt,
-                           'applied_at': datetime.now().isoformat(),
-                           'checksum': sha(new), 'backups': backs})
-    man['history'].append({'action': 'apply', 'patch_id': pid, 'target_file': tgt,
-                           'timestamp': datetime.now().isoformat()})
-    save_manifest(man)
-    log('Patch ' + pid + ' applied to ' + tgt, 'SUCCESS')
-    return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + tgt, 'backups': backs}
+        for pl in written:
+            if pl['backs']:
+                try:
+                    shutil.copy2(pl['backs'][-1], pl['path'])
+                except Exception:
+                    pass
+            elif os.path.exists(pl['path']):
+                try:
+                    os.remove(pl['path'])
+                except Exception:
+                    pass
+            tmp = pl['path'] + '.tmp'
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
+        log('Patch ' + pid + ' ROLLED BACK (phase2): ' + str(e), 'ERROR')
+        return {'success': False, 'error': 'Транзакция отменена, всё восстановлено: ' + str(e)}
 
 
 def rollback():
@@ -324,6 +431,19 @@ def rollback():
     if not man.get('applied'):
         return {'success': False, 'error': 'Нет патчей для отката'}
     last = man['applied'][-1]
+    ops = last.get('operations')
+    if ops:
+        for op in reversed(ops):
+            path = os.path.join(BASE, op['target_file'])
+            b = op.get('backups') or []
+            if b:
+                shutil.copy2(b[-1], path)
+            elif os.path.exists(path):
+                os.remove(path)
+        man['applied'].pop()
+        man['rollbacks'].append(last)
+        save_manifest(man)
+        return {'success': True, 'message': 'Откат ' + str(last['patch_id']) + ' (' + str(len(ops)) + ' файл(ов))'}
     tgt = last['target_file']
     b = os.path.join(BACKUP_DIR, os.path.basename(tgt) + '_LATEST.bak')
     if not os.path.exists(b):
@@ -341,6 +461,7 @@ def stats():
     ap = len([p for p in ps if p['is_applied']])
     return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap,
             'errors': len([p for p in ps if p.get('error')]),
+            'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),
             'rollbacks_count': len(man.get('rollbacks', [])),
             'backups_count': len(os.listdir(BACKUP_DIR))}
@@ -384,6 +505,47 @@ ICONS = {'.py': 'PY', '.tsx': 'TSX', '.ts': 'TS', '.js': 'JS', '.json': 'CFG',
          '.md': 'MD', '.bat': 'BAT', '.html': 'HTML', '.css': 'CSS', '.bak': 'BAK'}
 
 
+def get_cleanup_recommendation(f):
+    name = f.get('filename', '')
+    rel = f.get('path', '')
+    size = f.get('size', 0)
+    ext = f.get('extension', '')
+    size_human = f.get('size_human', human(size))
+    is_dup = f.get('is_duplicate', False)
+    dups = f.get('duplicates', [])
+    is_critical = f.get('is_critical', False)
+    is_important = f.get('is_important', False)
+    if is_critical or is_important:
+        return {'action': 'keep', 'reason': 'Критичный или помеченный как важный'}
+    if size == 0 and ext not in ('.gitkeep', '.keep'):
+        return {'action': 'delete', 'reason': 'Пустой файл (0 байт)'}
+    if name in ('.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db'):
+        return {'action': 'delete', 'reason': 'Системный мусор ОС'}
+    if ext in ('.tmp', '.pyc', '.pyo') or '__pycache__' in rel or '.vite' in rel:
+        return {'action': 'delete', 'reason': 'Временный файл или кэш'}
+    if re.search(r'_(old|backup|v\d+|copy|fixed|ru)\.', name, re.IGNORECASE):
+        return {'action': 'delete', 'reason': 'Устаревшая/тестовая версия файла'}
+    if rel.startswith('backups/') and ext == '.bak':
+        try:
+            mt = datetime.fromisoformat(f.get('modified', ''))
+            if datetime.now() - mt > timedelta(days=7):
+                return {'action': 'delete', 'reason': 'Старый бэкап (>7 дней)'}
+        except Exception:
+            pass
+        return {'action': 'review', 'reason': 'Свежий бэкап. Проверить перед удалением'}
+    if ext in ('.log', '.txt') and size > 5 * 1024 * 1024:
+        return {'action': 'review', 'reason': 'Большой файл (' + size_human + ')'}
+    if is_dup and dups:
+        primary = dups[0]
+        if len(rel) > len(primary):
+            return {'action': 'delete', 'reason': 'Дубликат. Оригинал: ' + primary}
+        else:
+            return {'action': 'review', 'reason': 'Дубликат в: ' + ', '.join(dups[:2])}
+    if re.match(r'^(test|temp|tmp|untitled|new_file|copy)\..+', name, re.IGNORECASE) and '/' not in rel:
+        return {'action': 'review', 'reason': 'Подозрительное временное имя'}
+    return {'action': 'keep', 'reason': 'Файл корректен'}
+
+
 def scan_project():
     files = []
     hashes = {}
@@ -394,17 +556,17 @@ def scan_project():
             p = os.path.join(root, n)
             rel = os.path.relpath(p, BASE).replace('\\', '/')
             try:
-                st = os.stat(p)
+                stt = os.stat(p)
                 h = ''
                 try:
                     with open(p, 'rb') as f:
                         h = hashlib.md5(f.read()).hexdigest()
                 except Exception:
                     pass
-                cat = category(n, rel, st.st_size)
-                files.append({'path': rel, 'filename': n, 'size': st.st_size,
-                              'size_human': human(st.st_size),
-                              'modified': datetime.fromtimestamp(st.st_mtime).isoformat(),
+                cat = category(n, rel, stt.st_size)
+                files.append({'path': rel, 'filename': n, 'size': stt.st_size,
+                              'size_human': human(stt.st_size),
+                              'modified': datetime.fromtimestamp(stt.st_mtime).isoformat(),
                               'category': cat, 'hash': h,
                               'is_critical': cat == 'critical', 'is_important': rel in imp,
                               'extension': os.path.splitext(n)[1].lower(),
@@ -419,6 +581,8 @@ def scan_project():
         if len(g) > 1:
             f['is_duplicate'] = True
             f['duplicates'] = [x for x in g if x != f['path']]
+    for f in files:
+        f['cleanup'] = get_cleanup_recommendation(f)
     total = sum(f['size'] for f in files)
     st = {'total': len(files), 'total_size': total, 'total_size_human': human(total),
           'by_category': {}, 'by_extension': {},
@@ -427,7 +591,9 @@ def scan_project():
           'critical_count': len([f for f in files if f['is_critical']]),
           'important_count': len([f for f in files if f['is_important']]),
           'trash_count': len([f for f in files if f['category'] == 'trash']),
-          'backup_count': len([f for f in files if f['category'] == 'backup'])}
+          'backup_count': len([f for f in files if f['category'] == 'backup']),
+          'cleanup_delete_count': len([f for f in files if f['cleanup']['action'] == 'delete']),
+          'cleanup_review_count': len([f for f in files if f['cleanup']['action'] == 'review'])}
     for f in files:
         st['by_category'][f['category']] = st['by_category'].get(f['category'], 0) + 1
         st['by_extension'][f['extension']] = st['by_extension'].get(f['extension'], 0) + 1
@@ -466,7 +632,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': '3.3.0 DISK-READER',
+                         'version': '3.5.0 MULTI-ATOMIC',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
@@ -548,6 +714,11 @@ def s_pprev(payload: dict):
     return JSONResponse(preview_patch(payload))
 
 
+@app.post('/api/patches/test-apply')
+def s_ptest(payload: dict):
+    return JSONResponse(test_apply(payload))
+
+
 @app.post('/api/patches/apply')
 def s_papply(payload: dict):
     return JSONResponse(apply_patch(payload))
@@ -603,7 +774,11 @@ def s_pall(payload: dict = {}):
 
 @app.get('/api/project/scan')
 def s_scan():
-    return JSONResponse(scan_project())
+    try:
+        return JSONResponse(scan_project())
+    except Exception as e:
+        log('Scan error: ' + str(e), 'ERROR')
+        return JSONResponse({'success': False, 'error': str(e), 'files': [], 'stats': {}})
 
 
 @app.get('/api/project/file')
@@ -678,48 +853,11 @@ def s_restart():
 def create_ui():
     ui.dark_mode().enable()
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.3.0 DISK-READER').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.5.0 MULTI-ATOMIC').classes('text-xl font-bold')
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    log('Starting drmAIcu Core v3.3.0 DISK-READER...')
+    log('Starting drmAIcu Core v3.5.0 MULTI-ATOMIC...')
     get_engine()
     create_ui()
     ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)
-
-# ==========================================
-# СИСТЕМНЫЕ ENDPOINTS (ПЕРЕЗАПУСК)
-# ==========================================
-
-@app.post("/api/system/restart")
-def api_system_restart():
-    """Перезапуск системы: убивает окна по заголовку и пишет флаг для лаунчера"""
-    try:
-        import subprocess
-        log_debug("=== RESTART REQUESTED VIA PANEL ===", "WARNING")
-        
-        # Пишем флаг перезапуска для циклического лаунчера
-        with open(RESTART_FLAG, 'w') as f:
-            f.write('restart')
-        
-        # Убиваем окна по заголовку (решает проблему пустых окон)
-        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu Core'], capture_output=True)
-        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu UI'], capture_output=True)
-        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu Core *'], capture_output=True)
-        subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq drmAIcu UI *'], capture_output=True)
-        
-        # Убиваем процессы по портам (на случай если заголовки не совпали)
-        subprocess.run(['taskkill', '/F', '/IM', 'node.exe'], capture_output=True)
-        
-        log_debug("Restart flag written, windows killed", "SUCCESS")
-        
-        # Задержка перед выходом, чтобы ответ успел дойти до клиента
-        def do_exit():
-            time.sleep(1.5)
-            os._exit(0)
-        threading.Thread(target=do_exit, daemon=True).start()
-        
-        return JSONResponse({"success": True, "message": "Перезапуск инициирован. Система перезагрузится через несколько секунд."})
-    except Exception as e:
-        log_debug(f"Restart error: {e}", "ERROR")
-        return JSONResponse({"success": False, "error": str(e)})

@@ -98,6 +98,7 @@ export default function App() {
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [projectSearch, setProjectSearch] = useState('');
   const [projectDuplicatesOnly, setProjectDuplicatesOnly] = useState(false);
+  const [cleanupMode, setCleanupMode] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [projectImportantOnly, setProjectImportantOnly] = useState(false);
   const [selectedProjectFile, setSelectedProjectFile] = useState<ProjectFile | null>(null);
@@ -251,6 +252,29 @@ export default function App() {
       else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети. Система, возможно, перезапускается...'); setTimeout(() => window.location.reload(), 8000); }
     finally { setRestarting(false); }
+  };
+
+  
+  const applyCleanup = async () => {
+    const toDelete = projectFiles.filter(f => f.cleanup?.action === 'delete');
+    if (toDelete.length === 0) { alert('Нечего очищать'); return; }
+    if (!confirm(`Переместить ${toDelete.length} файлов в архив?`)) return;
+    
+    let successCount = 0;
+    for (const file of toDelete) {
+      try {
+        const res = await fetch('/api/project/archive', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ path: file.path }) 
+        });
+        const data = await res.json();
+        if (data.success) successCount++;
+      } catch (e) { console.error(e); }
+    }
+    alert(`Очищено: ${successCount} из ${toDelete.length} файлов`);
+    setCleanupMode(false);
+    scanProject();
   };
 
   const scanProject = async () => {
@@ -532,9 +556,19 @@ export default function App() {
                 <h2 className="text-2xl font-bold">🗂 Управление проектом</h2>
                 <p className="text-sm text-gray-400 mt-1">Анализ файлов, поиск дубликатов, архивирование мусора</p>
               </div>
-              <button onClick={scanProject} disabled={projectLoading} className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold disabled:opacity-50">
-                {projectLoading ? '⏳ Сканирование...' : '🔄 Пересканировать'}
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setCleanupMode(!cleanupMode)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${cleanupMode ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                  {cleanupMode ? '❌ Отмена' : '🧹 Режим очистки'}
+                </button>
+                {cleanupMode && projectStats?.cleanup_delete_count > 0 && (
+                  <button onClick={applyCleanup} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold animate-pulse">
+                    🗑 Удалить {projectStats.cleanup_delete_count} файлов
+                  </button>
+                )}
+                <button onClick={scanProject} disabled={projectLoading} className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold disabled:opacity-50">
+                  {projectLoading ? '⏳ Сканирование...' : '🔄 Пересканировать'}
+                </button>
+              </div>
             </div>
 
             {projectStats && (
@@ -627,6 +661,14 @@ export default function App() {
                         <span>🕐 {new Date(file.modified).toLocaleString('ru-RU')}</span>
                         {file.is_duplicate && file.duplicates.length > 0 && <span className="text-purple-400">Дубли: {file.duplicates.join(', ')}</span>}
                       </div>
+                      {file.cleanup && file.cleanup.action !== 'keep' && (
+                        <div className={`mt-2 px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 ${
+                          file.cleanup.action === 'delete' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                        }`}>
+                          <span>{file.cleanup.action === 'delete' ? '🗑 УДАЛИТЬ' : '⚠️ ПРОВЕРИТЬ'}</span>
+                          <span className="font-normal opacity-80">— {file.cleanup.reason}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <button onClick={() => toggleImportant(file)} className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${file.is_important ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' : 'bg-gray-700 text-gray-400 border border-gray-600 hover:border-yellow-500/50'}`}>{file.is_important ? '⭐' : '☆'}</button>

@@ -1,7 +1,7 @@
-# main.py v3.3.0 DISK-READER
+# main.py v3.4.2 CONTEXT-DIFF
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -99,42 +99,78 @@ def backup(path):
     return out
 
 
+def find_block(lines, block, hint):
+    if not block:
+        return hint
+    n = len(block)
+    if hint is None:
+        hint = 0
+    hint = max(0, min(hint, len(lines)))
+    if 0 <= hint <= len(lines) - n and lines[hint:hint + n] == block:
+        return hint
+    matches = [i for i in range(len(lines) - n + 1) if lines[i:i + n] == block]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        return matches
+    sb = [s.rstrip() for s in block]
+    fm = [i for i in range(len(lines) - n + 1) if [x.rstrip() for x in lines[i:i + n]] == sb]
+    if len(fm) == 1:
+        return fm[0]
+    if len(fm) > 1:
+        return fm
+    return -1
+
+
 def apply_diff(content, diff):
     lines = content.split('\n')
     dl = diff.split('\n')
+    hunks = []
     i = 0
+    while i < len(dl) and not dl[i].startswith('@@'):
+        i += 1
     while i < len(dl):
         if dl[i].startswith('@@'):
-            m = re.match(r'@@ -(\d+)', dl[i])
+            m = re.match(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@', dl[i])
             if not m:
                 i += 1
                 continue
-            start = int(m.group(1)) - 1
+            old_start = int(m.group(1))
             j = i + 1
             while j < len(dl) and not dl[j].startswith('@@'):
                 j += 1
-            block = []
-            pos = start
-            for k in range(i + 1, j):
-                s = dl[k]
-                if s.startswith('--- ') or s.startswith('+++ '):
-                    continue
-                if s.startswith(' '):
-                    if pos < len(lines):
-                        block.append(lines[pos])
-                    pos += 1
-                elif s.startswith('-'):
-                    pos += 1
-                elif s.startswith('+'):
-                    block.append(s[1:])
-                elif s == '':
-                    if pos < len(lines):
-                        block.append(lines[pos])
-                    pos += 1
-            lines = lines[:start] + block + lines[pos:]
+            hunks.append((old_start, dl[i + 1:j]))
             i = j
         else:
             i += 1
+    ops = []
+    for old_start, body in hunks:
+        old_block = []
+        new_block = []
+        for s in body:
+            if s.startswith('--- ') or s.startswith('+++ ') or s.startswith('\\'):
+                continue
+            if s.startswith(' '):
+                old_block.append(s[1:])
+                new_block.append(s[1:])
+            elif s.startswith('-'):
+                old_block.append(s[1:])
+            elif s.startswith('+'):
+                new_block.append(s[1:])
+            elif s == '':
+                old_block.append('')
+                new_block.append('')
+        pos = find_block(lines, old_block, old_start - 1)
+        if isinstance(pos, list):
+            raise ValueError('Ханк неоднозначен: контекст найден в ' + str(len(pos)) + ' местах ' + str(pos[:5]) + '. Уточни контекст патча.')
+        if pos == -1:
+            p2 = find_block(lines, new_block, old_start - 1)
+            if p2 != -1:
+                continue
+            raise ValueError('Ханк не найден: контекст не совпадает (подсказка строки ' + str(old_start) + '). Файл изменён — патч устарел.')
+        ops.append((pos, pos + len(old_block), new_block))
+    for start, end, nb in sorted(ops, key=lambda x: -x[0]):
+        lines = lines[:start] + nb + lines[end:]
     return '\n'.join(lines)
 
 
@@ -160,8 +196,7 @@ def find_patch_file(pid, fname=''):
             return p
     if not pid:
         return None
-    cands = [pid + '.json', 'patch_' + pid + '.json']
-    for c in cands:
+    for c in (pid + '.json', 'patch_' + pid + '.json'):
         p = os.path.join(PATCH_DIR, c)
         if os.path.exists(p):
             return p
@@ -217,7 +252,7 @@ def list_patches():
             pt = d.get('type', '')
             if not pt:
                 pt = 'unified_diff' if d.get('diff') else 'full_replace'
-            body = d.get('full_file_content', '') if pt == 'full_replace' else d.get('diff', '')
+            body = d.get('full_file_content', '') if pt in ('full_replace', 'create') else d.get('diff', '')
             tgt = d.get('target_file', 'unknown')
             out.append({'filename': f, 'filepath': p, 'patch_id': pid, 'patch_type': pt,
                         'target_file': tgt, 'description': d.get('description', ''),
@@ -242,14 +277,26 @@ def compute_new(data):
     path = os.path.join(BASE, tgt)
     pt = data.get('type', '')
     if not pt:
-        pt = 'unified_diff' if data.get('diff') else 'full_replace'
-    if pt == 'unified_diff':
+        if data.get('diff'):
+            pt = 'unified_diff'
+        elif data.get('full_file_content'):
+            pt = 'full_replace'
+    if pt == 'create':
+        new = data.get('full_file_content', '')
+        if not new:
+            return None, None, 'Нет full_file_content для создания'
+        if os.path.exists(path):
+            return None, None, 'Файл уже существует: ' + tgt + '. Используйте full_replace.'
+    elif pt == 'unified_diff':
         d = data.get('diff', '')
         if not d:
             return None, None, 'Нет diff'
         if not os.path.exists(path):
-            return None, None, 'Файл не существует: ' + tgt
-        new = apply_diff(read_text(path), d)
+            return None, None, 'Файл не существует: ' + tgt + '. Используйте create.'
+        try:
+            new = apply_diff(read_text(path), d)
+        except Exception as e:
+            return None, None, 'Diff не применим: ' + str(e)
     else:
         new = data.get('full_file_content', '')
         if not new:
@@ -272,20 +319,57 @@ def preview_patch(raw):
             'message': 'OK: ' + str(len(old.split('\n'))) + ' -> ' + str(len(new.split('\n'))) + ' строк'}
 
 
-def apply_patch(raw):
+def test_apply(raw):
     data = resolve(raw)
     pid = str(data.get('patch_id', 'unknown'))
     tgt = data.get('target_file', '')
     path, new, err = compute_new(data)
     if err:
+        return {'success': False, 'error': err}
+    old = read_text(path) if os.path.exists(path) else ''
+    return {'success': True, 'patch_id': pid, 'target_file': tgt,
+            'old_size': len(old), 'new_size': len(new),
+            'old_lines': len(old.split('\n')), 'new_lines': len(new.split('\n')),
+            'lines_added': max(0, len(new.split('\n')) - len(old.split('\n'))),
+            'lines_removed': max(0, len(old.split('\n')) - len(new.split('\n'))),
+            'message': 'Тест пройден: ' + str(len(old.split('\n'))) + ' -> ' + str(len(new.split('\n'))) + ' строк'}
+
+
+def apply_patch(raw):
+    data = resolve(raw)
+    pid = str(data.get('patch_id', 'unknown'))
+    tgt = data.get('target_file', '')
+    ptype = data.get('type', 'unknown')
+    log('Applying patch ' + pid + ' to ' + tgt + ' (type: ' + ptype + ')', 'INFO')
+    path, new, err = compute_new(data)
+    if err:
         log('Patch ' + pid + ' rejected: ' + err, 'ERROR')
         return {'success': False, 'error': err}
+    dir_name = os.path.dirname(path)
+    if dir_name and not os.path.exists(dir_name):
+        os.makedirs(dir_name, exist_ok=True)
+        log('Created directory: ' + dir_name, 'INFO')
     backs = backup(path)
     tmp = path + '.tmp'
+    expected_sha = sha(new)
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(new)
         os.replace(tmp, path)
+        with open(path, 'r', encoding='utf-8') as f:
+            written = f.read()
+        actual_sha = sha(written)
+        if actual_sha != expected_sha:
+            log('Checksum mismatch! Expected: ' + expected_sha[:16] + ', Got: ' + actual_sha[:16], 'ERROR')
+            if backs:
+                shutil.copy2(backs[-1], path)
+                log('Auto-rollback from backup', 'WARNING')
+            else:
+                if os.path.exists(path):
+                    os.remove(path)
+                log('Created file removed due to integrity failure', 'WARNING')
+            return {'success': False, 'error': 'Целостность нарушена (автооткат)'}
+        log('File integrity verified: ' + expected_sha[:16], 'SUCCESS')
     except Exception as e:
         if os.path.exists(tmp):
             os.remove(tmp)
@@ -366,6 +450,47 @@ ICONS = {'.py': 'PY', '.tsx': 'TSX', '.ts': 'TS', '.js': 'JS', '.json': 'CFG',
          '.md': 'MD', '.bat': 'BAT', '.html': 'HTML', '.css': 'CSS', '.bak': 'BAK'}
 
 
+def get_cleanup_recommendation(f):
+    name = f.get('filename', '')
+    rel = f.get('path', '')
+    size = f.get('size', 0)
+    ext = f.get('extension', '')
+    size_human = f.get('size_human', human(size))
+    is_dup = f.get('is_duplicate', False)
+    dups = f.get('duplicates', [])
+    is_critical = f.get('is_critical', False)
+    is_important = f.get('is_important', False)
+    if is_critical or is_important:
+        return {'action': 'keep', 'reason': 'Критичный или помеченный как важный'}
+    if size == 0 and ext not in ('.gitkeep', '.keep'):
+        return {'action': 'delete', 'reason': 'Пустой файл (0 байт)'}
+    if name in ('.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db'):
+        return {'action': 'delete', 'reason': 'Системный мусор ОС'}
+    if ext in ('.tmp', '.pyc', '.pyo') or '__pycache__' in rel or '.vite' in rel:
+        return {'action': 'delete', 'reason': 'Временный файл или кэш'}
+    if re.search(r'_(old|backup|v\d+|copy|fixed|ru)\.', name, re.IGNORECASE):
+        return {'action': 'delete', 'reason': 'Устаревшая/тестовая версия файла'}
+    if rel.startswith('backups/') and ext == '.bak':
+        try:
+            mt = datetime.fromisoformat(f.get('modified', ''))
+            if datetime.now() - mt > timedelta(days=7):
+                return {'action': 'delete', 'reason': 'Старый бэкап (>7 дней)'}
+        except Exception:
+            pass
+        return {'action': 'review', 'reason': 'Свежий бэкап. Проверить перед удалением'}
+    if ext in ('.log', '.txt') and size > 5 * 1024 * 1024:
+        return {'action': 'review', 'reason': 'Большой файл (' + size_human + ')'}
+    if is_dup and dups:
+        primary = dups[0]
+        if len(rel) > len(primary):
+            return {'action': 'delete', 'reason': 'Дубликат. Оригинал: ' + primary}
+        else:
+            return {'action': 'review', 'reason': 'Дубликат в: ' + ', '.join(dups[:2])}
+    if re.match(r'^(test|temp|tmp|untitled|new_file|copy)\..+', name, re.IGNORECASE) and '/' not in rel:
+        return {'action': 'review', 'reason': 'Подозрительное временное имя'}
+    return {'action': 'keep', 'reason': 'Файл корректен'}
+
+
 def scan_project():
     files = []
     hashes = {}
@@ -376,17 +501,17 @@ def scan_project():
             p = os.path.join(root, n)
             rel = os.path.relpath(p, BASE).replace('\\', '/')
             try:
-                st = os.stat(p)
+                stt = os.stat(p)
                 h = ''
                 try:
                     with open(p, 'rb') as f:
                         h = hashlib.md5(f.read()).hexdigest()
                 except Exception:
                     pass
-                cat = category(n, rel, st.st_size)
-                files.append({'path': rel, 'filename': n, 'size': st.st_size,
-                              'size_human': human(st.st_size),
-                              'modified': datetime.fromtimestamp(st.st_mtime).isoformat(),
+                cat = category(n, rel, stt.st_size)
+                files.append({'path': rel, 'filename': n, 'size': stt.st_size,
+                              'size_human': human(stt.st_size),
+                              'modified': datetime.fromtimestamp(stt.st_mtime).isoformat(),
                               'category': cat, 'hash': h,
                               'is_critical': cat == 'critical', 'is_important': rel in imp,
                               'extension': os.path.splitext(n)[1].lower(),
@@ -401,6 +526,8 @@ def scan_project():
         if len(g) > 1:
             f['is_duplicate'] = True
             f['duplicates'] = [x for x in g if x != f['path']]
+    for f in files:
+        f['cleanup'] = get_cleanup_recommendation(f)
     total = sum(f['size'] for f in files)
     st = {'total': len(files), 'total_size': total, 'total_size_human': human(total),
           'by_category': {}, 'by_extension': {},
@@ -409,7 +536,9 @@ def scan_project():
           'critical_count': len([f for f in files if f['is_critical']]),
           'important_count': len([f for f in files if f['is_important']]),
           'trash_count': len([f for f in files if f['category'] == 'trash']),
-          'backup_count': len([f for f in files if f['category'] == 'backup'])}
+          'backup_count': len([f for f in files if f['category'] == 'backup']),
+          'cleanup_delete_count': len([f for f in files if f['cleanup']['action'] == 'delete']),
+          'cleanup_review_count': len([f for f in files if f['cleanup']['action'] == 'review'])}
     for f in files:
         st['by_category'][f['category']] = st['by_category'].get(f['category'], 0) + 1
         st['by_extension'][f['extension']] = st['by_extension'].get(f['extension'], 0) + 1
@@ -448,7 +577,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': '3.3.0 DISK-READER',
+                         'version': '3.4.2 CONTEXT-DIFF',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
@@ -530,6 +659,11 @@ def s_pprev(payload: dict):
     return JSONResponse(preview_patch(payload))
 
 
+@app.post('/api/patches/test-apply')
+def s_ptest(payload: dict):
+    return JSONResponse(test_apply(payload))
+
+
 @app.post('/api/patches/apply')
 def s_papply(payload: dict):
     return JSONResponse(apply_patch(payload))
@@ -585,7 +719,11 @@ def s_pall(payload: dict = {}):
 
 @app.get('/api/project/scan')
 def s_scan():
-    return JSONResponse(scan_project())
+    try:
+        return JSONResponse(scan_project())
+    except Exception as e:
+        log('Scan error: ' + str(e), 'ERROR')
+        return JSONResponse({'success': False, 'error': str(e), 'files': [], 'stats': {}})
 
 
 @app.get('/api/project/file')
@@ -660,11 +798,11 @@ def s_restart():
 def create_ui():
     ui.dark_mode().enable()
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.3.0 DISK-READER').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.4.2 CONTEXT-DIFF').classes('text-xl font-bold')
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    log('Starting drmAIcu Core v3.3.0 DISK-READER...')
+    log('Starting drmAIcu Core v3.4.2 CONTEXT-DIFF...')
     get_engine()
     create_ui()
     ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)
