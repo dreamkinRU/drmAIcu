@@ -39,7 +39,10 @@
   "description": "Описание изменений",
   "operations": [
     {"type": "full_replace", "target_file": "file1.md", "full_file_content": "..."},
-    {"type": "unified_diff", "target_file": "file2.py", "diff": "..."}
+    {"type": "unified_diff", "target_file": "file2.py", "diff": "..."},
+    {"type": "search_and_replace", "target_file": "file3.tsx", "find": "старый_текст", "replace": "новый_текст"}
   ]
 }
+
+💡 **Совет**: Используйте `search_and_replace` для коротких, точных замен (1-5 строк). Движок автоматически игнорирует различия между Windows (CRLF) и Unix (LF) переносами строк, что делает его намного надёжнее `unified_diff` для мелких правок и исправления опечаток.
 ```

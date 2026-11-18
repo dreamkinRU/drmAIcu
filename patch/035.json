@@ -1,9 +1,0 @@
-{
-  "patch_id": "035",
-  "type": "unified_diff",
-  "target_file": "src/App.tsx",
-  "description": "Исправлена гонка восстановления прокрутки: значение не удаляется пока projectFiles не загружен, scrollTo выполняется через requestAnimationFrame после рендера DOM.",
-  "author": "Qwen",
-  "created_at": "2026-11-19T01:45:00",
-  "diff": "--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -121,7 +121,12 @@\n   // Восстановление позиции прокрутки после обновления или перезагрузки\n   useEffect(() => {\n+    if (projectFiles.length === 0) return;\n     const savedScroll = localStorage.getItem('drmScrollPos');\n     if (savedScroll) {\n-      window.scrollTo(0, parseInt(savedScroll, 10)); localStorage.removeItem('drmScrollPos');\n+      const target = parseInt(savedScroll, 10);\n+      requestAnimationFrame(() => {\n+        window.scrollTo(0, target);\n+        localStorage.removeItem('drmScrollPos');\n+      });\n     }\n   }, [activeTab, projectFiles]);"
-}

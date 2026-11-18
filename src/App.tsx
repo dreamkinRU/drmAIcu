@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 
 interface Agent { id: number; name: string; status: 'active' | 'frozen' | 'offline'; task: string; stack: string[]; progress: number; lastActivity: string; enabled: boolean; description: string; }
 interface Provider { name: string; status: 'online' | 'offline' | 'error'; latency: number; models: number; description: string; url: string; enabled: boolean; apiKey?: string; getKeyUrl?: string; }
@@ -109,7 +109,7 @@ export default function App() {
   const [projectFileContent, setProjectFileContent] = useState('');
   const [projectFileLoading, setProjectFileLoading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  
+
   // ===== НОВОЕ: Переключатели видимости категорий =====
   const [showCritical, setShowCritical] = useState(false);
   const [showImportant, setShowImportant] = useState(true);
@@ -125,17 +125,21 @@ export default function App() {
       history.scrollRestoration = 'manual';
     }
 
-    if (projectFiles.length === 0) return;
-    const savedScroll = localStorage.getItem('drmScrollPos');
-    if (savedScroll) {
-      const target = parseInt(savedScroll, 10);
-      setTimeout(() => {
-        window.scrollTo({ top: target, behavior: 'auto' });
-        localStorage.removeItem('drmScrollPos');
-      }, 100);
+    if (activeTab === 'project' && projectFiles.length > 0) {
+      const saved = localStorage.getItem('drm_scroll_project');
+      if (saved) {
+        window.scrollTo({ top: parseInt(saved, 10), behavior: 'auto' });
+        localStorage.removeItem('drm_scroll_project');
+      }
     }
-  }, [activeTab, projectFiles]);
-
+    if (activeTab === 'patches' && patches.length > 0) {
+      const saved = localStorage.getItem('drm_scroll_patches');
+      if (saved) {
+        window.scrollTo({ top: parseInt(saved, 10), behavior: 'auto' });
+        localStorage.removeItem('drm_scroll_patches');
+      }
+    }
+  }, [activeTab, projectFiles, patches]);
   const checkOllama = async () => {
     try {
       const controller = new AbortController();
@@ -296,8 +300,8 @@ export default function App() {
     }
     alert(`Очищено: ${successCount} из ${toDelete.length} файлов`);
     setCleanupMode(false);
-    localStorage.setItem('drmScrollPos', window.scrollY.toString());
-    scanProject();
+    localStorage.setItem('drm_scroll_project', window.scrollY.toString());
+    setProjectFiles(prev => prev.filter(f => f.cleanup?.action !== 'delete'));
   };
 
   const scanProject = async () => {
@@ -323,7 +327,10 @@ export default function App() {
     try {
       const res = await fetch('/api/project/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });
       const data = await res.json();
-      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); scanProject(); }
+      if (data.success) {
+        localStorage.setItem('drm_scroll_project', window.scrollY.toString());
+        setProjectFiles(prev => prev.filter(f => f.path !== file.path));
+      }
     } catch (e) { alert('Ошибка сети'); }
   };
   const deleteProjectFile = async (file: ProjectFile) => {
@@ -332,10 +339,19 @@ export default function App() {
     try {
       const res = await fetch('/api/project/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });
       const data = await res.json();
-      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) {
+        localStorage.setItem('drm_scroll_project', window.scrollY.toString());
+        setProjectFiles(prev => prev.filter(f => f.path !== file.path));
+      } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); }
   };
-  const toggleImportant = async (file: ProjectFile) => { try { const res = await fetch('/api/project/important', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path, action: 'toggle'}) }); const data = await res.json(); if (data.success) { scanProject(); } } catch (e) { console.error(e); } };
+  const toggleImportant = async (file: ProjectFile) => {
+    try {
+      const res = await fetch('/api/project/important', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path, action: 'toggle'}) });
+      const data = await res.json();
+      if (data.success) { setProjectFiles(prev => prev.map(f => f.path === file.path ? {...f, is_important: !f.is_important} : f)); }
+    } catch (e) { console.error(e); }
+  };
 
   const getCategoryColor = (cat: string) => {
     const colors: Record<string, string> = { critical: 'bg-red-500/20 text-red-400 border-red-500/30', code: 'bg-blue-500/20 text-blue-400 border-blue-500/30', config: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', docs: 'bg-purple-500/20 text-purple-400 border-purple-500/30', backup: 'bg-gray-500/20 text-gray-400 border-gray-500/30', archive: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', trash: 'bg-orange-500/20 text-orange-400 border-orange-500/30', logs: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', scripts: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', web: 'bg-pink-500/20 text-pink-400 border-pink-500/30', other: 'bg-gray-700/20 text-gray-400 border-gray-600', error: 'bg-red-500/20 text-red-400 border-red-500/30' };
@@ -377,20 +393,6 @@ export default function App() {
   const codeTasks = taskList.filter(t => t.category === 'code');
   const generalTasks = taskList.filter(t => t.category === 'general');
 
-  const tabs = [
-    { id: 'console' as const, label: 'Консоль', icon: '▶', tooltip: 'Отправка запросов к LLM' },
-    { id: 'panel' as const, label: 'Панель', icon: '◈', tooltip: 'Общая статистика системы' },
-    { id: 'project' as const, label: 'Проект', icon: '🗂', tooltip: 'Анализ и очистка файлов' },
-    { id: 'agents' as const, label: 'Агенты', icon: '🤖', tooltip: 'Управление AI-агентами' },
-    { id: 'providers' as const, label: 'Провайдеры', icon: '🌐', tooltip: 'Настройка LLM провайдеров' },
-    { id: 'models' as const, label: 'Модели', icon: '🧠', tooltip: 'Управление моделями Ollama' },
-    { id: 'md' as const, label: 'MD', icon: '📝', tooltip: 'Редактор документации' },
-    { id: 'code' as const, label: 'Код', icon: '⟨⟩', badge: codeIssues.filter(i => !i.fixed).length, tooltip: 'Анализ и исправление ошибок' },
-    { id: 'patches' as const, label: 'Патчи', icon: '🔄', badge: patchStats.pending, tooltip: 'Система автопатчей' },
-    { id: 'logs' as const, label: 'Логи', icon: '▤', tooltip: 'Системные события' },
-    { id: 'tasks' as const, label: 'Задачи', icon: '☑', tooltip: 'Список задач' },
-  ];
-
   // ===== НОВОЕ: Фильтрация с учётом переключателей =====
   const filteredProjectFiles = projectFiles.filter(f => {
     if (projectFilter !== 'all' && f.category !== projectFilter) return false;
@@ -410,7 +412,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <Tooltip text={ollamaStatus === 'online' ? `✅ Ollama онлайн • ${ollamaModels.length} моделей` : '❌ Ollama не запущен'} position="bottom">
-              <div className="flex items-center gap-3 cursor-pointer">
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('console')}>
                 <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-500 via-cyan-500 to-blue-500 flex items-center justify-center font-bold text-sm shadow-lg shadow-emerald-500/30">AI</div>
                 <div>
                   <h1 className="text-lg font-bold gradient-text leading-tight">drmAIcu</h1>
@@ -420,82 +422,82 @@ export default function App() {
             </Tooltip>
             <div className="flex items-center gap-3 flex-1 justify-center">
               <Tooltip text={`${agents.filter(a => a.enabled).length} агентов`} position="bottom">
-                <button onClick={() => setActiveTab('agents')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-emerald-500/50 transition-all">
+                                <button onClick={() => setActiveTab('agents')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-emerald-500/50 transition-all">
                   <span className="text-xl">🤖</span>
                   <div className="text-left">
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-emerald-400 text-lg">{agents.filter(a => a.enabled).length}</span><span className="text-gray-500 text-sm">/{agents.length}</span></div>
                     <p className="text-[10px] text-gray-500">Агенты</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-emerald-400 text-lg">{agents.filter(a => a.enabled).length}</span><span className="text-gray-500 text-sm">/{agents.length}</span></div>
                   </div>
                 </button>
               </Tooltip>
               <Tooltip text={`${providers.filter(p => p.status === 'online').length} провайдеров`} position="bottom">
-                <button onClick={() => setActiveTab('providers')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-cyan-500/50 transition-all">
+                                <button onClick={() => setActiveTab('providers')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-cyan-500/50 transition-all">
                   <span className="text-xl">🌐</span>
                   <div className="text-left">
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-cyan-400 text-lg">{providers.filter(p => p.status === 'online').length}</span><span className="text-gray-500 text-sm">/{providers.length}</span></div>
                     <p className="text-[10px] text-gray-500">Провайдеры</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-cyan-400 text-lg">{providers.filter(p => p.status === 'online').length}</span><span className="text-gray-500 text-sm">/{providers.length}</span></div>
                   </div>
                 </button>
               </Tooltip>
               <Tooltip text={`${projectStats?.total || 0} файлов`} position="bottom">
-                <button onClick={() => setActiveTab('project')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-orange-500/50 transition-all">
+                                <button onClick={() => setActiveTab('project')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-orange-500/50 transition-all">
                   <span className="text-xl">🗂</span>
                   <div className="text-left">
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-orange-400 text-lg">{projectStats?.total || 0}</span></div>
                     <p className="text-[10px] text-gray-500">Файлов</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-orange-400 text-lg">{projectStats?.total || 0}</span></div>
                   </div>
                 </button>
               </Tooltip>
               <Tooltip text={`${installedModels.length} моделей`} position="bottom">
-                <button onClick={() => setActiveTab('models')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-purple-500/50 transition-all">
+                                <button onClick={() => setActiveTab('models')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-purple-500/50 transition-all">
                   <span className="text-xl">🧠</span>
                   <div className="text-left">
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-purple-400 text-lg">{installedModels.length}</span></div>
                     <p className="text-[10px] text-gray-500">Модели</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-purple-400 text-lg">{installedModels.length}</span></div>
                   </div>
                 </button>
               </Tooltip>
               <Tooltip text={`${patchStats.pending || 0} патчей`} position="bottom">
-                <button onClick={() => setActiveTab('patches')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-yellow-500/50 transition-all">
+                                <button onClick={() => setActiveTab('patches')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-yellow-500/50 transition-all">
                   <span className="text-xl">🔄</span>
                   <div className="text-left">
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-yellow-400 text-lg">{patchStats.pending || 0}</span></div>
                     <p className="text-[10px] text-gray-500">Патчи</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-yellow-400 text-lg">{patchStats.pending || 0}</span></div>
                   </div>
                 </button>
               </Tooltip>
               <Tooltip text={`${codeIssues.filter(i => !i.fixed).length} ошибок`} position="bottom">
-                <button onClick={() => setActiveTab('code')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-red-500/50 transition-all">
+                                <button onClick={() => setActiveTab('code')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-red-500/50 transition-all">
                   <span className="text-xl">⟨⟩</span>
                   <div className="text-left">
-                    <span className="font-bold text-red-400 text-lg">{codeIssues.filter(i => !i.fixed).length}</span>
                     <p className="text-[10px] text-gray-500">Код</p>
+                    <span className="font-bold text-red-400 text-lg">{codeIssues.filter(i => !i.fixed).length}</span>
                   </div>
                 </button>
               </Tooltip>
               <Tooltip text={`${completedTasks}/${taskList.length} задач`} position="bottom">
-                <button onClick={() => setActiveTab('tasks')} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-yellow-500/50 transition-all">
+                <button onClick={() => setActiveTab('tasks')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-yellow-500/50 transition-all">
                   <span className="text-xl">☑</span>
                   <div className="text-left">
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-yellow-400 text-lg">{completedTasks}</span><span className="text-gray-500 text-sm">/{taskList.length}</span></div>
                     <p className="text-[10px] text-gray-500">Задачи</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-yellow-400 text-lg">{completedTasks}</span><span className="text-gray-500 text-sm">/{taskList.length}</span></div>
                   </div>
                 </button>
               </Tooltip>
             </div>
             <div className="flex items-center gap-3">
               <Tooltip text={ollamaProcesses.length > 0 ? ollamaProcesses.map(m => `${m.name}: ${m.size}MB RAM`).join('\n') : 'Нет моделей'} position="bottom">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
-                  <span className="text-xs text-gray-500">RAM:</span>
-                  <span className={`font-mono font-bold text-sm ${totalRam > 0 ? 'text-emerald-400' : 'text-gray-600'}`}>{totalRam}MB</span>
-                  <span className="text-gray-600">|</span>
-                  <span className="text-xs text-gray-500">VRAM:</span>
-                  <span className={`font-mono font-bold text-sm ${totalVram > 0 ? 'text-cyan-400' : 'text-gray-600'}`}>{totalVram}MB</span>
+                <div className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">RAM:</span>
+                    <span className={`font-mono font-bold text-sm ${totalRam > 0 ? 'text-emerald-400' : 'text-gray-600'}`}>{totalRam}MB</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">VRAM:</span>
+                    <span className={`font-mono font-bold text-sm ${totalVram > 0 ? 'text-cyan-400' : 'text-gray-600'}`}>{totalVram}MB</span>
+                  </div>
                 </div>
               </Tooltip>
-              <div className="px-4 py-2 rounded-lg bg-gray-800/50 border-2 border-emerald-500/30">
-                <span className="font-mono text-lg text-emerald-400 tabular-nums font-bold">{currentTime.toLocaleTimeString('ru-RU')}</span>
-              </div>
               <Tooltip text="Перезапустить Python и React" position="bottom">
                 <button onClick={restartSystem} disabled={restarting} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${restarting ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-orange-500/20 border border-orange-500/50 text-orange-400 hover:bg-orange-500/30'}`}>
                   {restarting ? '⏳ Перезапуск...' : '🔄 Перезапуск'}
@@ -504,20 +506,9 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 flex items-center gap-2 overflow-x-auto border-t border-gray-800">
-          {tabs.map((tab) => (
-            <Tooltip key={tab.id} text={tab.tooltip} position="bottom">
-              <button onClick={() => setActiveTab(tab.id)} className={`px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === tab.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
-                <span className="text-base">{tab.icon}</span>
-                <span>{tab.label}</span>
-                {tab.badge ? <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold">{tab.badge}</span> : null}
-              </button>
-            </Tooltip>
-          ))}
-        </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full pb-16">
         {activeTab === 'console' && (
           <div className="space-y-6">
             <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-gray-900/80 to-gray-800/50 p-6">
@@ -769,7 +760,13 @@ export default function App() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => { navigator.clipboard.writeText('ollama serve'); }} className="px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-bold">▶ Запуск</button>
-                  <button onClick={() => setActiveTab('models')} className="px-3 py-2 rounded-lg bg-purple-500/20 border border-purple-500/50 text-purple-400 text-xs font-bold">🧠 Модели</button>
+                                  <button onClick={() => setActiveTab('models')} className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-purple-500/50 transition-all">
+                  <span className="text-xl">🧠</span>
+                  <div className="text-left">
+                    <p className="text-[10px] text-gray-500">Модели</p>
+                    <div className="flex items-baseline gap-1"><span className="font-bold text-purple-400 text-lg">{installedModels.length}</span></div>
+                  </div>
+                </button>
                 </div>
               </div>
               <input type="text" value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm font-mono mb-3" />
@@ -939,22 +936,17 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-t border-gray-800 bg-gray-900/50 shrink-0">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between text-xs text-gray-600">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span>🤖 {agents.filter(a => a.enabled).length} агентов</span>
-            <span>•</span>
-            <span>🌐 {providers.filter(p => p.status === 'online').length} провайдеров</span>
-            <span>•</span>
-            <span>🗂 {projectStats?.total || 0} файлов</span>
-            <span>•</span>
-            <span>🧠 {installedModels.length} моделей</span>
-            <span>•</span>
-            <span>🔄 {patchStats.pending || 0} патчей</span>
-            <span>•</span>
-            <span>☑ {completedTasks}/{taskList.length} задач</span>
+      <footer className="fixed bottom-0 left-0 right-0 border-t border-gray-800 bg-gray-900/95 backdrop-blur-sm py-3 px-4 z-50">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setActiveTab('md')} className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+              <span>📝</span> MD
+            </button>
+            <button onClick={() => setActiveTab('logs')} className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+              <span>▤</span> Логи
+            </button>
           </div>
-          <span>v.3.4.3 TOGGLES • dreamkin • 2026</span>
+          <span>v.3.5.0 MULTI-ATOMIC • dreamkin • 2026</span>
         </div>
       </footer>
     </div>

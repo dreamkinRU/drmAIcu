@@ -191,6 +191,26 @@ def validate(name, code):
     return True, None
 
 
+def apply_search_replace(content, find, replace):
+    """Точечная замена подстроки с авто-нормализацией переносов строк (Windows \r\n <-> Unix \n)."""
+    # Определяем тип переносов в файле
+    crlf = '\r\n' in content
+    # Нормализуем все три строки к \n для поиска
+    content_n = content.replace('\r\n', '\n')
+    find_n = find.replace('\r\n', '\n')
+    replace_n = replace.replace('\r\n', '\n')
+    if find_n not in content_n:
+        raise ValueError('Подстрока не найдена в файле (после нормализации переносов). Фрагмент: ' + find_n[:80] + '... Проверьте точное совпадение.')
+    count = content_n.count(find_n)
+    if count > 1:
+        raise ValueError(f'Подстрока найдена {count} раз. Уточните контекст для уникальности.')
+    new_content = content_n.replace(find_n, replace_n)
+    # Возвращаем исходный тип переносов, если файл был Windows
+    if crlf:
+        new_content = new_content.replace('\n', '\r\n')
+    return new_content
+
+
 def find_patch_file(pid, fname=''):
     if fname:
         p = os.path.join(PATCH_DIR, fname)
@@ -238,7 +258,7 @@ def normalize_ops(data):
     ops = data.get('operations')
     if isinstance(ops, list) and ops:
         return ops
-    return [{k: data.get(k) for k in ('type', 'target_file', 'diff', 'full_file_content') if data.get(k) is not None}]
+    return [{k: data.get(k) for k in ('type', 'target_file', 'diff', 'full_file_content', 'find', 'replace') if data.get(k) is not None}]
 
 
 def list_patches():
@@ -260,7 +280,7 @@ def list_patches():
             pid = str(d.get('patch_id', f[:-5]))
             ops = normalize_ops(d)
             multi = isinstance(d.get('operations'), list) and len(d.get('operations')) > 1
-            pt = 'multi' if multi else (d.get('type', '') or ('unified_diff' if d.get('diff') else 'full_replace'))
+            pt = 'multi' if multi else (d.get('type', '') or ('search_and_replace' if d.get('find') else ('unified_diff' if d.get('diff') else 'full_replace')))
             targets = [str(o.get('target_file', 'unknown')) for o in ops]
             if multi:
                 tgt = targets[0] + ' +' + str(len(targets) - 1) + ' (' + str(len(targets)) + ' файлов)'
@@ -312,6 +332,15 @@ def compute_new(o):
             new = apply_diff(read_text(path), d)
         except Exception as e:
             return None, None, 'Diff не применим (' + tgt + '): ' + str(e)
+    elif pt == 'search_and_replace':
+        find = o.get('find', '')
+        replace = o.get('replace', '')
+        if not find:
+            return None, None, 'Нет find для search_and_replace'
+        try:
+            new = apply_search_replace(read_text(path), find, replace)
+        except Exception as e:
+            return None, None, 'Search and replace не применим (' + tgt + '): ' + str(e)
     else:
         new = o.get('full_file_content', '')
         if not new:
