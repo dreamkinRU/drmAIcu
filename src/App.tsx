@@ -66,7 +66,11 @@ export default function App() {
   const [codeIssues, setCodeIssues] = useState<CodeIssue[]>(initialCodeIssues);
   const [taskList, setTaskList] = useState<Task[]>(initialTasks);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'console' | 'panel' | 'agents' | 'providers' | 'models' | 'md' | 'code' | 'logs' | 'tasks' | 'patches' | 'project'>('console');
+  const [activeTab, setActiveTab] = useState<'console' | 'panel' | 'agents' | 'providers' | 'models' | 'md' | 'code' | 'logs' | 'tasks' | 'patches' | 'project'>(() => {
+    const saved = localStorage.getItem('drmActiveTab') as 'console' | 'panel' | 'agents' | 'providers' | 'models' | 'md' | 'code' | 'logs' | 'tasks' | 'patches' | 'project' | null;
+    return saved || 'console';
+  });
+  useEffect(() => { localStorage.setItem('drmActiveTab', activeTab); }, [activeTab]);
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [providerMode, setProviderMode] = useState<'ollama' | 'groq' | 'all'>('all');
   const [consolePrompt, setConsolePrompt] = useState('');
