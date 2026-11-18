@@ -120,11 +120,21 @@ export default function App() {
 
   // Восстановление позиции прокрутки после обновления или перезагрузки
   useEffect(() => {
+    // Отключаем нативное восстановление прокрутки браузера, которое может конфликтовать
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+
+    if (projectFiles.length === 0) return;
     const savedScroll = localStorage.getItem('drmScrollPos');
     if (savedScroll) {
-      window.scrollTo(0, parseInt(savedScroll, 10)); localStorage.removeItem('drmScrollPos');
+      const target = parseInt(savedScroll, 10);
+      setTimeout(() => {
+        window.scrollTo({ top: target, behavior: 'auto' });
+        localStorage.removeItem('drmScrollPos');
+      }, 100);
     }
-  }, [activeTab]);
+  }, [activeTab, projectFiles]);
 
   const checkOllama = async () => {
     try {
@@ -291,12 +301,11 @@ export default function App() {
   };
 
   const scanProject = async () => {
-    setProjectLoading(true);
     try {
       const res = await fetch('/api/project/scan');
       const data = await res.json();
       if (data.files) { setProjectFiles(data.files); setProjectStats(data.stats); }
-    } catch (e) { console.error(e); } finally { setProjectLoading(false); }
+    } catch (e) { console.error(e); }
   };
   const openProjectFilePreview = async (file: ProjectFile) => {
     setSelectedProjectFile(file);

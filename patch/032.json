@@ -1,9 +1,0 @@
-{
-  "patch_id": "032",
-  "type": "unified_diff",
-  "target_file": "src/App.tsx",
-  "description": "Убран спиннер загрузки при обновлении списка файлов. Прокрутка сохраняется естественно.",
-  "author": "Qwen",
-  "created_at": "2026-11-19T01:15:00",
-  "diff": "--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -293,8 +293,6 @@\n   const scanProject = async () => {\n-    setProjectLoading(true);\n     try {\n       const res = await fetch('/api/project/scan');\n       const data = await res.json();\n       if (data.files) { setProjectFiles(data.files); setProjectStats(data.stats); }\n     } catch (e) { console.error(e); }\n-    finally { setProjectLoading(false); }\n   };\n   const openProjectFilePreview = async (file: ProjectFile) => {"
-}

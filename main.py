@@ -167,7 +167,9 @@ def apply_diff(content, diff):
             p2 = find_block(lines, new_block, old_start - 1)
             if p2 != -1:
                 continue
-            raise ValueError('Ханк не найден: контекст не совпадает (подсказка строки ' + str(old_start) + '). Файл изменён — патч устарел.')
+            hint = max(0, old_start - 1)
+            real = lines[hint:hint + max(1, len(old_block))]
+            raise ValueError('Ханк не найден (подсказка строки ' + str(old_start) + '): ожидалось ' + str(len(old_block)) + ' строк; РЕАЛЬНО в файле: ' + json.dumps(real, ensure_ascii=False)[:800])
         ops.append((pos, pos + len(old_block), new_block))
     for start, end, nb in sorted(ops, key=lambda x: -x[0]):
         lines = lines[:start] + nb + lines[end:]
