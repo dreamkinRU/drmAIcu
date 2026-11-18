@@ -118,6 +118,14 @@ export default function App() {
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
 
+  // Восстановление позиции прокрутки после обновления или перезагрузки
+  useEffect(() => {
+    const savedScroll = localStorage.getItem('drmScrollPos');
+    if (savedScroll) {
+      window.scrollTo(0, parseInt(savedScroll, 10)); localStorage.removeItem('drmScrollPos');
+    }
+  }, [activeTab]);
+
   const checkOllama = async () => {
     try {
       const controller = new AbortController();
@@ -278,6 +286,7 @@ export default function App() {
     }
     alert(`Очищено: ${successCount} из ${toDelete.length} файлов`);
     setCleanupMode(false);
+    localStorage.setItem('drmScrollPos', window.scrollY.toString());
     scanProject();
   };
 
@@ -302,11 +311,10 @@ export default function App() {
   };
   const archiveProjectFile = async (file: ProjectFile) => {
     if (file.is_critical) { alert('Нельзя архивировать критичный файл!'); return; }
-    if (!confirm(`Архивировать ${file.path}?`)) return;
     try {
       const res = await fetch('/api/project/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });
       const data = await res.json();
-      if (data.success) { alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); scanProject(); }
     } catch (e) { alert('Ошибка сети'); }
   };
   const deleteProjectFile = async (file: ProjectFile) => {
@@ -315,7 +323,7 @@ export default function App() {
     try {
       const res = await fetch('/api/project/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });
       const data = await res.json();
-      if (data.success) { alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); }
   };
   const toggleImportant = async (file: ProjectFile) => { try { const res = await fetch('/api/project/important', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path, action: 'toggle'}) }); const data = await res.json(); if (data.success) { scanProject(); } } catch (e) { console.error(e); } };

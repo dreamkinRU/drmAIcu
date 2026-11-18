@@ -66,7 +66,11 @@ export default function App() {
   const [codeIssues, setCodeIssues] = useState<CodeIssue[]>(initialCodeIssues);
   const [taskList, setTaskList] = useState<Task[]>(initialTasks);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'console' | 'panel' | 'agents' | 'providers' | 'models' | 'md' | 'code' | 'logs' | 'tasks' | 'patches' | 'project'>('console');
+  const [activeTab, setActiveTab] = useState<'console' | 'panel' | 'agents' | 'providers' | 'models' | 'md' | 'code' | 'logs' | 'tasks' | 'patches' | 'project'>(() => {
+    const saved = localStorage.getItem('drmActiveTab') as 'console' | 'panel' | 'agents' | 'providers' | 'models' | 'md' | 'code' | 'logs' | 'tasks' | 'patches' | 'project' | null;
+    return saved || 'console';
+  });
+  useEffect(() => { localStorage.setItem('drmActiveTab', activeTab); }, [activeTab]);
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [providerMode, setProviderMode] = useState<'ollama' | 'groq' | 'all'>('all');
   const [consolePrompt, setConsolePrompt] = useState('');
@@ -113,6 +117,14 @@ export default function App() {
   const [showDuplicates, setShowDuplicates] = useState(true);
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
+
+  // Восстановление позиции прокрутки после обновления или перезагрузки
+  useEffect(() => {
+    const savedScroll = localStorage.getItem('drmScrollPos');
+    if (savedScroll) {
+      setTimeout(() => { window.scrollTo(0, parseInt(savedScroll, 10)); localStorage.removeItem('drmScrollPos'); }, 100);
+    }
+  }, [activeTab]);
 
   const checkOllama = async () => {
     try {
@@ -274,6 +286,7 @@ export default function App() {
     }
     alert(`Очищено: ${successCount} из ${toDelete.length} файлов`);
     setCleanupMode(false);
+    localStorage.setItem('drmScrollPos', window.scrollY.toString());
     scanProject();
   };
 
@@ -302,7 +315,7 @@ export default function App() {
     try {
       const res = await fetch('/api/project/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });
       const data = await res.json();
-      if (data.success) { alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); }
   };
   const deleteProjectFile = async (file: ProjectFile) => {
@@ -311,7 +324,7 @@ export default function App() {
     try {
       const res = await fetch('/api/project/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });
       const data = await res.json();
-      if (data.success) { alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); }
   };
   const toggleImportant = async (file: ProjectFile) => { try { const res = await fetch('/api/project/important', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path, action: 'toggle'}) }); const data = await res.json(); if (data.success) { scanProject(); } } catch (e) { console.error(e); } };

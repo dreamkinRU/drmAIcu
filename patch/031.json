@@ -1,0 +1,9 @@
+{
+  "patch_id": "031",
+  "type": "unified_diff",
+  "target_file": "src/App.tsx",
+  "description": "Мгновенное восстановление прокрутки без задержки. Убраны диалоги подтверждения и результата при архивировании файлов.",
+  "author": "Qwen",
+  "created_at": "2026-11-19T01:00:00",
+  "diff": "--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -121,7 +121,7 @@\n   useEffect(() => {\n     const savedScroll = localStorage.getItem('drmScrollPos');\n     if (savedScroll) {\n-      setTimeout(() => { window.scrollTo(0, parseInt(savedScroll, 10)); localStorage.removeItem('drmScrollPos'); }, 100);\n+      window.scrollTo(0, parseInt(savedScroll, 10)); localStorage.removeItem('drmScrollPos');\n     }\n   }, [activeTab]);\n \n@@ -308,10 +308,9 @@\n   const archiveProjectFile = async (file: ProjectFile) => {\n     if (file.is_critical) { alert('Нельзя архивировать критичный файл!'); return; }\n-    if (!confirm(`Архивировать ${file.path}?`)) return;\n     try {\n       const res = await fetch('/api/project/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({path: file.path}) });\n       const data = await res.json();\n-      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); alert(data.message); scanProject(); } else { alert('Ошибка: ' + data.error); }\n+      if (data.success) { localStorage.setItem('drmScrollPos', window.scrollY.toString()); scanProject(); }\n     } catch (e) { alert('Ошибка сети'); }\n   };\n   const deleteProjectFile = async (file: ProjectFile) => {"
+}

@@ -417,6 +417,50 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_203007_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "030",
+      "target_file": "src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "576c4da8551bafb261a8464d80a9a9049140a605ee21c9dce25a31b23a0fc5c9",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_204952.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_204952_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-18T20:49:52.533998",
+      "checksum": "d324e38e9d7c109b199f32a1bca52efd39db9a934cb894a00a8dc240c031935b",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_204952.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_204952_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "031",
+      "target_file": "src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "055abc02ba80c0adb9c1220b84eb3b097bcbb5976d7bd062962c882ea713b5b9",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_205255.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_205255_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-18T20:52:55.511368",
+      "checksum": "33aeb8f30b8c0cff49462d808791aade184b59905a70b21e77e175ec0b5437c9",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_205255.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_205255_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -614,6 +658,22 @@
         "src/App.tsx"
       ],
       "timestamp": "2026-11-18T20:30:07.731543"
+    },
+    {
+      "action": "apply",
+      "patch_id": "030",
+      "files": [
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-18T20:49:52.533998"
+    },
+    {
+      "action": "apply",
+      "patch_id": "031",
+      "files": [
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-18T20:52:55.511368"
     }
   ],
   "rollbacks": []
