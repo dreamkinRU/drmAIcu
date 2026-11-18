@@ -226,7 +226,7 @@ export default function App() {
           filename: patch.filename
         }) });
       const data = await res.json();
-      if (data.success) { setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ ${data.message}`]); alert('Патч применен! Перезагрузка...'); setTimeout(() => window.location.reload(), 2000); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) { setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ ${data.message}`]); alert(data.message + '\nСписок патчей обновлен.'); loadPatches(); } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); } finally { setApplyingPatch(false); }
   };
   const rollbackLastPatch = async () => {
@@ -234,12 +234,12 @@ export default function App() {
     try {
       const res = await fetch('/api/patches/rollback', {method: 'POST'});
       const data = await res.json();
-      if (data.success) { alert(data.message); window.location.reload(); } else { alert('Ошибка: ' + data.error); }
+      if (data.success) { alert(data.message + '\nСписок патчей обновлен.'); loadPatches(); } else { alert('Ошибка: ' + data.error); }
     } catch (e) { alert('Ошибка сети'); }
   };
   const archivePatch = async (filename: string) => { try { const res = await fetch('/api/patches/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({filename}) }); const data = await res.json(); if (data.success) { loadPatches(); setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] 📦 ${data.message}`]); } } catch (e) { alert('Ошибка сети'); } };
   const deletePatch = async (filename: string) => { if (!confirm(`Удалить ${filename}?`)) return; try { const res = await fetch('/api/patches/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({filename}) }); const data = await res.json(); if (data.success) { loadPatches(); setPatchLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🗑 ${data.message}`]); } } catch (e) { alert('Ошибка сети'); } };
-  const applyAllPending = async () => { if (!confirm(`Применить все патчи (${patchStats.pending} шт.)?`)) return; setApplyingPatch(true); try { const res = await fetch('/api/patches/apply-all', {method: 'POST'}); const data = await res.json(); if (data.success) { alert(`Применено: ${data.results.filter((r: any) => r.success).length}`); window.location.reload(); } } catch (e) { alert('Ошибка сети'); } finally { setApplyingPatch(false); } };
+  const applyAllPending = async () => { if (!confirm(`Применить все патчи (${patchStats.pending} шт.)?`)) return; setApplyingPatch(true); try { const res = await fetch('/api/patches/apply-all', {method: 'POST'}); const data = await res.json(); if (data.success) { alert(`Применено: ${data.results.filter((r: any) => r.success).length}\nСписок патчей обновлен.`); loadPatches(); } } catch (e) { alert('Ошибка сети'); } finally { setApplyingPatch(false); } };
 
   
   const restartSystem = async () => {

@@ -373,6 +373,28 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261118_194517_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "028",
+      "target_file": "src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "1920340fac42f29d85612e4b65a79e9d1984d54f2743d4d66de274359a5ee817",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_200642.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_200642_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-18T20:06:42.027063",
+      "checksum": "13092afbd6da674ff8356bda2507d1c87ed42f1aa2ee0f8bf64f69b4abb85a3c",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_200642.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261118_200642_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -554,6 +576,14 @@
         "ARCHITECTURE.md"
       ],
       "timestamp": "2026-11-18T19:45:17.994410"
+    },
+    {
+      "action": "apply",
+      "patch_id": "028",
+      "files": [
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-18T20:06:42.027063"
     }
   ],
   "rollbacks": []
