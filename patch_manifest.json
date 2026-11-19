@@ -1854,6 +1854,358 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_20261119_130825_510203_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "085",
+      "target_file": "src/types/index.ts+src/utils/categories.ts+src/utils/storage.ts+src/utils/constants.ts",
+      "operations": [
+        {
+          "target_file": "src/types/index.ts",
+          "checksum": "ea230e49e93b1bf8c198b6a00e2009fc3c7fff660fbd6222ffe6749734384c72",
+          "backups": []
+        },
+        {
+          "target_file": "src/utils/categories.ts",
+          "checksum": "ad66b7840c5aa64a2a87f486d29ece350fd4819979e40c88151d38ae66e5f79b",
+          "backups": []
+        },
+        {
+          "target_file": "src/utils/storage.ts",
+          "checksum": "bcb2e74a845bcce79aa41bf9bc7a043def1c9a3c27e942fed92098d70afd023b",
+          "backups": []
+        },
+        {
+          "target_file": "src/utils/constants.ts",
+          "checksum": "9eb2eef0536764acc4986981115203c92e9235e39ffeed67c45e5df569770b2e",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T13:20:41.306723",
+      "checksum": "44949ab072075c4a5eb27cd595c1f562259bc915697c616a292fd324e1fd1a1b",
+      "backups": []
+    },
+    {
+      "patch_id": "086",
+      "target_file": "src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "d8d85fdbfafe9e7038aa77b667223ced3192d0ab7eb56031eef1cc4630c005ca",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_132856_217704.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_132856_217704_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T13:28:56.223218",
+      "checksum": "d756b5c0e5914b52ab1b650e6bd1ca528b26365999038fdf4636003985d14bfb",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_132856_217704.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_132856_217704_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "086",
+      "target_file": "src/services/api.ts+src/pages/Dashboard.tsx",
+      "operations": [
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "75d00b8e10b449f432e6f73521cd41137f5f489f3f5d178b9904b8a74bb33568",
+          "backups": []
+        },
+        {
+          "target_file": "src/pages/Dashboard.tsx",
+          "checksum": "70dc3a9cdf0337a48f4187f4fa00ae176063875806975e56503261e5a8be2d35",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T13:38:18.006190",
+      "checksum": "84a48bb0bfa4f03b6390354573b6753610048c9da53c1689eddfe2d10f4aa88b",
+      "backups": []
+    },
+    {
+      "patch_id": "087",
+      "target_file": "src/hooks/useLogs.ts+src/hooks/useCodeIssues.ts+src/hooks/useTasks.ts+src/hooks/useAgents.ts+src/hooks/useConsole.ts+src/hooks/useMD.ts+src/hooks/useOllama.ts+src/hooks/usePatches.ts+src/hooks/useProject.ts",
+      "operations": [
+        {
+          "target_file": "src/hooks/useLogs.ts",
+          "checksum": "3ac964ec1038d09f526091182df7caf95d24c46097607e88420822a26efbe431",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useCodeIssues.ts",
+          "checksum": "eb0e70332d7ec5f8c4049e72804da5794f86e8b7309bf342f6baa1c7c705acf2",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useTasks.ts",
+          "checksum": "fe89ef443e0b75e3c2fff467603c6e96c0cce673a6f3d13c835938aa90cb5e72",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useAgents.ts",
+          "checksum": "65596b627efd327c730501e7fc0b266ef936370ee08eecc27dc33105017ae8e9",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "93aec014e43191ed97d0162ee189289c4de37c1251bc8cc82a818bd5c4d1f972",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useMD.ts",
+          "checksum": "9b465b899fa5adf5978bbda69ddb1c3d19d04a48dac8bc6f34c62f6d02f0958d",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useOllama.ts",
+          "checksum": "5aa9ac071e56fc9166792ef0070394cae57d54ca8c329e0850db7bc35d1aa3e9",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/usePatches.ts",
+          "checksum": "beeb76c9243d47c01dbe831f65b48c0069e4cced978ba2cbe195bf8ed3929804",
+          "backups": []
+        },
+        {
+          "target_file": "src/hooks/useProject.ts",
+          "checksum": "5b5749806728fab3280e01d08062506b42bccf8415373e755fdd6abcd7c0c9f8",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T13:50:29.173221",
+      "checksum": "6500626c8736a0e6c014d19aa8cbbaf38bef573542dce537e90a05bc045095be",
+      "backups": []
+    },
+    {
+      "patch_id": "088",
+      "target_file": "src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "0c67974eee382e5b0ddf3bad21bf28895f033eb6b92f580d4204f832e11e357f",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_135454_033714.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_135454_033714_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T13:54:54.040859",
+      "checksum": "6dbe36a852a89f58292f6d32e8306f29596ebbc0b0ae809870ed206902b2aaad",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_135454_033714.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_135454_033714_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "089",
+      "target_file": "src/components/ui/Tooltip.tsx+src/components/ui/StatusBadge.tsx+src/components/ui/Modal.tsx+src/components/ui/Toggle.tsx+src/components/ui/Button.tsx",
+      "operations": [
+        {
+          "target_file": "src/components/ui/Tooltip.tsx",
+          "checksum": "36a97d42fa1952f587f04dc07fc7c1c842e8f7622ad4a425d0753df1530202ba",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/ui/StatusBadge.tsx",
+          "checksum": "6bcc31c53f8d0fc37c8ca9774821bb8ee65dd0b8246ad499fe83a5b9dc73b6ec",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/ui/Modal.tsx",
+          "checksum": "d8a63b530e99d22cd80b19939d36e77183721acfa817adb6053205825ef23e2d",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/ui/Toggle.tsx",
+          "checksum": "a14af5267515b0cea7d6968d1ead8d8d0238fca76d2112291bae77d7dea7fcdf",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/ui/Button.tsx",
+          "checksum": "464f7ecf9873f0946525e896c158761041e3eef7dc70b0ad0c9d0d6ef3d10b1b",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T13:57:55.423787",
+      "checksum": "41d262910b7d173efc4d6f7b09e90d93f6f1edfc5e85823e8940084a25bf85d0",
+      "backups": []
+    },
+    {
+      "patch_id": "090",
+      "target_file": "src/components/layout/Header.tsx+src/components/layout/Footer.tsx+src/components/layout/TabLayout.tsx",
+      "operations": [
+        {
+          "target_file": "src/components/layout/Header.tsx",
+          "checksum": "92a309c08736178ecadca927503ecf058b8a20b472759385af72bc0a5c7aa4ea",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/layout/Footer.tsx",
+          "checksum": "e47d96d0ded4e7387330b7597d6bff5eb4ab6afd31cca5877527e0237730601c",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/layout/TabLayout.tsx",
+          "checksum": "00b0dbbdff21d2bc087da47a9751eaabecd3009577dc4ad327919772af630f52",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T14:00:11.282580",
+      "checksum": "95d10ceeeed449508ddf521bbf87388445f1e007bd3bdf2a5a4e18f9c178e3fa",
+      "backups": []
+    },
+    {
+      "patch_id": "091",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "225471a8906c3f67b8e16d086c743fd6a09cc90a9c5775b1a883ed1032ae0b23",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141135_083319.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141135_083319_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T14:11:35.088837",
+      "checksum": "e5113aa0a4d69d0df2c680bfa5773ae0c0f1f0dce58a51bfb55e1085897facef",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141135_083319.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141135_083319_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "092",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "01d21b56f6c475da4c4725593686c432dbd0c32fd65c7493f55d44c77c5a5443",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141350_919067.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141350_919067_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T14:13:50.931102",
+      "checksum": "134b32a675a843f2d95a7f337d5b57a6d078b55fd703f87a1b0904fc749f42b3",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141350_919067.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_141350_919067_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "093",
+      "target_file": "src/components/tabs/ConsoleTab.tsx+src/components/tabs/PanelTab.tsx+src/components/tabs/ProjectTab.tsx",
+      "operations": [
+        {
+          "target_file": "src/components/tabs/ConsoleTab.tsx",
+          "checksum": "7c86a9954978cdf87b019d4c131dbafcf53b5cb8c36948dec6fdd5e0dfc4daaa",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/PanelTab.tsx",
+          "checksum": "b745b4bb72690926a9aa96903d236f6dd3dbe9223ed20cdc3b498fc517e25a5f",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/ProjectTab.tsx",
+          "checksum": "ff468b38772ce9a16ebd5c3f9f5bc61a9a59fece4352c92c927aa5941dedf522",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T14:16:47.994408",
+      "checksum": "124e03609652ee05a1570874f2406a68fcf28366d7bd23e5e12d3fc2b0a2cba7",
+      "backups": []
+    },
+    {
+      "patch_id": "094",
+      "target_file": "src/components/tabs/PanelTab.tsx",
+      "operations": [
+        {
+          "target_file": "src/components/tabs/PanelTab.tsx",
+          "checksum": "55876ee93a97feec85973dee1424771c689afd5522d296c4bdad88514edc4aa0",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__PanelTab.tsx_20261119_141850_479356.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__PanelTab.tsx_20261119_141850_479356_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__PanelTab.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T14:18:50.487896",
+      "checksum": "a9f7fc98b119cb5dd006e04a329f5413cb267b8e6c4e18bf86125744c7e4ca48",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__PanelTab.tsx_20261119_141850_479356.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__PanelTab.tsx_20261119_141850_479356_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__PanelTab.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "095",
+      "target_file": "src/components/tabs/AgentsTab.tsx+src/components/tabs/ProvidersTab.tsx+src/components/tabs/ModelsTab.tsx",
+      "operations": [
+        {
+          "target_file": "src/components/tabs/AgentsTab.tsx",
+          "checksum": "d69eba73a3c5701a446882a293feb9ea6181aa99ffc30955f9626ed65c97c193",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/ProvidersTab.tsx",
+          "checksum": "cdc2bd08f756602cd10e3d8d1071686bc0eac5a8c332681d2392e24bc63ca5ef",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/ModelsTab.tsx",
+          "checksum": "aca68c4e29060a548b9669bf77ebf24c30515daf0ada5fb75b272ea3d709bc12",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T14:21:57.285000",
+      "checksum": "5acaff85d6e3afb5fc41aa72a13fa90d079d5dbc144e9192a45776e305f13b3a",
+      "backups": []
+    },
+    {
+      "patch_id": "096",
+      "target_file": "src/components/tabs/MDTab.tsx+src/components/tabs/CodeTab.tsx+src/components/tabs/LogsTab.tsx+src/components/tabs/TasksTab.tsx+src/components/tabs/PatchesTab.tsx",
+      "operations": [
+        {
+          "target_file": "src/components/tabs/MDTab.tsx",
+          "checksum": "5fde040e593e978f0c6f33be9ac5c56a692acb43bfc743eff67371110d24aaa9",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/CodeTab.tsx",
+          "checksum": "5794c86e199ee5d3e25ee2f656b4ee83f48c0a6e5996b630d94f4e559330707d",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/LogsTab.tsx",
+          "checksum": "7d01be6b81a563fb5bc821159a42e3ded69a067ab815b03d189e99f6beb21900",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/TasksTab.tsx",
+          "checksum": "884a243e09a510e67c154a8fe23f922e29768fbacc4480dccb5fe54d0c4b0ae0",
+          "backups": []
+        },
+        {
+          "target_file": "src/components/tabs/PatchesTab.tsx",
+          "checksum": "1788e6305e2e1b86b8f7a34773d86dce56bee2e3827fee7cc5a857293390f9cb",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T14:24:52.245901",
+      "checksum": "3f59deffe8cc2e36a3a7cb7ee62f8a7a54aedd0f138bccff77ecbb06bc6159bb",
+      "backups": []
     }
   ],
   "history": [
@@ -2423,6 +2775,136 @@
         "NEW_FEATURES.md"
       ],
       "timestamp": "2026-11-19T13:08:25.515234"
+    },
+    {
+      "action": "apply",
+      "patch_id": "085",
+      "files": [
+        "src/types/index.ts",
+        "src/utils/categories.ts",
+        "src/utils/storage.ts",
+        "src/utils/constants.ts"
+      ],
+      "timestamp": "2026-11-19T13:20:41.306723"
+    },
+    {
+      "action": "apply",
+      "patch_id": "086",
+      "files": [
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-19T13:28:56.224217"
+    },
+    {
+      "action": "apply",
+      "patch_id": "086",
+      "files": [
+        "src/services/api.ts",
+        "src/pages/Dashboard.tsx"
+      ],
+      "timestamp": "2026-11-19T13:38:18.006190"
+    },
+    {
+      "action": "apply",
+      "patch_id": "087",
+      "files": [
+        "src/hooks/useLogs.ts",
+        "src/hooks/useCodeIssues.ts",
+        "src/hooks/useTasks.ts",
+        "src/hooks/useAgents.ts",
+        "src/hooks/useConsole.ts",
+        "src/hooks/useMD.ts",
+        "src/hooks/useOllama.ts",
+        "src/hooks/usePatches.ts",
+        "src/hooks/useProject.ts"
+      ],
+      "timestamp": "2026-11-19T13:50:29.173221"
+    },
+    {
+      "action": "apply",
+      "patch_id": "088",
+      "files": [
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-19T13:54:54.040859"
+    },
+    {
+      "action": "apply",
+      "patch_id": "089",
+      "files": [
+        "src/components/ui/Tooltip.tsx",
+        "src/components/ui/StatusBadge.tsx",
+        "src/components/ui/Modal.tsx",
+        "src/components/ui/Toggle.tsx",
+        "src/components/ui/Button.tsx"
+      ],
+      "timestamp": "2026-11-19T13:57:55.423787"
+    },
+    {
+      "action": "apply",
+      "patch_id": "090",
+      "files": [
+        "src/components/layout/Header.tsx",
+        "src/components/layout/Footer.tsx",
+        "src/components/layout/TabLayout.tsx"
+      ],
+      "timestamp": "2026-11-19T14:00:11.282580"
+    },
+    {
+      "action": "apply",
+      "patch_id": "091",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-19T14:11:35.088837"
+    },
+    {
+      "action": "apply",
+      "patch_id": "092",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-19T14:13:50.931102"
+    },
+    {
+      "action": "apply",
+      "patch_id": "093",
+      "files": [
+        "src/components/tabs/ConsoleTab.tsx",
+        "src/components/tabs/PanelTab.tsx",
+        "src/components/tabs/ProjectTab.tsx"
+      ],
+      "timestamp": "2026-11-19T14:16:47.994408"
+    },
+    {
+      "action": "apply",
+      "patch_id": "094",
+      "files": [
+        "src/components/tabs/PanelTab.tsx"
+      ],
+      "timestamp": "2026-11-19T14:18:50.487896"
+    },
+    {
+      "action": "apply",
+      "patch_id": "095",
+      "files": [
+        "src/components/tabs/AgentsTab.tsx",
+        "src/components/tabs/ProvidersTab.tsx",
+        "src/components/tabs/ModelsTab.tsx"
+      ],
+      "timestamp": "2026-11-19T14:21:57.285000"
+    },
+    {
+      "action": "apply",
+      "patch_id": "096",
+      "files": [
+        "src/components/tabs/MDTab.tsx",
+        "src/components/tabs/CodeTab.tsx",
+        "src/components/tabs/LogsTab.tsx",
+        "src/components/tabs/TasksTab.tsx",
+        "src/components/tabs/PatchesTab.tsx"
+      ],
+      "timestamp": "2026-11-19T14:24:52.245901"
     }
   ],
   "rollbacks": [

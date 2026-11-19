@@ -225,6 +225,20 @@ def apply_diff(content, diff):
     return '\n'.join(lines)
 
 
+def check_ts_full():
+    """Полная типовая проверка проекта через tsc --noEmit."""
+    try:
+        r = subprocess.run(['npx', 'tsc', '--noEmit'],
+                           capture_output=True, text=True, timeout=30, cwd=BASE)
+        if r.returncode == 0:
+            return None
+        return 'TypeScript errors: ' + (r.stdout or r.stderr).strip()[:300]
+    except subprocess.TimeoutExpired:
+        return 'tsc --noEmit timeout (30s)'
+    except Exception as e:
+        return 'tsc error: ' + str(e)
+
+
 def validate(name, code):
     ext = os.path.splitext(name)[1].lower()
     if ext == '.py':
@@ -241,6 +255,20 @@ def validate(name, code):
         err = check_ts(name, code)
         if err:
             return False, 'TS/JS: ' + err
+        # Полная типовая проверка (только для TS/TSX, не JS)
+        if ext in ('.ts', '.tsx'):
+            err = check_ts_full()
+            if err:
+                return False, err
+    elif ext in ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'):
+        err = check_ts(name, code)
+        if err:
+            return False, 'TS/JS: ' + err
+        # Полная типовая проверка (только для TS/TSX, не JS)
+        if ext in ('.ts', '.tsx'):
+            err = check_ts_full()
+            if err:
+                return False, err
     return True, None
 
 

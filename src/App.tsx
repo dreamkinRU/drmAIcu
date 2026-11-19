@@ -7,9 +7,9 @@ interface CodeIssue { id: number; severity: 'critical' | 'warning' | 'info'; lin
 interface Task { id: number; text: string; done: boolean; priority: 'high' | 'medium' | 'low'; category: 'code' | 'general'; }
 interface MDFile { name: string; description: string; }
 interface OllamaModel { name: string; size_gb: number; }
-interface PatchInfo { filename: string; filepath: string; patch_id: string; target_file: string; description: string; author: string; created_at: string; is_applied: boolean; file_exists: boolean; checksum_ok: boolean | null; content_length: number; has_content: boolean; error?: string; full_file_content?: string; }
-interface ProjectFile { path: string; filename: string; size: number; size_human: string; modified: string; category: string; hash: string; preview: string; is_critical: boolean; is_important: boolean; extension: string; icon: string; is_duplicate: boolean; duplicates: string[]; error?: string; }
-interface ProjectStats { total: number; total_size: number; total_size_human: string; by_category: Record<string, number>; by_extension: Record<string, number>; duplicates_count: number; duplicates_groups: number; critical_count: number; important_count: number; trash_count: number; backup_count: number; }
+interface PatchInfo { filename: string; filepath: string; patch_id: string; patch_type?: string; target_file: string; description: string; author: string; created_at: string; is_applied: boolean; file_exists: boolean; checksum_ok: boolean | null; content_length: number; has_content: boolean; error?: string; full_file_content?: string; diff?: string; operations?: any[]; }
+interface ProjectFile { path: string; filename: string; size: number; size_human: string; modified: string; category: string; hash: string; preview: string; is_critical: boolean; is_important: boolean; extension: string; icon: string; is_duplicate: boolean; duplicates: string[]; error?: string; cleanup?: { action: 'keep' | 'delete' | 'review'; reason: string; }; }
+interface ProjectStats { total: number; total_size: number; total_size_human: string; by_category: Record<string, number>; by_extension: Record<string, number>; duplicates_count: number; duplicates_groups: number; critical_count: number; important_count: number; trash_count: number; backup_count: number; cleanup_delete_count?: number; cleanup_review_count?: number; }
 
 const initialAgents: Agent[] = [
   { id: 1, name: 'Агент №1 — Развитие системы', status: 'active', task: 'Исправление ошибок компиляции', stack: ['Java', 'Python', 'VBA/Excel'], progress: 45, lastActivity: '2 мин назад', enabled: true, description: 'Основной агент для развития инфраструктуры drmAIcu.' },
@@ -572,9 +572,9 @@ export default function App() {
                 <button onClick={() => setCleanupMode(!cleanupMode)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${cleanupMode ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
                   {cleanupMode ? '❌ Отмена' : '🧹 Режим очистки'}
                 </button>
-                {cleanupMode && projectStats?.cleanup_delete_count > 0 && (
+                {cleanupMode && (projectStats?.cleanup_delete_count ?? 0) > 0 && (
                   <button onClick={applyCleanup} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold animate-pulse">
-                    🗑 Удалить {projectStats.cleanup_delete_count} файлов
+                    🗑 Удалить {projectStats?.cleanup_delete_count} файлов
                   </button>
                 )}
                 <button onClick={scanProject} disabled={projectLoading} className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold disabled:opacity-50">
