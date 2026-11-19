@@ -1820,6 +1820,40 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261119_130021_302023_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "084",
+      "target_file": "USER_GUIDE.md+NEW_FEATURES.md",
+      "operations": [
+        {
+          "target_file": "USER_GUIDE.md",
+          "checksum": "9fa13fe291e78244922017a3446a6f259ee3d28bab722599ddd15e7286851dff",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\USER_GUIDE.md_20261119_130825_508201.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\USER_GUIDE.md_20261119_130825_508201_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\USER_GUIDE.md_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "NEW_FEATURES.md",
+          "checksum": "95f89a966776d5d2db9ce5037213a3533f3032259d22bc88ec9e890ccaaa1250",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_20261119_130825_510203.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_20261119_130825_510203_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T13:08:25.515234",
+      "checksum": "e839b96820aca94b4bbba7df02bceb694125dfc28f005a11fe8800abe75391e0",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\USER_GUIDE.md_20261119_130825_508201.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\USER_GUIDE.md_20261119_130825_508201_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\USER_GUIDE.md_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_20261119_130825_510203.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_20261119_130825_510203_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\NEW_FEATURES.md_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -2380,6 +2414,15 @@
         "ARCHITECTURE.md"
       ],
       "timestamp": "2026-11-19T13:00:21.308053"
+    },
+    {
+      "action": "apply",
+      "patch_id": "084",
+      "files": [
+        "USER_GUIDE.md",
+        "NEW_FEATURES.md"
+      ],
+      "timestamp": "2026-11-19T13:08:25.515234"
     }
   ],
   "rollbacks": [
