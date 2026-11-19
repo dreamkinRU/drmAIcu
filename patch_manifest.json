@@ -1439,6 +1439,341 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261119_021247_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "081",
+      "target_file": "main.py+tests/test_engine.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "1b229d26a5db696d2826b5246b99b27c6b6d01a8c526f334f8795775f9709258",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_105515.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_105515_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tests/test_engine.py",
+          "checksum": "703ef16b0865c5f4b863e3ae238b8f759ebbc8fcc505951dd47f6eac1cc76922",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_105515.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_105515_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T10:55:15.461991",
+      "checksum": "c04aba761524a6fb86a882ab354ff8a171dcd0f8bdbe0cf68a4144b39b8e55c1",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_105515.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_105515_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_105515.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_105515_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "080",
+      "target_file": "main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+tests/test_engine.py+tools/tscheck.cjs+main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "0549a14b37163efa7bb41f476f9e35d693a3b57a2641e46f8137d07b36224c51",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "6491a27d2f24d124e88923adc727a2e3070ca91fea352171936c5b47b71bbdcb",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "f18e6c6001ad56b2fb6daf8afc7bf4dfe5a5ca8b29c919c1f57b27564bfd06e6",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "9013d19c80d897a3825a6690c963ca53ec7d330fda21ceb5fe041e3efcff5e7f",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "01ea7fb1ed719d70e7bb30c2bb8b3fc1da2ac6281db3e91974970d7517598ce0",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "bce64f8436be240e4290a3aeafe98c1e068faddb4a1856ca5ea1ad614ae30142",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "9e06ccbf17368070c61fea6bf3b60127114ba748c425f28e432f5b4927c08172",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "a98b971b00e98eeae64a07de213182b0a69c782115ef1c496eff63b92c6185fa",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "ea8131fb213087e926545eb8dea8bf9513ff16eca5d241af812a76690293cf4b",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "2ac8aa620cb66ae4f989abc01d5c539e3d1732ff4ba00718ad08f426e086acb7",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "d231dd1179fba533748be1c282f847ee68baf0db5fba9d675dd36f1ae6068f11",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "1322719502734298a09ef85213111a8ba55c2d386b9a6c00d8cb4fa3b62d6e4d",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "0b834c1c6cf7755ff0ffe9941ac0778971d13fd446bbea092b60405f306bc9d9",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "57d7c2d787caea2e547960f04c809f224a8177a34bfcfc629f62e1a5b07f3724",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "5bb10426186dc173b4c02c8b70c1da34418d44ade42d928664b89b91152d3936",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "5432926e22de6e462b9e3b1537bfd03e05da7075e0bf6e2598b9b2afe49fb9db",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "a3b18f4d9c1e1ddc0175cbfc3cef1fdb9cfe917dd53bc5d184b0d565c4b5c058",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "85f3ce42adb72e618fc06181dd446f8c0dc12fcd2d58b25ce0fe01545c320f09",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "5ed65138d3ac23beb676e079462366ec740cf3474a2186588e21556fca73abc4",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "d0ff422c027df37f3fba9277b8dd42c93aa506d790669a3cb68b840ad663d597",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tests/test_engine.py",
+          "checksum": "259b5b8e9216be7d8eaf8f9b0133f092db38162a98f46ae8bab5cab6d7808cd4",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tools/tscheck.cjs",
+          "checksum": "268a72752f384762fde2d7b3f05e6ce0607ff1b79496721f59f85a61ad2e346f",
+          "backups": []
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "a5cf3759b5dc83780f9d9b88a8b23be639ed9bde710affe5689383431850c3fc",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T11:17:13.238205",
+      "checksum": "fd098651960ff954375928742de991f9079d649f78a7f92b3db6c8bf1860e1d2",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_111713_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "080c",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "ae34aea97bbf529a28afe7ea9e4ac402fc4ff84f80cd52598791b413f91e6bcf",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_112652.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_112652_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T11:26:52.857265",
+      "checksum": "7b8e3703dd8969f77232af98ec7adf5156c2be6fb0dbbc3c735bd15178429388",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_112652.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_112652_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -1913,7 +2248,351 @@
         "ARCHITECTURE.md"
       ],
       "timestamp": "2026-11-19T02:12:47.554340"
+    },
+    {
+      "action": "apply",
+      "patch_id": "080",
+      "files": [
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "tests/test_engine.py",
+        "tools/tscheck.cjs"
+      ],
+      "timestamp": "2026-11-19T10:40:33.073680"
+    },
+    {
+      "action": "apply",
+      "patch_id": "081",
+      "files": [
+        "main.py",
+        "tests/test_engine.py"
+      ],
+      "timestamp": "2026-11-19T10:55:15.461991"
+    },
+    {
+      "action": "apply",
+      "patch_id": "080",
+      "files": [
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "main.py",
+        "tests/test_engine.py",
+        "tools/tscheck.cjs",
+        "main.py"
+      ],
+      "timestamp": "2026-11-19T11:17:13.238205"
+    },
+    {
+      "action": "apply",
+      "patch_id": "080c",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-19T11:26:52.857265"
     }
   ],
-  "rollbacks": []
+  "rollbacks": [
+    {
+      "patch_id": "080",
+      "target_file": "main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+main.py+tests/test_engine.py+tools/tscheck.cjs",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "a306467257f7d304458ecc75779deb875994c35e91c7db5c77044148e1a32e25",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "85fa72f1a8ba4bf5ebd5c096e9f8e1146c5449efb7a1d252bbe5a86457bdb423",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "9e1e00a197d43fe41d2fa98c8524c65ca05fb21d6a2d43acf034398e3d71003b",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "b21f8ccc7320befd543881ed4ad81ff599fcd488176aa13640e29ac8c4d2f2b9",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "54d05bbd3c063c095ba76bf5dfe2dc1e7a30c1fa5a00aa786191641800ac5dc0",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "9431b0cfa636d5447f6e4b3e2abc68317267f6e41ba0e03eca02db696c59a988",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "4606dcc0b606de31d9461f01e5a5366abaa742f4289309e804a241eba48ebdc1",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "1718aed8d7273a082695beeb339d3d66587f93015321be2eb6e28b4ed31ed4ef",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "028ed8d24d78d0e640ca4c917cf87ba969d377a71d48c31ccc6e0ed69dcedf5d",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "5c144cc7bc2277c8e5c8e8dbd1075b2522ff603fb90d423353c9a8c54b371910",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "1577b11fc909f3318087c43c98b8820e3b53e97f2a82d96f0b9fe94e3752520e",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "44fa059a2866bfe510876f57eb99d04694e75af360009c30f0510f38c75251ba",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "51dfcf28cdbcd152eb3d09cb044925e485578075dcffd109ae347173a60aa768",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "d6770f0c62d28f5897129c4d68374cfb3e638f11bf0355e0ea0ac6a627fcbf0c",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "f19898731ba3678e4c000db8a69aa0f98726e5e891e368cdf051c329708cbcb8",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "871e0c38a7a48fc66f1e586f7332f09089dc6af0644d53ea625b76fc473ff087",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "259ab0154b2b683326bdb0232315b2b0cdbf9760d1e6fd2e578d23a68e820857",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "76a3a913dda488af60d0414389cbb43ae2c9674a887819129c955d2f8a4d722d",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "7ce76edecb016e047077119a6ebb2dcdd9b97d1d7ad643b8bc944f1fe1b0e60e",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "162559fc0dfa19b247ff40e360790686ee7af48c83b7147a66487bb917e55055",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tests/test_engine.py",
+          "checksum": "6a4c0abfcefb7709178ff5a5eb5d0bb0cba9ecd70a25e67811a6137e44fccc87",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_104033.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_104033_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tools/tscheck.cjs",
+          "checksum": "268a72752f384762fde2d7b3f05e6ce0607ff1b79496721f59f85a61ad2e346f",
+          "backups": []
+        }
+      ],
+      "applied_at": "2026-11-19T10:40:33.073680",
+      "checksum": "5cca00fb598cbb001c93321da570eb09bfa72489772046ffb3a62d0362b63ad8",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_104033.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_104033_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak"
+      ]
+    }
+  ]
 }

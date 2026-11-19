@@ -126,13 +126,13 @@ def test_BUG07_failed_file_not_rolled_back(box, monkeypatch):
     """B7: файл, не прошедший SHA-проверку, отсутствует в written -> не откатывается."""
     put(box, "a.py", "x = 1\n")
     put(box, "b.py", "y = 1\n")
-    real, n = main.sha, {"i": 0}
+    real, n = main.sha_bytes, {"i": 0}
 
-    def fake(text):
+    def fake(data):
         n["i"] += 1
-        return "bogus" if n["i"] > 2 else real(text)
+        return "bogus" if n["i"] > 2 else real(data)
 
-    monkeypatch.setattr(main, "sha", fake)
+    monkeypatch.setattr(main, "sha_bytes", fake)
     res = main.apply_patch({"patch_id": "T3", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
@@ -167,3 +167,14 @@ def test_BUG11_newline_rewrite_on_windows(box):
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 1\ny = 3\n"},
     ]})["success"]
     assert (box / "a.py").read_bytes() == b"x = 1\ny = 3\n"
+
+
+def test_BUG18_multi_ops_same_file(box):
+    """B18: two ops on one file must accumulate, not overwrite."""
+    put(box, "a.py", "x = 1\ny = 1\n")
+    res = main.apply_patch({"patch_id": "T5", "operations": [
+        {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+        {"type": "search_and_replace", "target_file": "a.py", "find": "y = 1", "replace": "y = 2"},
+    ]})
+    assert res["success"]
+    assert read(box / "a.py") == "x = 2\ny = 2\n"

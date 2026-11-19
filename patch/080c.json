@@ -1,0 +1,130 @@
+{
+  "patch_id": "080c",
+  "version": "1.0",
+  "type": "multi",
+  "description": "Engine fix: remaining operations",
+  "author": "review",
+  "created_at": "2026-11-19T10:30:00",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time",
+      "replace": "import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "SKIP = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea'}",
+      "replace": "SKIP = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea', 'dist', 'project_archive', '.vite', '.pytest_cache'}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "CRIT_DIRS = ('src/', 'patch/', 'backups/', 'docs/')",
+      "replace": "CRIT_DIRS = ('src/', 'patch/', 'docs/', 'tests/')"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def sha(text):\n    return hashlib.sha256(text.encode('utf-8')).hexdigest()",
+      "replace": "def sha(text):\n    return hashlib.sha256(text.encode('utf-8')).hexdigest()\n\n\ndef sha_bytes(data):\n    return hashlib.sha256(data).hexdigest()\n\n\ndef safe_path(rel):\n    p = os.path.normpath(os.path.join(BASE, str(rel)))\n    try:\n        if os.path.commonpath([BASE, p]) != BASE:\n            return None\n    except ValueError:\n        return None\n    return p\n\n\ndef file_newline(path):\n    try:\n        with open(path, 'rb') as f:\n            return '\\r\\n' if b'\\r\\n' in f.read() else '\\n'\n    except Exception:\n        return '\\n'\n\n\ndef to_bytes(text, nl):\n    return text.replace('\\r\\n', '\\n').replace('\\n', nl).encode('utf-8')\n\n\ndef check_ts(name, code):\n    root = os.path.dirname(os.path.abspath(__file__))\n    script = os.path.join(root, 'tools', 'tscheck.cjs')\n    if not os.path.exists(script):\n        return None\n    try:\n        r = subprocess.run(['node', script, name], input=code.encode('utf-8'),\n                           capture_output=True, timeout=30, cwd=root)\n    except Exception:\n        return None\n    if r.returncode == 0:\n        return None\n    return (r.stdout or r.stderr).decode('utf-8', 'replace').strip()[:300]"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "    name = os.path.basename(path)\n    ts = datetime.now().strftime('%Y%m%d_%H%M%S')\n    for suffix in ('_' + ts + '.bak', '_' + ts + '_verified.bak', '_LATEST.bak'):\n        dst = os.path.join(BACKUP_DIR, name + suffix)",
+      "replace": "    name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')\n    ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')\n    for suffix in ('_' + ts + '.bak', '_' + ts + '_verified.bak', '_LATEST.bak'):\n        dst = os.path.join(BACKUP_DIR, name + suffix)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def apply_diff(content, diff):\n    lines = content.split('\\n')\n    dl = diff.split('\\n')",
+      "replace": "def apply_diff(content, diff):\n    diff = diff.replace('\\r\\n', '\\n').replace('\\r', '\\n')\n    lines = content.split('\\n')\n    dl = diff.split('\\n')"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "            old_start = int(m.group(1))\n            j = i + 1\n            while j < len(dl) and not dl[j].startswith('@@'):\n                j += 1\n            hunks.append((old_start, dl[i + 1:j]))",
+      "replace": "            old_start = int(m.group(1))\n            old_count = int(m.group(2)) if m.group(2) is not None else 1\n            j = i + 1\n            while j < len(dl) and not dl[j].startswith('@@'):\n                j += 1\n            hunks.append((old_start, old_count, dl[i + 1:j]))"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "    for old_start, body in hunks:\n        old_block = []\n        new_block = []",
+      "replace": "    for old_start, old_count, body in hunks:\n        while body and body[-1] == '':\n            body.pop()\n        has_add = False\n        old_block = []\n        new_block = []"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "            elif s.startswith('+'):\n                new_block.append(s[1:])",
+      "replace": "            elif s.startswith('+'):\n                new_block.append(s[1:])\n                has_add = True"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "        pos = find_block(lines, old_block, old_start - 1)",
+      "replace": "        hint = old_start if old_count == 0 else old_start - 1\n        pos = find_block(lines, old_block, hint)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "        if pos == -1:\n            p2 = find_block(lines, new_block, old_start - 1)\n            if p2 != -1:\n                continue",
+      "replace": "        if pos == -1:\n            if has_add and new_block:\n                p2 = find_block(lines, new_block, hint)\n                if isinstance(p2, int) and p2 != -1:\n                    continue"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "    elif ext == '.json':\n        try:\n            json.loads(code)\n        except Exception as e:\n            return False, 'JSON: ' + str(e)\n    return True, None",
+      "replace": "    elif ext == '.json':\n        try:\n            json.loads(code)\n        except Exception as e:\n            return False, 'JSON: ' + str(e)\n    elif ext in ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'):\n        err = check_ts(name, code)\n        if err:\n            return False, 'TS/JS: ' + err\n    return True, None"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "    path = os.path.join(BASE, tgt)\n    pt = o.get('type', '')",
+      "replace": "    path = safe_path(tgt)\n    if path is None:\n        return None, None, 'Path outside project: ' + tgt\n    pt = o.get('type', '')"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "        backs = backup(o['path'])\n        planned.append({'path': o['path'], 'new': o['new'], 'backs': backs,\n                        'tgt': o['target_file'], 'sha': sha(o['new'])})",
+      "replace": "        backs = backup(o['path'])\n        data = to_bytes(o['new'], file_newline(o['path']))\n        planned.append({'path': o['path'], 'new': o['new'], 'backs': backs, 'data': data,\n                        'tgt': o['target_file'], 'sha': sha_bytes(data)})"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "            tmp = pl['path'] + '.tmp'\n            with open(tmp, 'w', encoding='utf-8') as f:\n                f.write(pl['new'])\n            os.replace(tmp, pl['path'])\n            with open(pl['path'], 'r', encoding='utf-8') as f:\n                actual = sha(f.read())\n            if actual != pl['sha']:\n                raise ValueError('Checksum mismatch: ' + pl['tgt'])\n            written.append(pl)",
+      "replace": "            tmp = pl['path'] + '.tmp'\n            with open(tmp, 'wb') as f:\n                f.write(pl['data'])\n            os.replace(tmp, pl['path'])\n            written.append(pl)\n            with open(pl['path'], 'rb') as f:\n                actual = sha_bytes(f.read())\n            if actual != pl['sha']:\n                raise ValueError('Checksum mismatch: ' + pl['tgt'])"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def s_md_get(name):\n    p = os.path.join(BASE, name.replace('..', ''))",
+      "replace": "def s_md_get(name):\n    p = safe_path(name)\n    if p is None:\n        return JSONResponse({'content': '', 'name': name, 'error': 'forbidden'})"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def s_md_post(name, payload: dict):\n    p = os.path.join(BASE, name.replace('..', ''))",
+      "replace": "def s_md_post(name, payload: dict):\n    p = safe_path(name)\n    if p is None:\n        return JSONResponse({'success': False, 'error': 'forbidden'})"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def s_pfile(path: str):\n    p = os.path.join(BASE, path)",
+      "replace": "def s_pfile(path: str):\n    p = safe_path(path)\n    if p is None:\n        return JSONResponse({'success': False, 'error': 'forbidden'})"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def s_proj_arch(payload: dict):\n    rel = payload.get('path', '')\n    p = os.path.join(BASE, rel)",
+      "replace": "def s_proj_arch(payload: dict):\n    rel = payload.get('path', '')\n    p = safe_path(rel)\n    if p is None:\n        return JSONResponse({'success': False, 'error': 'forbidden'})"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def s_proj_del(payload: dict):\n    rel = payload.get('path', '')\n    p = os.path.join(BASE, rel)",
+      "replace": "def s_proj_del(payload: dict):\n    rel = payload.get('path', '')\n    p = safe_path(rel)\n    if p is None:\n        return JSONResponse({'success': False, 'error': 'forbidden'})"
+    }
+  ]
+}

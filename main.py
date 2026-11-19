@@ -1,6 +1,6 @@
 # main.py v3.5.0 MULTI-ATOMIC
 from nicegui import ui, app
-import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time
+import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,9 +18,9 @@ RESTART_FLAG = os.path.join(BASE, 'restart.flag')
 PROJ_ARCHIVE = os.path.join(BASE, 'project_archive')
 IMPORTANT = os.path.join(BASE, '.project-important.json')
 LOG = []
-SKIP = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea'}
+SKIP = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea', 'dist', 'project_archive', '.vite', '.pytest_cache'}
 CRIT_FILES = {'main.py', 'agent_engine.py', 'settings.json', 'launcher.bat', 'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json', 'index.html', 'README.md'}
-CRIT_DIRS = ('src/', 'patch/', 'backups/', 'docs/')
+CRIT_DIRS = ('src/', 'patch/', 'docs/', 'tests/')
 
 for d in (PATCH_DIR, ARCHIVE_DIR, BACKUP_DIR, PROJ_ARCHIVE):
     os.makedirs(d, exist_ok=True)
@@ -48,6 +48,47 @@ def read_text(path):
 
 def sha(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def sha_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def safe_path(rel):
+    p = os.path.normpath(os.path.join(BASE, str(rel)))
+    try:
+        if os.path.commonpath([BASE, p]) != BASE:
+            return None
+    except ValueError:
+        return None
+    return p
+
+
+def file_newline(path):
+    try:
+        with open(path, 'rb') as f:
+            return '\r\n' if b'\r\n' in f.read() else '\n'
+    except Exception:
+        return '\n'
+
+
+def to_bytes(text, nl):
+    return text.replace('\r\n', '\n').replace('\n', nl).encode('utf-8')
+
+
+def check_ts(name, code):
+    root = os.path.dirname(os.path.abspath(__file__))
+    script = os.path.join(root, 'tools', 'tscheck.cjs')
+    if not os.path.exists(script):
+        return None
+    try:
+        r = subprocess.run(['node', script, name], input=code.encode('utf-8'),
+                           capture_output=True, timeout=30, cwd=root)
+    except Exception:
+        return None
+    if r.returncode == 0:
+        return None
+    return (r.stdout or r.stderr).decode('utf-8', 'replace').strip()[:300]
 
 
 def human(n):
@@ -87,8 +128,8 @@ def backup(path):
     out = []
     if not os.path.exists(path):
         return out
-    name = os.path.basename(path)
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     for suffix in ('_' + ts + '.bak', '_' + ts + '_verified.bak', '_LATEST.bak'):
         dst = os.path.join(BACKUP_DIR, name + suffix)
         try:
@@ -123,6 +164,7 @@ def find_block(lines, block, hint):
 
 
 def apply_diff(content, diff):
+    diff = diff.replace('\r\n', '\n').replace('\r', '\n')
     lines = content.split('\n')
     dl = diff.split('\n')
     hunks = []
@@ -136,15 +178,19 @@ def apply_diff(content, diff):
                 i += 1
                 continue
             old_start = int(m.group(1))
+            old_count = int(m.group(2)) if m.group(2) is not None else 1
             j = i + 1
             while j < len(dl) and not dl[j].startswith('@@'):
                 j += 1
-            hunks.append((old_start, dl[i + 1:j]))
+            hunks.append((old_start, old_count, dl[i + 1:j]))
             i = j
         else:
             i += 1
     ops = []
-    for old_start, body in hunks:
+    for old_start, old_count, body in hunks:
+        while body and body[-1] == '':
+            body.pop()
+        has_add = False
         old_block = []
         new_block = []
         for s in body:
@@ -157,16 +203,19 @@ def apply_diff(content, diff):
                 old_block.append(s[1:])
             elif s.startswith('+'):
                 new_block.append(s[1:])
+                has_add = True
             elif s == '':
                 old_block.append('')
                 new_block.append('')
-        pos = find_block(lines, old_block, old_start - 1)
+        hint = old_start if old_count == 0 else old_start - 1
+        pos = find_block(lines, old_block, hint)
         if isinstance(pos, list):
             raise ValueError('Ханк неоднозначен: контекст найден в ' + str(len(pos)) + ' местах ' + str(pos[:5]) + '. Уточни контекст патча.')
         if pos == -1:
-            p2 = find_block(lines, new_block, old_start - 1)
-            if p2 != -1:
-                continue
+            if has_add and new_block:
+                p2 = find_block(lines, new_block, hint)
+                if isinstance(p2, int) and p2 != -1:
+                    continue
             hint = max(0, old_start - 1)
             real = lines[hint:hint + max(1, len(old_block))]
             raise ValueError('Ханк не найден (подсказка строки ' + str(old_start) + '): ожидалось ' + str(len(old_block)) + ' строк; РЕАЛЬНО в файле: ' + json.dumps(real, ensure_ascii=False)[:800])
@@ -188,6 +237,10 @@ def validate(name, code):
             json.loads(code)
         except Exception as e:
             return False, 'JSON: ' + str(e)
+    elif ext in ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'):
+        err = check_ts(name, code)
+        if err:
+            return False, 'TS/JS: ' + err
     return True, None
 
 
@@ -309,7 +362,9 @@ def compute_new(o):
     tgt = o.get('target_file', '')
     if not tgt:
         return None, None, 'Нет target_file'
-    path = os.path.join(BASE, tgt)
+    path = safe_path(tgt)
+    if path is None:
+        return None, None, 'Path outside project: ' + tgt
     pt = o.get('type', '')
     if not pt:
         if o.get('diff'):
@@ -353,10 +408,48 @@ def compute_new(o):
 
 def compute_ops(data):
     res = []
+    cache = {}
     for o in normalize_ops(data):
-        path, new, err = compute_new(o)
-        res.append({'target_file': o.get('target_file', ''), 'type': o.get('type', 'full_replace'),
-                    'path': path, 'new': new, 'err': err})
+        tgt = o.get('target_file', '')
+        pt = o.get('type', '') or ('unified_diff' if o.get('diff') else 'full_replace')
+        path = os.path.normpath(os.path.join(BASE, tgt))
+        try:
+            inside = os.path.commonpath([BASE, path]) == BASE
+        except ValueError:
+            inside = False
+        if not tgt or not inside:
+            res.append({'target_file': tgt, 'type': pt, 'path': None, 'new': None,
+                        'err': 'Bad target_file: ' + str(tgt)})
+            continue
+        key = os.path.normcase(path)
+        if key in cache:
+            new, err = None, None
+            try:
+                if pt == 'unified_diff':
+                    new = apply_diff(cache[key], o.get('diff', ''))
+                elif pt == 'search_and_replace':
+                    fnd = o.get('find', '')
+                    if not fnd:
+                        err = 'No find for search_and_replace'
+                    else:
+                        new = apply_search_replace(cache[key], fnd, o.get('replace', ''))
+                elif pt == 'create':
+                    err = 'Already created in this patch: ' + tgt
+                else:
+                    new = o.get('full_file_content', '')
+                    if not new:
+                        err = 'No full_file_content'
+                if err is None:
+                    ok, ve = validate(tgt, new)
+                    if not ok:
+                        err = 'Validation (' + tgt + '): ' + str(ve)
+            except Exception as e:
+                new, err = None, str(e)
+        else:
+            path, new, err = compute_new(o)
+        if err is None:
+            cache[key] = new
+        res.append({'target_file': tgt, 'type': pt, 'path': path, 'new': new, 'err': err})
     return res
 
 
@@ -403,26 +496,31 @@ def apply_patch(raw):
         log('Patch ' + pid + ' rejected (phase1): ' + ' | '.join(errs), 'ERROR')
         return {'success': False, 'error': ' | '.join(errs)}
     log('Applying patch ' + pid + ' (' + str(len(ops)) + ' file(s))', 'INFO')
+    final = {}
+    for o in ops:
+        final[os.path.normcase(o['path'])] = o
+    ops = list(final.values())
     planned = []
     for o in ops:
         dir_name = os.path.dirname(o['path'])
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
         backs = backup(o['path'])
-        planned.append({'path': o['path'], 'new': o['new'], 'backs': backs,
-                        'tgt': o['target_file'], 'sha': sha(o['new'])})
+        data = to_bytes(o['new'], file_newline(o['path']))
+        planned.append({'path': o['path'], 'new': o['new'], 'backs': backs, 'data': data,
+                        'tgt': o['target_file'], 'sha': sha_bytes(data)})
     written = []
     try:
         for pl in planned:
             tmp = pl['path'] + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as f:
-                f.write(pl['new'])
+            with open(tmp, 'wb') as f:
+                f.write(pl['data'])
             os.replace(tmp, pl['path'])
-            with open(pl['path'], 'r', encoding='utf-8') as f:
-                actual = sha(f.read())
+            written.append(pl)
+            with open(pl['path'], 'rb') as f:
+                actual = sha_bytes(f.read())
             if actual != pl['sha']:
                 raise ValueError('Checksum mismatch: ' + pl['tgt'])
-            written.append(pl)
         oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'], 'backups': pl['backs']} for pl in planned]
         allb = [x for pl in planned for x in pl['backs']]
         combined = sha(json.dumps(oprecs, sort_keys=True))
@@ -676,7 +774,9 @@ def s_logs():
 
 @app.get('/api/md/{name:path}')
 def s_md_get(name):
-    p = os.path.join(BASE, name.replace('..', ''))
+    p = safe_path(name)
+    if p is None:
+        return JSONResponse({'content': '', 'name': name, 'error': 'forbidden'})
     if os.path.exists(p):
         return JSONResponse({'content': read_text(p), 'name': name})
     return JSONResponse({'content': '', 'name': name, 'error': 'not found'})
@@ -684,7 +784,9 @@ def s_md_get(name):
 
 @app.post('/api/md/{name:path}')
 def s_md_post(name, payload: dict):
-    p = os.path.join(BASE, name.replace('..', ''))
+    p = safe_path(name)
+    if p is None:
+        return JSONResponse({'success': False, 'error': 'forbidden'})
     try:
         with open(p, 'w', encoding='utf-8') as f:
             f.write(payload.get('content', ''))
@@ -814,7 +916,9 @@ def s_scan():
 
 @app.get('/api/project/file')
 def s_pfile(path: str):
-    p = os.path.join(BASE, path)
+    p = safe_path(path)
+    if p is None:
+        return JSONResponse({'success': False, 'error': 'forbidden'})
     if not os.path.exists(p):
         return JSONResponse({'success': False, 'error': 'not found'})
     c = read_text(p)
@@ -824,7 +928,9 @@ def s_pfile(path: str):
 @app.post('/api/project/archive')
 def s_proj_arch(payload: dict):
     rel = payload.get('path', '')
-    p = os.path.join(BASE, rel)
+    p = safe_path(rel)
+    if p is None:
+        return JSONResponse({'success': False, 'error': 'forbidden'})
     if not os.path.exists(p):
         return JSONResponse({'success': False, 'error': 'not found'})
     if os.path.basename(rel) in CRIT_FILES or rel.replace('\\', '/').startswith(CRIT_DIRS):
@@ -839,7 +945,9 @@ def s_proj_arch(payload: dict):
 @app.post('/api/project/delete')
 def s_proj_del(payload: dict):
     rel = payload.get('path', '')
-    p = os.path.join(BASE, rel)
+    p = safe_path(rel)
+    if p is None:
+        return JSONResponse({'success': False, 'error': 'forbidden'})
     if not os.path.exists(p):
         return JSONResponse({'success': False, 'error': 'not found'})
     if os.path.basename(rel) in CRIT_FILES or rel.replace('\\', '/').startswith(CRIT_DIRS):
