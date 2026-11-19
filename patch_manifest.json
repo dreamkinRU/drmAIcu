@@ -1774,6 +1774,52 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_112652_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "083",
+      "target_file": "README.md+CHANGELOG.md+ARCHITECTURE.md",
+      "operations": [
+        {
+          "target_file": "README.md",
+          "checksum": "7e76820e63d2a3de53fd7f838f3e702c4507849618abcd95c1c0b405a8a1559f",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\README.md_20261119_130021_296481.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\README.md_20261119_130021_296481_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\README.md_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "CHANGELOG.md",
+          "checksum": "f8b3de70735cb305207340e05b73f1df4fd065c0b8b5ef6575bce86058df764c",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_20261119_130021_299040.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_20261119_130021_299040_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "ARCHITECTURE.md",
+          "checksum": "d738116c06b417ea19875d1278532b7fb9f56dc1f768fa98d41c9a87403dc8be",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261119_130021_302023.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261119_130021_302023_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T13:00:21.308053",
+      "checksum": "74da1d908cdad9fa7374db6f0822a3d2c0e307382dc0bfb08a90c8a27f638f3f",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\README.md_20261119_130021_296481.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\README.md_20261119_130021_296481_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\README.md_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_20261119_130021_299040.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_20261119_130021_299040_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261119_130021_302023.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_20261119_130021_302023_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\ARCHITECTURE.md_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -2324,6 +2370,16 @@
         "main.py"
       ],
       "timestamp": "2026-11-19T11:26:52.857265"
+    },
+    {
+      "action": "apply",
+      "patch_id": "083",
+      "files": [
+        "README.md",
+        "CHANGELOG.md",
+        "ARCHITECTURE.md"
+      ],
+      "timestamp": "2026-11-19T13:00:21.308053"
     }
   ],
   "rollbacks": [
