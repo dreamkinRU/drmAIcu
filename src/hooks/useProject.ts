@@ -1,31 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ProjectFile, ProjectStats } from '../types';
 import {
   scanProject as scanProjectApi,
   loadProjectFile,
-  archiveProjectFile as archiveProjectFileApi,
-  deleteProjectFile as deleteProjectFileApi,
-  toggleImportant as toggleImportantApi,
+  bulkProjectAction,
+  restoreProjectFile,
+  rollbackProjectAction,
+  loadProjectHistory,
+  loadArchiveList,
+  ProjectHistoryEntry,
+  ArchiveFile,
 } from '../services/api';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+
+export type SortField = 'name' | 'size' | 'date';
+export type SortDir = 'asc' | 'desc';
 
 export function useProject() {
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
   const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
   const [projectLoading, setProjectLoading] = useState(false);
-  const [projectFilter, setProjectFilter] = useState<string>('all');
   const [projectSearch, setProjectSearch] = useState('');
   const [projectDuplicatesOnly, setProjectDuplicatesOnly] = useState(false);
   const [projectImportantOnly, setProjectImportantOnly] = useState(false);
+  const [projectFilters, setProjectFilters] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [cleanupMode, setCleanupMode] = useState(false);
-  const [showCritical, setShowCritical] = useState(false);
-  const [showImportant, setShowImportant] = useState(true);
-  const [showTrash, setShowTrash] = useState(true);
-  const [showDuplicates, setShowDuplicates] = useState(true);
+  const [history, setHistory] = useState<ProjectHistoryEntry[]>([]);
+  const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedProjectFile, setSelectedProjectFile] = useState<ProjectFile | null>(null);
   const [projectFileContent, setProjectFileContent] = useState('');
   const [projectFileLoading, setProjectFileLoading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [hasScanned, setHasScanned] = useState(false);
 
   const scanProject = async () => {
     setProjectLoading(true);
@@ -33,10 +43,63 @@ export function useProject() {
       const data = await scanProjectApi();
       setProjectFiles(data.files);
       setProjectStats(data.stats);
+      setHasScanned(true);
     } catch {
       // ignore
     } finally {
       setProjectLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasScanned) {
+      scanProject();
+    }
+  }, [hasScanned]);
+
+  const toggleFilter = (cat: string) => {
+    setProjectFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const clearFilters = () => setProjectFilters(new Set());
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const toggleFileSelection = (path: string) => {
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedFiles(new Set(filteredProjectFiles.map(f => f.path)));
+  };
+
+  const deselectAll = () => setSelectedFiles(new Set());
+
+  const bulkAction = async (action: 'archive' | 'important' | 'delete') => {
+    if (selectedFiles.size === 0) return;
+    const paths = Array.from(selectedFiles);
+    const data = await bulkProjectAction(action, paths);
+    if (data.success) {
+      await scanProject();
+      await loadHistory();
+      setSelectedFiles(new Set());
     }
   };
 
@@ -54,88 +117,68 @@ export function useProject() {
     setProjectFileLoading(false);
   };
 
-  const archiveProjectFile = async (file: ProjectFile) => {
-    if (file.is_critical) {
-      alert('Нельзя архивировать критичный файл!');
-      return;
-    }
-    const data = await archiveProjectFileApi(file.path);
+  const loadHistory = async () => {
+    const h = await loadProjectHistory();
+    setHistory(h);
+  };
+
+  const loadArchive = async () => {
+    const files = await loadArchiveList();
+    setArchiveFiles(files);
+    setShowArchiveModal(true);
+  };
+
+  const restoreFile = async (archivePath: string) => {
+    const data = await restoreProjectFile(archivePath);
     if (data.success) {
-      storage.set(STORAGE_KEYS.SCROLL_PROJECT, window.scrollY.toString());
-      setProjectFiles(prev => prev.filter(f => f.path !== file.path));
+      await loadArchive();
+      await scanProject();
     }
   };
 
-  const deleteProjectFile = async (file: ProjectFile) => {
-    if (file.is_critical) {
-      alert('Нельзя удалять критичный файл!');
-      return;
-    }
-    if (!confirm('УДАЛИТЬ ' + file.path + '?')) return;
-    const data = await deleteProjectFileApi(file.path);
+  const rollbackLast = async () => {
+    const data = await rollbackProjectAction();
     if (data.success) {
-      storage.set(STORAGE_KEYS.SCROLL_PROJECT, window.scrollY.toString());
-      setProjectFiles(prev => prev.filter(f => f.path !== file.path));
-    } else {
-      alert('Ошибка: ' + data.error);
+      await scanProject();
+      await loadHistory();
     }
   };
 
-  const toggleImportant = async (file: ProjectFile) => {
-    const data = await toggleImportantApi(file.path);
-    if (data.success) {
-      setProjectFiles(prev =>
-        prev.map(f => (f.path === file.path ? { ...f, is_important: !f.is_important } : f))
-      );
-    }
-  };
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
-  const applyCleanup = async () => {
-    const toDelete = projectFiles.filter(f => f.cleanup?.action === 'delete');
-    if (toDelete.length === 0) {
-      alert('Нечего очищать');
-      return;
-    }
-    if (!confirm('Переместить ' + toDelete.length + ' файлов в архив?')) return;
-    let successCount = 0;
-    for (const file of toDelete) {
-      const data = await archiveProjectFileApi(file.path);
-      if (data.success) successCount++;
-    }
-    alert('Очищено: ' + successCount + ' из ' + toDelete.length + ' файлов');
-    setCleanupMode(false);
-    storage.set(STORAGE_KEYS.SCROLL_PROJECT, window.scrollY.toString());
-    setProjectFiles(prev => prev.filter(f => f.cleanup?.action !== 'delete'));
-  };
-
-  const filteredProjectFiles = projectFiles.filter(f => {
-    if (projectFilter !== 'all' && f.category !== projectFilter) return false;
-    if (projectSearch && !f.filename.toLowerCase().includes(projectSearch.toLowerCase()) && !f.path.toLowerCase().includes(projectSearch.toLowerCase())) return false;
-    if (projectDuplicatesOnly && !f.is_duplicate) return false;
-    if (projectImportantOnly && !f.is_important) return false;
-    if (!showCritical && f.is_critical) return false;
-    if (!showImportant && f.is_important) return false;
-    if (!showTrash && f.category === 'trash') return false;
-    if (!showDuplicates && f.is_duplicate) return false;
-    return true;
-  });
+  const filteredProjectFiles = projectFiles
+    .filter(f => {
+      if (projectSearch && !f.filename.toLowerCase().includes(projectSearch.toLowerCase()) && !f.path.toLowerCase().includes(projectSearch.toLowerCase())) return false;
+      if (projectDuplicatesOnly && !f.is_duplicate) return false;
+      if (projectImportantOnly && !f.is_important) return false;
+      if (projectFilters.size > 0 && !projectFilters.has(f.category)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'name') cmp = a.filename.localeCompare(b.filename);
+      else if (sortField === 'size') cmp = a.size - b.size;
+      else if (sortField === 'date') cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
 
   return {
     projectFiles, projectStats, projectLoading,
-    projectFilter, setProjectFilter,
     projectSearch, setProjectSearch,
     projectDuplicatesOnly, setProjectDuplicatesOnly,
     projectImportantOnly, setProjectImportantOnly,
+    projectFilters, toggleFilter, clearFilters,
+    sortField, sortDir, toggleSort,
+    selectedFiles, toggleFileSelection, selectAll, deselectAll,
     cleanupMode, setCleanupMode,
-    showCritical, setShowCritical,
-    showImportant, setShowImportant,
-    showTrash, setShowTrash,
-    showDuplicates, setShowDuplicates,
+    history, rollbackLast,
+    archiveFiles, showArchiveModal, setShowArchiveModal, loadArchive, restoreFile,
     selectedProjectFile, setSelectedProjectFile,
     projectFileContent, projectFileLoading,
     showPreviewModal, setShowPreviewModal,
     filteredProjectFiles,
-    scanProject, openProjectFilePreview,
-    archiveProjectFile, deleteProjectFile, toggleImportant, applyCleanup,
+    scanProject, openProjectFilePreview, bulkAction,
   };
 }

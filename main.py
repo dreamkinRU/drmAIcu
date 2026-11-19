@@ -2,7 +2,7 @@
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse,  JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
@@ -788,6 +788,15 @@ def get_engine():
     return engine_obj
 
 
+@app.get('/rollback')
+def rollback_page():
+    """Аварийная страница отката"""
+    rollback_html = os.path.join(BASE, 'rollback.html')
+    if os.path.exists(rollback_html):
+        return FileResponse(rollback_html)
+    return {'error': 'rollback.html not found'}
+
+
 @app.get('/api/status')
 def s_status():
     cfg = load_cfg()
@@ -1031,6 +1040,119 @@ def create_ui():
     ui.dark_mode().enable()
     with ui.header().classes('bg-gray-900 text-white p-4'):
         ui.label('drmAIcu Core v3.5.0 MULTI-ATOMIC').classes('text-xl font-bold')
+
+
+# ============================================================================
+# Project History & Bulk Operations
+# ============================================================================
+
+PROJECT_HISTORY = []
+MAX_HISTORY = 50
+
+
+def log_action(action, paths, backups):
+    PROJECT_HISTORY.append({
+        'action': action,
+        'paths': paths,
+        'backups': backups,
+        'timestamp': datetime.now().isoformat()
+    })
+    if len(PROJECT_HISTORY) > MAX_HISTORY:
+        PROJECT_HISTORY.pop(0)
+
+
+@app.post('/api/project/bulk')
+def s_project_bulk(payload: dict):
+    action = payload.get('action', '')
+    paths = payload.get('paths', [])
+    if not paths:
+        return JSONResponse({'success': False, 'error': 'Нет выбранных файлов'})
+    backups = []
+    processed = []
+    for rel_path in paths:
+        full_path = safe_path(rel_path)
+        if not full_path or not os.path.exists(full_path):
+            continue
+        if action == 'archive':
+            b = backup(full_path)
+            if b:
+                backups.append(b[0])
+            else:
+                backups.append('')
+            archive_dir = os.path.join(BASE, 'project_archive', datetime.now().strftime('%Y%m%d_%H%M%S'))
+            os.makedirs(archive_dir, exist_ok=True)
+            shutil.move(full_path, os.path.join(archive_dir, os.path.basename(full_path)))
+            processed.append(rel_path)
+        elif action == 'important':
+            important = load_important()
+            if rel_path in important:
+                important.remove(rel_path)
+            else:
+                important.add(rel_path)
+            save_important(important)
+            processed.append(rel_path)
+        elif action == 'delete':
+            b = backup(full_path)
+            if b:
+                backups.append(b[0])
+            else:
+                backups.append('')
+            os.remove(full_path)
+            processed.append(rel_path)
+    if processed:
+        log_action(action, processed, backups)
+    return JSONResponse({'success': True, 'processed': len(processed)})
+
+
+@app.post('/api/project/restore')
+def s_project_restore(payload: dict):
+    archive_path = payload.get('archive_path', '')
+    archive_full = safe_path(archive_path)
+    if not archive_full or not os.path.exists(archive_full):
+        return JSONResponse({'success': False, 'error': 'Файл не найден в архиве'})
+    filename = os.path.basename(archive_full)
+    target = os.path.join(BASE, filename)
+    if os.path.exists(target):
+        return JSONResponse({'success': False, 'error': f'Файл {filename} уже существует'})
+    shutil.copy2(archive_full, target)
+    return JSONResponse({'success': True, 'message': f'Восстановлен {filename}'})
+
+
+@app.post('/api/project/rollback')
+def s_project_rollback():
+    if not PROJECT_HISTORY:
+        return JSONResponse({'success': False, 'error': 'История пуста'})
+    last = PROJECT_HISTORY.pop()
+    restored = 0
+    for backup_path, original_path in zip(last['backups'], last['paths']):
+        if backup_path and os.path.exists(backup_path):
+            shutil.copy2(backup_path, original_path)
+            restored += 1
+    return JSONResponse({'success': True, 'message': f'Откат: {last["action"]} ({restored} файлов)'})
+
+
+@app.get('/api/project/history')
+def s_project_history():
+    return JSONResponse({'history': PROJECT_HISTORY})
+
+
+@app.get('/api/project/archive-list')
+def s_project_archive_list():
+    archive_dir = os.path.join(BASE, 'project_archive')
+    if not os.path.exists(archive_dir):
+        return JSONResponse({'files': []})
+    files = []
+    for root, dirs, filenames in os.walk(archive_dir):
+        for f in filenames:
+            full = os.path.join(root, f)
+            rel = os.path.relpath(full, BASE)
+            files.append({
+                'path': rel,
+                'filename': f,
+                'size': os.path.getsize(full),
+                'modified': datetime.fromtimestamp(os.path.getmtime(full)).isoformat()
+            })
+    return JSONResponse({'files': files})
 
 
 if __name__ in {'__main__', '__mp_main__'}:

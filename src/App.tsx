@@ -64,20 +64,20 @@ export default function App() {
   } = usePatches(addLog);
   const {
     projectFiles, projectStats, projectLoading,
-    projectFilter, setProjectFilter,
     projectSearch, setProjectSearch,
     projectDuplicatesOnly, setProjectDuplicatesOnly,
     projectImportantOnly, setProjectImportantOnly,
+    projectFilters, toggleFilter, clearFilters,
+    sortField, sortDir, toggleSort,
+    selectedFiles, toggleFileSelection, selectAll, deselectAll,
     cleanupMode, setCleanupMode,
-    showCritical, setShowCritical,
-    showImportant, setShowImportant,
-    showTrash, setShowTrash,
-    showDuplicates, setShowDuplicates,
-    selectedProjectFile, projectFileContent, projectFileLoading,
+    history, rollbackLast,
+    archiveFiles, showArchiveModal, setShowArchiveModal, loadArchive, restoreFile,
+    selectedProjectFile, setSelectedProjectFile,
+    projectFileContent, projectFileLoading,
     showPreviewModal, setShowPreviewModal,
     filteredProjectFiles,
-    scanProject, openProjectFilePreview,
-    archiveProjectFile, deleteProjectFile, toggleImportant, applyCleanup,
+    scanProject, openProjectFilePreview, bulkAction,
   } = useProject();
 
   // === Локальное состояние ===
@@ -191,36 +191,40 @@ export default function App() {
             projectFiles={projectFiles}
             projectStats={projectStats}
             projectLoading={projectLoading}
-            projectFilter={projectFilter}
-            setProjectFilter={setProjectFilter}
             projectSearch={projectSearch}
             setProjectSearch={setProjectSearch}
             projectDuplicatesOnly={projectDuplicatesOnly}
             setProjectDuplicatesOnly={setProjectDuplicatesOnly}
             projectImportantOnly={projectImportantOnly}
             setProjectImportantOnly={setProjectImportantOnly}
+            projectFilters={projectFilters}
+            toggleFilter={toggleFilter}
+            clearFilters={clearFilters}
+            sortField={sortField}
+            sortDir={sortDir}
+            toggleSort={toggleSort}
+            selectedFiles={selectedFiles}
+            toggleFileSelection={toggleFileSelection}
+            selectAll={selectAll}
+            deselectAll={deselectAll}
             cleanupMode={cleanupMode}
             setCleanupMode={setCleanupMode}
-            showCritical={showCritical}
-            setShowCritical={setShowCritical}
-            showImportant={showImportant}
-            setShowImportant={setShowImportant}
-            showTrash={showTrash}
-            setShowTrash={setShowTrash}
-            showDuplicates={showDuplicates}
-            setShowDuplicates={setShowDuplicates}
-            filteredProjectFiles={filteredProjectFiles}
-            scanProject={scanProject}
-            openProjectFilePreview={openProjectFilePreview}
-            archiveProjectFile={archiveProjectFile}
-            deleteProjectFile={deleteProjectFile}
-            toggleImportant={toggleImportant}
-            applyCleanup={applyCleanup}
+            history={history}
+            rollbackLast={rollbackLast}
+            archiveFiles={archiveFiles}
+            showArchiveModal={showArchiveModal}
+            setShowArchiveModal={setShowArchiveModal}
+            loadArchive={loadArchive}
+            restoreFile={restoreFile}
             selectedProjectFile={selectedProjectFile}
             projectFileContent={projectFileContent}
             projectFileLoading={projectFileLoading}
             showPreviewModal={showPreviewModal}
             setShowPreviewModal={setShowPreviewModal}
+            filteredProjectFiles={filteredProjectFiles}
+            scanProject={scanProject}
+            openProjectFilePreview={openProjectFilePreview}
+            bulkAction={bulkAction}
           />
         )}
 

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import rollbackPlugin from './vite-rollback-plugin.js'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({

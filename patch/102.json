@@ -1,0 +1,28 @@
+{
+  "patch_id": "102",
+  "version": "1.0",
+  "type": "multi",
+  "description": "Add rollback page and Vite plugin for emergency rollback link in error overlay",
+  "author": "review",
+  "created_at": "2026-11-19T22:00:00",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "@app.get('/api/status')\ndef get_status():",
+      "replace": "@app.get('/rollback')\ndef rollback_page():\n    \"\"\"Аварийная страница отката патча (работает даже при сломанном фронтенде)\"\"\"\n    rollback_html = os.path.join(BASE, 'rollback.html')\n    if os.path.exists(rollback_html):\n        return FileResponse(rollback_html)\n    return {'error': 'rollback.html not found'}\n\n\n@app.get('/api/status')\ndef get_status():"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "vite.config.js",
+      "find": "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'",
+      "replace": "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nimport rollbackPlugin from './vite-rollback-plugin.js'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "vite.config.js",
+      "find": "plugins: [react()],",
+      "replace": "plugins: [react(), rollbackPlugin()],"
+    }
+  ]
+}

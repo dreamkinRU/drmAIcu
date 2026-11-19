@@ -322,3 +322,72 @@ export async function toggleImportant(path: string): Promise<{ success: boolean;
     return { success: false };
   }
 }
+
+export async function bulkProjectAction(action: 'archive' | 'important' | 'delete', paths: string[]): Promise<{ success: boolean; processed: number }> {
+  try {
+    const res = await fetch('/api/project/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, paths }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, processed: 0 };
+  }
+}
+
+export async function restoreProjectFile(archivePath: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/project/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archive_path: archivePath }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, error: 'Ошибка сети' };
+  }
+}
+
+export async function rollbackProjectAction(): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/project/rollback', { method: 'POST' });
+    return await res.json();
+  } catch {
+    return { success: false, error: 'Ошибка сети' };
+  }
+}
+
+export interface ProjectHistoryEntry {
+  action: string;
+  paths: string[];
+  backups: string[];
+  timestamp: string;
+}
+
+export async function loadProjectHistory(): Promise<ProjectHistoryEntry[]> {
+  try {
+    const res = await fetch('/api/project/history');
+    const data = await res.json();
+    return data.history || [];
+  } catch {
+    return [];
+  }
+}
+
+export interface ArchiveFile {
+  path: string;
+  filename: string;
+  size: number;
+  modified: string;
+}
+
+export async function loadArchiveList(): Promise<ArchiveFile[]> {
+  try {
+    const res = await fetch('/api/project/archive-list');
+    const data = await res.json();
+    return data.files || [];
+  } catch {
+    return [];
+  }
+}

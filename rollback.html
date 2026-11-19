@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>🚨 Аварийный откат - drmAIcu</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a2e; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .container { max-width: 600px; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; text-align: center; }
+        h1 { color: #ff6b6b; }
+        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1em; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; text-decoration: none; }
+        .btn-rollback { background: #ff6b6b; color: white; }
+        .btn-back { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); }
+        .result { margin-top: 20px; padding: 15px; border-radius: 10px; display: none; }
+        .success { background: rgba(76,175,80,0.2); color: #4caf50; border: 1px solid #4caf50; }
+        .error { background: rgba(255,107,107,0.2); color: #ff6b6b; border: 1px solid #ff6b6b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 Аварийный откат</h1>
+        <p>Используйте эту страницу, если панель управления не загружается из-за ошибки патча.</p>
+        <button class="btn btn-rollback" id="btn" onclick="rollback()">↩️ Откатить последний патч</button>
+        <a href="/" class="btn btn-back">🏠 Вернуться на главную</a>
+        <div class="result" id="result"></div>
+    </div>
+    <script>
+        async function rollback() {
+            const btn = document.getElementById('btn');
+            const res = document.getElementById('result');
+            btn.disabled = true; btn.textContent = '⏳ Откатываю...'; res.style.display = 'none';
+            try {
+                const response = await fetch('/api/patches/rollback', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    res.className = 'result success'; res.style.display = 'block';
+                    res.innerHTML = '<strong>✅ Успешно!</strong><br>' + (data.message || 'Патч откатан.') + '<br>Перезагрузите страницу.';
+                    btn.textContent = '✅ Готово';
+                } else { throw new Error(data.error || 'Ошибка'); }
+            } catch (e) {
+                res.className = 'result error'; res.style.display = 'block';
+                res.innerHTML = '<strong>❌ Ошибка:</strong> ' + e.message + '<br>Убедитесь, что ядро (порт 8080) запущено.';
+                btn.disabled = false; btn.textContent = '↩️ Откатить последний патч';
+            }
+        }
+    </script>
+</body>
+</html>
