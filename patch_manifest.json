@@ -2206,6 +2206,50 @@
       "applied_at": "2026-11-19T14:24:52.245901",
       "checksum": "3f59deffe8cc2e36a3a7cb7ee62f8a7a54aedd0f138bccff77ecbb06bc6159bb",
       "backups": []
+    },
+    {
+      "patch_id": "098",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "5fbc8bc2c01d00ea2adaf9c1f489a5390ed102d21c685187de3bea183cbc0692",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_142847_114715.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_142847_114715_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T14:28:47.127497",
+      "checksum": "392eec687d7ab02676c407d926aed836a36c73a1f96dbf8d542374b824e2cbda",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_142847_114715.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_142847_114715_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "097",
+      "target_file": "src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "8c523ba39bdea30e3c770965599a71e635da1b7dcec6326528344cde3f24a944",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_143041_932385.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_143041_932385_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T14:30:41.938122",
+      "checksum": "98a23698f9a80034881a707424227af4222a2e2578280c0ee02eb6f6f9c19787",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_143041_932385.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_143041_932385_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -2905,6 +2949,22 @@
         "src/components/tabs/PatchesTab.tsx"
       ],
       "timestamp": "2026-11-19T14:24:52.245901"
+    },
+    {
+      "action": "apply",
+      "patch_id": "098",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-19T14:28:47.127497"
+    },
+    {
+      "action": "apply",
+      "patch_id": "097",
+      "files": [
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-19T14:30:41.938122"
     }
   ],
   "rollbacks": [

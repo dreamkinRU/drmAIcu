@@ -1,0 +1,15 @@
+{
+  "patch_id": "098",
+  "version": "1.0",
+  "description": "Fix check_ts_full() for Windows: use shell=True or direct tsc path",
+  "author": "review",
+  "created_at": "2026-11-19T19:30:00",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def check_ts_full():\n    \"\"\"Полная типовая проверка проекта через tsc --noEmit.\"\"\"\n    try:\n        r = subprocess.run(['npx', 'tsc', '--noEmit'],\n                           capture_output=True, text=True, timeout=30, cwd=BASE)\n        if r.returncode == 0:\n            return None\n        return 'TypeScript errors: ' + (r.stdout or r.stderr).strip()[:300]\n    except subprocess.TimeoutExpired:\n        return 'tsc --noEmit timeout (30s)'\n    except Exception as e:\n        return 'tsc error: ' + str(e)",
+      "replace": "def check_ts_full():\n    \"\"\"Полная типовая проверка проекта через tsc --noEmit.\"\"\"\n    import sys\n    try:\n        # На Windows npx — это npx.cmd, нужен shell=True\n        if sys.platform == 'win32':\n            cmd = 'npx tsc --noEmit'\n            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=BASE)\n        else:\n            r = subprocess.run(['npx', 'tsc', '--noEmit'],\n                               capture_output=True, text=True, timeout=30, cwd=BASE)\n        if r.returncode == 0:\n            return None\n        return 'TypeScript errors: ' + (r.stdout or r.stderr).strip()[:300]\n    except subprocess.TimeoutExpired:\n        return 'tsc --noEmit timeout (30s)'\n    except Exception as e:\n        return 'tsc error: ' + str(e)"
+    }
+  ]
+}

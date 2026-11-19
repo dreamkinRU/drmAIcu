@@ -227,9 +227,15 @@ def apply_diff(content, diff):
 
 def check_ts_full():
     """Полная типовая проверка проекта через tsc --noEmit."""
+    import sys
     try:
-        r = subprocess.run(['npx', 'tsc', '--noEmit'],
-                           capture_output=True, text=True, timeout=30, cwd=BASE)
+        # На Windows npx — это npx.cmd, нужен shell=True
+        if sys.platform == 'win32':
+            cmd = 'npx tsc --noEmit'
+            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=BASE)
+        else:
+            r = subprocess.run(['npx', 'tsc', '--noEmit'],
+                               capture_output=True, text=True, timeout=30, cwd=BASE)
         if r.returncode == 0:
             return None
         return 'TypeScript errors: ' + (r.stdout or r.stderr).strip()[:300]
