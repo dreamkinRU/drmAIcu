@@ -1,0 +1,58 @@
+{
+  "patch_id": "082",
+  "version": "1.0",
+  "type": "multi",
+  "description": "Engine hardening: stale code detection, idempotency, lock, expected_sha, manifest rotation, single backup",
+  "author": "review",
+  "created_at": "2026-11-19T12:00:00",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "BACKUP_DIR = os.path.join(BASE, 'backups')",
+      "replace": "BACKUP_DIR = os.path.join(BASE, 'backups')\nMAIN_HASH = None\nPATCH_LOCK = threading.Lock()"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def sha(text):\n    return hashlib.sha256(text.encode('utf-8')).hexdigest()",
+      "replace": "def sha(text):\n    return hashlib.sha256(text.encode('utf-8')).hexdigest()\n\n\ndef sha_file(path):\n    h = hashlib.sha256()\n    with open(path, 'rb') as f:\n        for chunk in iter(lambda: f.read(65536), b''):\n            h.update(chunk)\n    return h.hexdigest()"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def backup(path):\n    out = []\n    if not os.path.exists(path):\n        return out\n    name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')\n    ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')\n    for suffix in ('_' + ts + '.bak', '_' + ts + '_verified.bak', '_LATEST.bak'):\n        dst = os.path.join(BACKUP_DIR, name + suffix)\n        try:\n            shutil.copy2(path, dst)\n            out.append(dst)\n        except Exception:\n            pass\n    return out",
+      "replace": "def backup(path):\n    out = []\n    if not os.path.exists(path):\n        return out\n    name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')\n    ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')\n    dst = os.path.join(BACKUP_DIR, name + '_' + ts + '.bak')\n    try:\n        shutil.copy2(path, dst)\n        out.append(dst)\n    except Exception:\n        pass\n    prefix = name + '_'\n    try:\n        existing = [f for f in os.listdir(BACKUP_DIR) if f.startswith(prefix) and f.endswith('.bak')]\n        if len(existing) > 10:\n            existing.sort()\n            for old in existing[:-10]:\n                try:\n                    os.remove(os.path.join(BACKUP_DIR, old))\n                except Exception:\n                    pass\n    except Exception:\n        pass\n    return out"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def apply_search_replace(content, find, replace):",
+      "replace": "def apply_search_replace(content, find, replace):\n    # B17: идемпотентность - если replace уже в файле, патч уже применён\n    content_n = content.replace('\\r\\n', '\\n')\n    replace_n = replace.replace('\\r\\n', '\\n')\n    if replace_n in content_n and find not in content_n:\n        return content  # Уже применено"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "def apply_patch(raw):\n    data = resolve(raw)\n    pid = str(data.get('patch_id', 'unknown'))\n    ops = compute_ops(data)",
+      "replace": "def apply_patch(raw):\n    # B12: замок от двойного клика\n    if not PATCH_LOCK.acquire(blocking=False):\n        return {'success': False, 'error': 'Другой патч уже применяется. Подождите.'}\n    try:\n        return _apply_patch_inner(raw)\n    finally:\n        PATCH_LOCK.release()\n\n\ndef _apply_patch_inner(raw):\n    # B19: детект устаревшего кода\n    global MAIN_HASH\n    current_hash = sha_file(os.path.join(BASE, 'main.py'))\n    if MAIN_HASH and current_hash != MAIN_HASH:\n        log('Code changed on disk - refusing to apply patch', 'ERROR')\n        return {'success': False, 'error': 'Код изменён на диске. Перезапустите систему.'}\n    data = resolve(raw)\n    pid = str(data.get('patch_id', 'unknown'))\n    ops = compute_ops(data)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "        backs = backup(o['path'])\n        data = to_bytes(o['new'], file_newline(o['path']))",
+      "replace": "        backs = backup(o['path'])\n        expected_sha = o.get('expected_sha')\n        if expected_sha and os.path.exists(o['path']):\n            actual = sha_bytes(to_bytes(read_text(o['path']), file_newline(o['path'])))\n            if actual != expected_sha:\n                return {'success': False, 'error': 'Файл изменён: ' + o['target_file'] + '. Обновите страницу.'}\n        data = to_bytes(o['new'], file_newline(o['path']))"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "        save_manifest(man)\n        log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')",
+      "replace": "        if len(man['applied']) > 100:\n            man['applied'] = man['applied'][-100:]\n        if len(man['history']) > 500:\n            man['history'] = man['history'][-500:]\n        save_manifest(man)\n        log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "main.py",
+      "find": "if __name__ in {'__main__', '__mp_main__'}:\n    log('Starting drmAIcu Core v3.5.0 MULTI-ATOMIC...')\n    get_engine()",
+      "replace": "if __name__ in {'__main__', '__mp_main__'}:\n    log('Starting drmAIcu Core v3.5.0 MULTI-ATOMIC...')\n    # B19: сохранить хеш кода при старте\n    MAIN_HASH = sha_file(os.path.join(BASE, 'main.py'))\n    log('Code hash: ' + MAIN_HASH[:16] + '...', 'INFO')\n    get_engine()"
+    }
+  ]
+}

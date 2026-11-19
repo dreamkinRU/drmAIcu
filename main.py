@@ -530,6 +530,10 @@ def apply_patch(raw):
                                'checksum': combined, 'backups': allb})
         man['history'].append({'action': 'apply', 'patch_id': pid, 'files': [pl['tgt'] for pl in planned],
                                'timestamp': datetime.now().isoformat()})
+        if len(man['applied']) > 100:
+            man['applied'] = man['applied'][-100:]
+        if len(man['history']) > 500:
+            man['history'] = man['history'][-500:]
         save_manifest(man)
         log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
         return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам)', 'backups': allb}
