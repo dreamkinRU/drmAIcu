@@ -8,10 +8,17 @@ APPLY = '--apply' in sys.argv
 
 DIRS = ['backups', 'patch/archive', 'backend']
 FILES = [
-    'api.py', 'dev.cmd', 'report.txt', 'diag.bat',
+    # мёртвые API-дублёры
+    'api.py', 'backend/api.py', 'backend/requirements.txt',
+    # мёртвый фронтенд
+    'src/services/api.ts', 'src/pages/Dashboard.tsx',
+    # fixer-скрипты
     'apply_smart_cleanup.py', 'upgrade_cleanup_backend.py', 'upgrade_cleanup_ui.py',
     'fix_cleanup_ui_exact.py', 'fix_main_robustness.py', 'fix_apptsx.py',
     'fix_ui_patch_fields.py', 'add_test_apply.py', 'diagnose.py',
+    # мусор корня
+    'dev.cmd', 'report.txt', 'diag.bat', '!patch_system.txt',
+    # старые версии в public
     'public/App.tsx', 'public/agent_engine.py', 'public/context_manager.py',
     'public/main.py', 'public/main_v3.0.4_ru.py', 'public/main_v3.0.4_fixed.py',
     'public/main_v3.0.7.py', 'public/main_v3.0.8.py', 'public/main_v3.1.0.py',
