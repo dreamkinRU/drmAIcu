@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse,  JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+    app.add_middleware(CORSMiddleware, allow_origins=['http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://localhost:8080'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 except RuntimeError:
     pass
 
@@ -1179,7 +1179,9 @@ def s_pback():
 
 @app.post('/api/patches/archive')
 def s_parch(payload: dict):
-    f = payload.get('filename', '')
+    f = os.path.basename(str(payload.get('filename', '')))
+    if not f or not f.endswith('.json'):
+        return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
     src = os.path.join(PATCH_DIR, f)
     dst = os.path.join(ARCHIVE_DIR, f)
     if not os.path.exists(src):
@@ -1195,7 +1197,12 @@ def s_parch(payload: dict):
 
 @app.post('/api/patches/delete')
 def s_pdel(payload: dict):
-    p = os.path.join(PATCH_DIR, payload.get('filename', ''))
+    f = os.path.basename(str(payload.get('filename', '')))
+    if not f or not f.endswith('.json'):
+        return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
+    p = os.path.join(PATCH_DIR, f)
+    if os.path.realpath(os.path.dirname(p)) != os.path.realpath(PATCH_DIR):
+        return JSONResponse({'success': False, 'error': 'forbidden'})
     if os.path.exists(p):
         os.remove(p)
         return JSONResponse({'success': True, 'message': 'deleted'})
