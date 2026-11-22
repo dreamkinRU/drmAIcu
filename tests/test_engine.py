@@ -3,6 +3,7 @@ import importlib
 import pytest
 
 main = importlib.import_module("main")
+import patch_engine as engine
 
 
 @pytest.fixture
@@ -11,12 +12,12 @@ def box(tmp_path, monkeypatch):
     (base / "patch" / "archive").mkdir(parents=True)
     (base / "backups").mkdir()
     (base / "project_archive").mkdir()
-    monkeypatch.setattr(main, "BASE", str(base))
-    monkeypatch.setattr(main, "PATCH_DIR", str(base / "patch"))
-    monkeypatch.setattr(main, "ARCHIVE_DIR", str(base / "patch" / "archive"))
-    monkeypatch.setattr(main, "BACKUP_DIR", str(base / "backups"))
+    monkeypatch.setattr(engine, "BASE", str(base))
+    monkeypatch.setattr(engine, "PATCH_DIR", str(base / "patch"))
+    monkeypatch.setattr(engine, "ARCHIVE_DIR", str(base / "patch" / "archive"))
+    monkeypatch.setattr(engine, "BACKUP_DIR", str(base / "backups"))
     monkeypatch.setattr(main, "PROJ_ARCHIVE", str(base / "project_archive"))
-    monkeypatch.setattr(main, "MANIFEST", str(base / "patch_manifest.json"))
+    monkeypatch.setattr(engine, "MANIFEST", str(base / "patch_manifest.json"))
     monkeypatch.setattr(main, "IMPORTANT", str(base / ".project-important.json"))
     return base
 
@@ -132,7 +133,7 @@ def test_BUG07_failed_file_not_rolled_back(box, monkeypatch):
         n["i"] += 1
         return "bogus" if n["i"] > 2 else real(data)
 
-    monkeypatch.setattr(main, "sha_bytes", fake)
+    monkeypatch.setattr(engine, "sha_bytes", fake)
     res = main.apply_patch({"patch_id": "T3", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
@@ -208,7 +209,7 @@ def test_BUG20b_expected_sha_match_applies(box):
 def test_BUG21_stale_file_aborts_patch_after_backup(box):
     """B21: файл изменён на диске ПОСЛЕ фазы расчёта -> патч отвергнут до записи."""
     put(box, "a.py", "x = 1\n")
-    real = main.sha_bytes
+    real = engine.sha_bytes
     calls = {"n": 0}
 
     def fake(data):
@@ -218,7 +219,7 @@ def test_BUG21_stale_file_aborts_patch_after_backup(box):
         return real(b"tampered")
 
     monkey = __import__("pytest").MonkeyPatch()
-    monkey.setattr(main, "sha_bytes", fake)
+    monkey.setattr(engine, "sha_bytes", fake)
     try:
         res = main.apply_patch({"patch_id": "T-B21", "operations": [
             {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
@@ -264,3 +265,16 @@ def test_BUG24_tx_lock_serializes_toggle():
     assert got == [True]
     assert main.TX_LOCK.acquire(timeout=2)
     main.TX_LOCK.release()
+
+
+def test_engine_module_is_ui_free():
+    """patch_engine импортируется в чистом интерпретаторе без nicegui/fastapi."""
+    import subprocess, sys as _sys
+    code = (
+        "import sys; import patch_engine; "
+        "leaks = [m for m in ('nicegui', 'uvicorn', 'fastapi') if m in sys.modules]; "
+        "print('LEAKS:' + ','.join(leaks))"
+    )
+    r = subprocess.run([_sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert "LEAKS:" in r.stdout and r.stdout.strip().split("LEAKS:")[1] == "", r.stdout
