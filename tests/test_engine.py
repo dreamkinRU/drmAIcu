@@ -56,7 +56,7 @@ def test_OK_diff_idempotent():
 
 def test_OK_create_rejects_existing(box):
     put(box, "x.py", "a = 1\n")
-    _, _, err = main.compute_new(
+    _, _, _, err = main.compute_new(
         {"type": "create", "target_file": "x.py", "full_file_content": "b = 2\n"}
     )
     assert err is not None
@@ -149,7 +149,7 @@ def test_BUG08_tsx_not_validated():
 
 def test_BUG09_path_escape(box):
     """B9: target_file выходит за пределы проекта."""
-    _, _, err = main.compute_new(
+    _, _, _, err = main.compute_new(
         {"type": "create", "target_file": "../escaped.py", "full_file_content": "p = 1\n"}
     )
     assert err is not None
