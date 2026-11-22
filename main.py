@@ -1,4 +1,4 @@
-# main.py v3.5.0 MULTI-ATOMIC
+# main.py v3.5.3 MULTI-ATOMIC HARDENED
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
@@ -1003,7 +1003,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': '3.5.0 MULTI-ATOMIC',
+                         'version': '3.5.3 MULTI-ATOMIC HARDENED',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
@@ -1519,7 +1519,7 @@ def s_project_archive_list():
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    log('Starting drmAIcu Core v3.5.0 MULTI-ATOMIC...')
+    log('Starting drmAIcu Core v3.5.3 MULTI-ATOMIC HARDENED...')
     get_engine()
     create_ui()
     ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)

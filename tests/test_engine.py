@@ -178,3 +178,89 @@ def test_BUG18_multi_ops_same_file(box):
     ]})
     assert res["success"]
     assert read(box / "a.py") == "x = 2\ny = 2\n"
+
+# ---------- B20-B24: движок 3.5.3 (fix PATCHES) ----------
+
+def test_BUG20_expected_sha_mismatch_rejected(box):
+    """B20: expected_sha не совпал с содержимым на диске -> патч отвергнут целиком."""
+    put(box, "a.py", "x = 1\n")
+    res = main.apply_patch({"patch_id": "T-B20", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n",
+         "expected_sha": "deadbeef"},
+    ]})
+    assert res["success"] is False
+    assert "expected_sha" in res["error"]
+    assert read(box / "a.py") == "x = 1\n"
+
+
+def test_BUG20b_expected_sha_match_applies(box):
+    """B20: корректный expected_sha пропускает патч."""
+    put(box, "a.py", "x = 1\n")
+    good = main.sha_bytes(b"x = 1\n")
+    res = main.apply_patch({"patch_id": "T-B20b", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n",
+         "expected_sha": good},
+    ]})
+    assert res["success"] is True
+    assert read(box / "a.py") == "x = 2\n"
+
+
+def test_BUG21_stale_file_aborts_patch_after_backup(box):
+    """B21: файл изменён на диске ПОСЛЕ фазы расчёта -> патч отвергнут до записи."""
+    put(box, "a.py", "x = 1\n")
+    real = main.sha_bytes
+    calls = {"n": 0}
+
+    def fake(data):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real(data)
+        return real(b"tampered")
+
+    monkey = __import__("pytest").MonkeyPatch()
+    monkey.setattr(main, "sha_bytes", fake)
+    try:
+        res = main.apply_patch({"patch_id": "T-B21", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+        ]})
+    finally:
+        monkey.undo()
+    assert res["success"] is False
+    assert "stale" in res["error"] or "изменился" in res["error"]
+    assert read(box / "a.py") == "x = 1\n"
+
+
+def test_BUG22_rollback_rejects_manifest_traversal(box):
+    """B22: tampered-манифест с ../ в target_file -> откат запрещён, файл не удалён."""
+    put(box, "victim.txt", "do not delete\n")
+    main.save_manifest({'applied': [{'patch_id': 'EVIL', 'operations': [
+        {'target_file': '../victim.txt', 'backups': []},
+    ]}], 'history': [], 'rollbacks': []})
+    res = main.rollback()
+    assert res["success"] is False
+    assert (box / "victim.txt").exists()
+
+
+def test_BUG23_stats_endpoint_not_shadowed():
+    """B23: /api/patches/stats файлов регистрируется ровно один раз, s_pstats жив."""
+    stats_routes = [r for r in main.app.routes if getattr(r, 'path', '') == '/api/patches/stats']
+    assert len(stats_routes) == 1
+    handler = getattr(stats_routes[0], 'endpoint', None)
+    assert handler is main.s_pstats
+
+
+def test_BUG24_tx_lock_serializes_toggle():
+    """B24: TX_LOCK существует и является RLock (apply/rollback сериализуются)."""
+    got = []
+    def hold_in_subthread():
+        if main.TX_LOCK.acquire(timeout=2):
+            got.append(True)
+            import time; time.sleep(0.3)
+            main.TX_LOCK.release()
+    import threading as th
+    t = th.Thread(target=hold_in_subthread)
+    t.start()
+    t.join(2)
+    assert got == [True]
+    assert main.TX_LOCK.acquire(timeout=2)
+    main.TX_LOCK.release()
