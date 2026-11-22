@@ -62,7 +62,7 @@ python -m pytest tests -v
 - [USER_GUIDE.md](USER_GUIDE.md) — руководство пользователя и формат патчей
 - [NEW_FEATURES.md](NEW_FEATURES.md) — описание возможностей по версиям
 - [CHANGELOG.md](CHANGELOG.md) — полная история изменений
-- [docs/PATCH_FORMAT.md](docs/PATCH_FORMAT.md) — спецификация формата патчей (см. `patch/001.json`)
+- Формат патчей — см. раздел PATCHMASTER в [USER_GUIDE.md](USER_GUIDE.md) и живой пример `patch/143.json`
 
 ## Лицензия
 
