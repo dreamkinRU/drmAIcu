@@ -1,0 +1,16 @@
+{
+  "patch_id": "125",
+  "version": "1.0",
+  "type": "multi",
+  "description": "Fix pytest import path for main module",
+  "author": "review",
+  "created_at": "2026-11-21T18:45:00",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "tests/test_patching_hardcore.py",
+      "find": "import importlib\nimport os\nimport stat\nimport pytest\n\nmain = importlib.import_module(\"main\")",
+      "replace": "import os\nimport sys\nimport stat\nimport pytest\n\n# Гарантируем, что корень проекта в sys.path для импорта main.py\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\nimport main"
+    }
+  ]
+}

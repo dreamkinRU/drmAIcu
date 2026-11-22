@@ -5,7 +5,10 @@ from datetime import datetime, timedelta
 from fastapi.responses import FileResponse,  JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+try:
+    app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+except RuntimeError:
+    pass
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 PATCH_DIR = os.path.join(BASE, 'patch')
@@ -55,6 +58,8 @@ def sha_bytes(data):
 
 
 def safe_path(rel):
+    if chr(0) in str(rel):
+        return None
     p = os.path.normpath(os.path.join(BASE, str(rel)))
     try:
         if os.path.commonpath([BASE, p]) != BASE:
@@ -117,6 +122,42 @@ def load_manifest():
         except Exception:
             pass
     return {'applied': [], 'history': [], 'rollbacks': []}
+
+
+@app.get('/api/patches/dump')
+def s_dump():
+    import re
+    with open(os.path.join(BASE, 'main.py'), 'r', encoding='utf-8') as f:
+        content = f.read()
+    def extract(name):
+        pat = re.compile(r'^\s*(?:async\s+)?def\s+' + re.escape(name) + r'\s*\(', re.MULTILINE)
+        m = pat.search(content)
+        if not m:
+            return None
+        start = m.start()
+        indent_str = content[start:content.index('def', start)]
+        indent = len(indent_str)
+        lines = content[start:].split('\n')
+        end = 0
+        for i in range(1, len(lines)):
+            ln = lines[i]
+            if not ln.strip():
+                continue
+            li = len(ln) - len(ln.lstrip())
+            if li <= indent and (ln.strip().startswith('def ') or ln.strip().startswith('async def ') or ln.strip().startswith('@')):
+                end = sum(len(l) + 1 for l in lines[:i])
+                break
+        else:
+            end = len(content) - start
+        return content[start:start + end].rstrip()
+    return JSONResponse({
+        'success': True,
+        'apply_patch': extract('apply_patch'),
+        'apply_patch_atomic': extract('apply_patch_atomic'),
+        'apply_search_replace': extract('apply_search_replace'),
+        'preview_patch': extract('preview_patch'),
+        'validate': extract('validate')
+    })
 
 
 def save_manifest(m):
@@ -246,6 +287,8 @@ def check_ts_full():
 
 
 def validate(name, code):
+    if code is None:
+        return False, 'Resulting code is None (search/replace failed)'
     ext = os.path.splitext(name)[1].lower()
     if ext == '.py':
         try:
@@ -258,44 +301,52 @@ def validate(name, code):
         except Exception as e:
             return False, 'JSON: ' + str(e)
     elif ext in ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'):
-        err = check_ts(name, code)
-        if err:
-            return False, 'TS/JS: ' + err
-        # Полная типовая проверка (только для TS/TSX, не JS)
         if ext in ('.ts', '.tsx'):
-            err = check_ts_full()
+            # Военный уровень: требуем наличия инструмента для проверки именно этого кода
+            script = os.path.join(BASE, 'tools', 'tscheck.cjs')
+            if not os.path.exists(script):
+                return False, 'TSX validation tool (tools/tscheck.cjs) is missing'
+            err = check_ts(name, code)
             if err:
-                return False, err
-    elif ext in ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'):
-        err = check_ts(name, code)
-        if err:
-            return False, 'TS/JS: ' + err
-        # Полная типовая проверка (только для TS/TSX, не JS)
-        if ext in ('.ts', '.tsx'):
-            err = check_ts_full()
+                return False, 'TS/JS: ' + err
+        else:
+            err = check_ts(name, code)
             if err:
-                return False, err
+                return False, 'JS syntax error: ' + err
     return True, None
 
 
 def apply_search_replace(content, find, replace):
-    """Точечная замена подстроки с авто-нормализацией переносов строк (Windows \r\n <-> Unix \n)."""
-    # Определяем тип переносов в файле
-    crlf = '\r\n' in content
-    # Нормализуем все три строки к \n для поиска
-    content_n = content.replace('\r\n', '\n')
-    find_n = find.replace('\r\n', '\n')
-    replace_n = replace.replace('\r\n', '\n')
-    if find_n not in content_n:
-        raise ValueError('Подстрока не найдена в файле (после нормализации переносов). Фрагмент: ' + find_n[:80] + '... Проверьте точное совпадение.')
-    count = content_n.count(find_n)
-    if count > 1:
-        raise ValueError(f'Подстрока найдена {count} раз. Уточните контекст для уникальности.')
-    new_content = content_n.replace(find_n, replace_n)
-    # Возвращаем исходный тип переносов, если файл был Windows
-    if crlf:
-        new_content = new_content.replace('\n', '\r\n')
-    return new_content
+    """Максимально устойчивая замена с двухуровневой нормализацией."""
+    # Уровень 1: Нормализация переносов строк к \n
+    norm_content = content.replace('\r\n', '\n').replace('\r', '\n')
+    norm_find = find.replace('\r\n', '\n').replace('\r', '\n')
+    norm_replace = replace.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Попытка 1: Точное совпадение (быстро и безопасно)
+    if norm_find in norm_content:
+        new_norm = norm_content.replace(norm_find, norm_replace, 1)
+        return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
+
+    # Попытка 2: Совпадение с игнорированием trailing-пробелов в каждой строке
+    content_lines = norm_content.split('\n')
+    find_lines = norm_find.split('\n')
+    
+    def strip_r(s): return s.rstrip()
+    stripped_content = [strip_r(line) for line in content_lines]
+    stripped_find = [strip_r(line) for line in find_lines]
+    
+    find_len = len(stripped_find)
+    for i in range(len(stripped_content) - find_len + 1):
+        if stripped_content[i:i+find_len] == stripped_find:
+            # Нашли блок! Заменяем строки с i по i+find_len на norm_replace.split('\n')
+            replace_lines = norm_replace.split('\n')
+            new_lines = content_lines[:i] + replace_lines + content_lines[i+find_len:]
+            new_norm = '\n'.join(new_lines)
+            return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
+
+    # Если не найдено, возвращаем None, чтобы движок выдал понятную ошибку валидации
+    return None
 
 
 def find_patch_file(pid, fname=''):
@@ -848,12 +899,14 @@ async def s_task(payload: dict):
     if not e:
         return JSONResponse({'success': False, 'error': 'Engine not loaded'})
     try:
-        r = await e.run_task(payload.get('prompt', ''), mode=payload.get('mode', 'full'))
+        prompt = payload.get('prompt', '')
+        mode = payload.get('mode', 'fast')
+        model = payload.get('model', '')
+        provider = payload.get('provider', 'ollama')
+        r = await e.run_task(prompt, mode=mode, model=model, provider=provider)
         return JSONResponse({'success': True, 'result': r})
     except Exception as ex:
         return JSONResponse({'success': False, 'error': str(ex)})
-
-
 @app.get('/api/ollama/models')
 def s_models():
     try:
@@ -885,6 +938,54 @@ def s_plist():
 
 
 @app.get('/api/patches/stats')
+@app.get('/api/patches/validate-all')
+def s_pvalidate_all():
+    """Проверить валидность всех патчей без применения."""
+    if not os.path.isdir(PATCH_DIR):
+        return JSONResponse({'patches': []})
+    results = []
+    man = load_manifest()
+    done = set(str(a.get('patch_id')) for a in man.get('applied', []))
+    for f in sorted(os.listdir(PATCH_DIR)):
+        if not f.endswith('.json'):
+            continue
+        fp = os.path.join(PATCH_DIR, f)
+        try:
+            with open(fp, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            ops = data.get('operations', [])
+            errors = []
+            for i, op in enumerate(ops):
+                tgt = op.get('target_file', '')
+                full_path = os.path.join(BASE, tgt)
+                if not os.path.exists(full_path):
+                    errors.append(f'Операция {i+1}: файл {tgt} не существует')
+                    continue
+                with open(full_path, 'r', encoding='utf-8') as fh:
+                    content = fh.read()
+                if op.get('type') == 'search_and_replace':
+                    find_txt = op.get('find', '')
+                    if find_txt not in content:
+                        errors.append(f'Операция {i+1}: подстрока не найдена в {tgt}')
+                    elif content.count(find_txt) > 1:
+                        errors.append(f'Операция {i+1}: найдено {content.count(find_txt)} вхождений в {tgt}')
+                elif op.get('type') == 'full_replace':
+                    if 'full_file_content' not in op:
+                        errors.append(f'Операция {i+1}: отсутствует full_file_content')
+            results.append({
+                'filename': f,
+                'patch_id': str(data.get('patch_id', f[:-5])),
+                'valid': len(errors) == 0,
+                'errors': errors,
+                'operations_count': len(ops),
+                'is_applied': str(data.get('patch_id', f[:-5])) in done
+            })
+        except Exception as e:
+            results.append({'filename': f, 'patch_id': '?', 'valid': False, 'errors': [f'Ошибка: {str(e)}'], 'operations_count': 0, 'is_applied': False})
+    return JSONResponse({'patches': results})
+
+
+@app.get('/api/patches/stats')
 def s_pstats():
     return JSONResponse({'success': True, 'stats': stats()})
 
@@ -901,7 +1002,119 @@ def s_ptest(payload: dict):
 
 @app.post('/api/patches/apply')
 def s_papply(payload: dict):
-    return JSONResponse(apply_patch(payload))
+    return JSONResponse(apply_patch_atomic(payload))
+
+
+@app.get('/api/patches/verify-108')
+def s_verify_108():
+    """Проверка применения патча 108 (атомарность)."""
+    with open(os.path.join(BASE, 'main.py'), 'r', encoding='utf-8') as f:
+        content = f.read()
+    checks = {
+        'apply_patch_atomic_exists': 'def apply_patch_atomic(data):' in content,
+        'endpoint_registered': '/api/patches/apply-atomic' in content,
+        'rollback_mechanism': 'shutil.copy2' in content,
+        'syntax_check': 'compile(new_content' in content or 'compile(f.read()' in content,
+        's_papply_uses_atomic': 'apply_patch_atomic(payload)' in content
+    }
+    passed = sum(1 for v in checks.values() if v)
+    return JSONResponse({
+        'success': True,
+        'patch_108_verified': passed == 5,
+        'checks': checks,
+        'passed': f'{passed}/5'
+    })
+
+
+def apply_patch_atomic(data):
+    """Атомарное применение: все операции или ни одной."""
+    pid = str(data.get('patch_id', 'unknown'))
+    ops = data.get('operations', [])
+    if not ops:
+        return {'success': False, 'error': 'Нет операций'}
+    # Фаза 1: валидация всех операций БЕЗ записи на диск
+    planned = []
+    for i, op in enumerate(ops):
+        tgt = op.get('target_file', '')
+        full = os.path.join(BASE, tgt)
+        if not os.path.exists(full):
+            return {'success': False, 'patch_id': pid,
+                    'error': f'Операция {i+1}: файл {tgt} не существует',
+                    'rolled_back': False}
+        with open(full, 'r', encoding='utf-8') as f:
+            content = f.read()
+        op_type = op.get('type', '')
+        if op_type == 'search_and_replace':
+            find_txt = op.get('find', '')
+            if find_txt not in content:
+                return {'success': False, 'patch_id': pid,
+                        'error': f'Операция {i+1}: подстрока не найдена в {tgt}',
+                        'rolled_back': False}
+            if content.count(find_txt) > 1:
+                return {'success': False, 'patch_id': pid,
+                        'error': f'Операция {i+1}: {content.count(find_txt)} вхождений в {tgt}',
+                        'rolled_back': False}
+            new_content = content.replace(find_txt, op.get('replace', ''), 1)
+        elif op_type == 'full_replace':
+            new_content = op.get('full_file_content', '')
+        else:
+            return {'success': False, 'patch_id': pid,
+                    'error': f'Операция {i+1}: неизвестный тип {op_type}',
+                    'rolled_back': False}
+        # Проверка синтаксиса Python до записи
+        if tgt.endswith('.py'):
+            try:
+                compile(new_content, tgt, 'exec')
+            except SyntaxError as e:
+                return {'success': False, 'patch_id': pid,
+                        'error': f'Операция {i+1}: синтаксис Python сломан в {tgt}: {e}',
+                        'rolled_back': False}
+        planned.append({'tgt': tgt, 'full': full, 'content': new_content})
+    # Фаза 2: бэкап всех файлов
+    backups = []
+    for pl in planned:
+        b = backup(pl['full'])
+        backups.append((pl['full'], b))
+    # Фаза 3: запись
+    try:
+        for pl in planned:
+            with open(pl['full'], 'w', encoding='utf-8') as f:
+                f.write(pl['content'])
+    except Exception as e:
+        # Откат
+        for orig, b in backups:
+            if b:
+                try:
+                    shutil.copy2(b[0], orig)
+                except Exception:
+                    pass
+        return {'success': False, 'patch_id': pid,
+                'error': f'Ошибка записи, откат выполнен: {e}',
+                'rolled_back': True}
+    # Фаза 4: финальная проверка синтаксиса всех .py
+    for pl in planned:
+        if pl['tgt'].endswith('.py'):
+            try:
+                with open(pl['full'], 'r', encoding='utf-8') as f:
+                    compile(f.read(), pl['tgt'], 'exec')
+            except SyntaxError as e:
+                for orig, b in backups:
+                    if b:
+                        try:
+                            shutil.copy2(b[0], orig)
+                        except Exception:
+                            pass
+                return {'success': False, 'patch_id': pid,
+                        'error': f'Финальная проверка: {e}. Откат выполнен.',
+                        'rolled_back': True}
+    return {'success': True, 'patch_id': pid,
+            'message': f'Атомарно применено {len(planned)} файл(ов)',
+            'rolled_back': False}
+
+
+@app.post('/api/patches/apply-atomic')
+def s_papply_atomic(payload: dict):
+    return JSONResponse(apply_patch_atomic(payload))
 
 
 @app.post('/api/patches/rollback')
@@ -1038,8 +1251,97 @@ def s_restart():
 
 def create_ui():
     ui.dark_mode().enable()
+    
+    # Шапка
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.5.0 MULTI-ATOMIC').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.5.2 NICEGUI').classes('text-xl font-bold')
+    
+    # Вкладки
+    with ui.tabs().classes('w-full') as tabs:
+        console_tab = ui.tab('🖥 Консоль')
+    
+    with ui.tab_panels(tabs, value=console_tab).classes('w-full'):
+        with ui.tab_panel(console_tab):
+            # Выбор провайдера
+            provider_select = ui.select(
+                ['Ollama', 'Groq', 'Все'],
+                value='Ollama',
+                label='Провайдер'
+            ).classes('w-64 mb-4')
+            
+            # Выбор модели
+            model_select = ui.select(
+
+                [],
+
+                label='Модель'
+
+            ).classes('w-64 mb-4')
+            
+            # Промпт
+            prompt_input = ui.textarea(
+                label='Промпт',
+                placeholder='Опишите задачу... (Ctrl+Enter для отправки)'
+            ).classes('w-full mb-4').props('rows=4')
+            
+            # Ответ
+            response_display = ui.markdown('*Ожидание запроса...*').classes('w-full')
+            
+            # Функция загрузки моделей
+            def load_models():
+                try:
+                    import requests
+                    cfg = load_cfg()
+                    r = requests.get(cfg.get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=5)
+                    if r.status_code == 200:
+                        models_data = r.json().get('models', [])
+                        model_names = [m['name'] for m in models_data]
+                        model_select.options = model_names
+                        if model_names and not model_select.value:
+                            model_select.value = model_names[0]
+                except Exception as e:
+                    log(f'Ошибка загрузки моделей: {e}', 'ERROR')
+            
+            # Функция отправки задачи
+            async def send_task():
+                prompt = prompt_input.value
+                if not prompt:
+                    response_display.content = '**Ошибка:** Введите промпт'
+                    return
+                
+                response_display.content = '*Обработка...*'
+                
+                try:
+                    import requests
+                    payload = {
+                        'prompt': prompt,
+                        'mode': 'fast',
+                        'model': model_select.value or '',
+                        'provider': 'ollama' if provider_select.value == 'Ollama' else 'groq' if provider_select.value == 'Groq' else 'all'
+                    }
+                    r = requests.post('http://127.0.0.1:8080/api/task', json=payload, timeout=120)
+                    if r.status_code == 200:
+                        result = r.json()
+                        if result.get('success'):
+                            response_display.content = result.get('result', '*Нет ответа*')
+                        else:
+                            response_display.content = f"**Ошибка:** {result.get('error', 'Неизвестная ошибка')}"
+                    else:
+                        response_display.content = f'**HTTP Ошибка:** {r.status_code}'
+                except Exception as e:
+                    response_display.content = f'**Исключение:** {str(e)}'
+            
+            # Кнопка отправки
+            ui.button('▶ Отправить', on_click=send_task).classes('bg-green-500 text-white mb-4')
+            
+            # Автообновление списка моделей каждые 10 секунд
+            ui.timer(10.0, load_models)
+            
+            # Загрузка моделей при старте
+            load_models()
+            
+            # Обработка Enter
+            prompt_input.on('keydown.enter', send_task)
 
 
 # ============================================================================

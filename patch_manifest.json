@@ -2308,6 +2308,106 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ProjectTab.tsx_20261119_145143_556906_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ProjectTab.tsx_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "104",
+      "target_file": "main.py+agent_engine.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "a0ae0d7b2be4783c73ff963cce4f737baf9c863871a9885cd8bd39dde3722bff",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_002631_396229.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_002631_396229_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "8eede4a82bba806bac5f188b83016e33a20cca8df6c7b82d39e0b4e99ef96cea",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261120_002631_405726.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261120_002631_405726_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-20T00:26:31.414715",
+      "checksum": "0720cfa8ad60a31af4f6f402913147cdb5b9252ea09f494d0b72abf94d300a99",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_002631_396229.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_002631_396229_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261120_002631_405726.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261120_002631_405726_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "105",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "4f10dfda73a49b2b5a780b2d63ab15f7731baf0b7e415a0a5424db0a0597bce3",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_230513_001843.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_230513_001843_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-20T23:05:13.018169",
+      "checksum": "e15a459b5ca535ad5b4798f25c9e2489f770c9567fc9ad4ed53a31b0b239e722",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_230513_001843.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_230513_001843_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "108",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "aa62477009b91db93575fbdf706073639fb687b3ffc33acfbfae781585a1c462",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_235237_256505.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_235237_256505_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-20T23:52:37.286576",
+      "checksum": "b251b8cb3f8e94ccd6260c801ec40a12fc71ca2df18e0ccaded824e8d56e6b12",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_235237_256505.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261120_235237_256505_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "109",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "d9a19830ca4acaeaf1d126e41d421983ea2368fac0009e21b7b701c0b56da02a",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261121_001638_573344.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261121_001638_573344_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-21T00:16:38.595685",
+      "checksum": "e1b913759824accd5169cb046b28610db8467494bc0d1cba3496010fdc93b250",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261121_001638_573344.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261121_001638_573344_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -3034,6 +3134,52 @@
         "src/components/tabs/ProjectTab.tsx"
       ],
       "timestamp": "2026-11-19T14:51:43.562441"
+    },
+    {
+      "action": "apply",
+      "patch_id": "103",
+      "files": [
+        "main.py",
+        "agent_engine.py",
+        "src/services/api.ts",
+        "src/hooks/useConsole.ts",
+        "src/components/tabs/ConsoleTab.tsx",
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-19T23:27:24.086940"
+    },
+    {
+      "action": "apply",
+      "patch_id": "104",
+      "files": [
+        "main.py",
+        "agent_engine.py"
+      ],
+      "timestamp": "2026-11-20T00:26:31.414715"
+    },
+    {
+      "action": "apply",
+      "patch_id": "105",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-20T23:05:13.018169"
+    },
+    {
+      "action": "apply",
+      "patch_id": "108",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-20T23:52:37.286576"
+    },
+    {
+      "action": "apply",
+      "patch_id": "109",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-21T00:16:38.595685"
     }
   ],
   "rollbacks": [
@@ -3302,6 +3448,88 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_104033.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_20261119_104033_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\test_engine.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "103",
+      "target_file": "main.py+agent_engine.py+src/services/api.ts+src/hooks/useConsole.ts+src/components/tabs/ConsoleTab.tsx+src/App.tsx",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "a0ae0d7b2be4783c73ff963cce4f737baf9c863871a9885cd8bd39dde3722bff",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_232724_045462.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_232724_045462_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "8eede4a82bba806bac5f188b83016e33a20cca8df6c7b82d39e0b4e99ef96cea",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261119_232724_047989.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261119_232724_047989_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "3f974b3d63c18391552bc7ee07e49bce9f5ba24fd961659df89cf066fa2f10d7",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261119_232724_075286.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261119_232724_075286_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "da79471d9e3b03c66c6a9c91e70411df1dd1109b21177e9fe1b9c7d19115a646",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261119_232724_076936.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261119_232724_076936_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "src/components/tabs/ConsoleTab.tsx",
+          "checksum": "b888349627ecc94b43d08cd3889278b114a5b18057969faa78f371a2028d41e3",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261119_232724_078832.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261119_232724_078832_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "9dc76e9f73587b3a414d83c7c1d1fbf320921a84bc7a4230fbdc904ef3c63d30",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_232724_080361.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_232724_080361_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-19T23:27:24.086940",
+      "checksum": "b725b41f98df3dd00a3a6b92e72a6d8a3df2001d706961262eeeeae9cfc5db45",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_232724_045462.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261119_232724_045462_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261119_232724_047989.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261119_232724_047989_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261119_232724_075286.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261119_232724_075286_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261119_232724_076936.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261119_232724_076936_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261119_232724_078832.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261119_232724_078832_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_232724_080361.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261119_232724_080361_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
       ]
     }
   ]

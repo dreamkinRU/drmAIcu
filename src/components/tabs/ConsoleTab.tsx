@@ -6,6 +6,9 @@ interface ConsoleTabProps {
   consoleLoading: boolean;
   providerMode: 'ollama' | 'groq' | 'all';
   setProviderMode: (mode: 'ollama' | 'groq' | 'all') => void;
+  selectedModel: string;
+  setSelectedModel: (value: string) => void;
+  installedModels: any[];
   ollamaUrl: string;
   setOllamaUrl: (url: string) => void;
   runAiTask: () => void;
@@ -14,7 +17,8 @@ interface ConsoleTabProps {
 export default function ConsoleTab(props: ConsoleTabProps) {
   const {
     consolePrompt, setConsolePrompt, consoleLoading,
-    providerMode, setProviderMode, ollamaUrl, setOllamaUrl, runAiTask,
+    providerMode, setProviderMode, selectedModel, setSelectedModel, installedModels,
+    ollamaUrl, setOllamaUrl, runAiTask,
   } = props;
 
   return (
@@ -27,12 +31,27 @@ export default function ConsoleTab(props: ConsoleTabProps) {
           <button onClick={() => setProviderMode('all')} className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all border-2 ${providerMode === 'all' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>⚡ Все</button>
         </div>
         {(providerMode === 'ollama' || providerMode === 'all') && (
-          <input
-            type="text"
-            value={ollamaUrl}
-            onChange={(e) => setOllamaUrl(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm font-mono focus:border-emerald-500 focus:outline-none"
-          />
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={ollamaUrl}
+              onChange={(e) => setOllamaUrl(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm font-mono focus:border-emerald-500 focus:outline-none"
+              placeholder="http://localhost:11434"
+            />
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-emerald-500 focus:outline-none appearance-none cursor-pointer"
+            >
+              <option value="">🤖 Выбрать модель...</option>
+              {installedModels.map((m: any) => (
+                <option key={m.name || m} value={m.name || m}>
+                  {m.name || m}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 

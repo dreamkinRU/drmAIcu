@@ -121,6 +121,66 @@ class AgentEngine:
         response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=timeout)
         return response['message']['content']
 
+
+
+    async def run_task(self, prompt: str, status_callback=None, mode: str = "full", model: str = None, provider: str = None) -> str:
+        self.log("=" * 70, "INFO")
+        self.log(f"TASK: {prompt[:80]}", "INFO")
+        self.log(f"MODE: {mode}", "INFO")
+        if model and provider:
+            self.log(f"TARGET: {provider} / {model}", "INFO")
+            candidates = [{"provider": provider, "model": model, "name": f"{provider}: {model}"}]
+        else:
+            candidates = self._get_candidates()
+        self.log("=" * 70, "INFO")
+        active_providers = set(c['provider'].upper() for c in candidates)
+        self.log(f"Active providers: {', '.join(sorted(active_providers))}", "INFO")
+        self.log(f"Total models: {len(candidates)}", "INFO")
+        if status_callback:
+            status_callback(f"Sending to {len(candidates)} models...")
+        tasks = [self.get_code_response(c, prompt) for c in candidates]
+        self.log("Parallel query...", "INFO")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        valid_responses = []
+        for res in results:
+            if isinstance(res, Exception):
+                self.log(f"[ERR] Critical: {res}", "ERROR")
+            elif isinstance(res, dict) and res.get("code"):
+                valid_responses.append(res)
+            elif isinstance(res, dict):
+                self.log(f"[WARN] {res['candidate']['name']}: {res.get('error')}", "WARN")
+        self.log(f"Success: {len(valid_responses)} of {len(candidates)}", "INFO")
+        if valid_responses:
+            answered = [r['candidate']['name'] for r in valid_responses]
+            self.log(f"Answered: {', '.join(answered)}", "SUCCESS")
+        if not valid_responses:
+            if status_callback:
+                status_callback("All models failed")
+            self.log("All models failed", "ERROR")
+            return "All models failed. Check Debug log."
+        if mode == "fast":
+            winner = valid_responses[0]['candidate']['name']
+            if status_callback:
+                status_callback(f"Fast: {winner}")
+            self.log(f"Fast: {winner}", "SUCCESS")
+            return valid_responses[0]["code"]
+        if len(valid_responses) == 1:
+            if status_callback:
+                status_callback("1 response")
+            self.log("Only 1 response", "INFO")
+            return valid_responses[0]["code"]
+        if status_callback:
+            status_callback("Judge...")
+        judge_result = await self.judge_responses(prompt, valid_responses)
+        if judge_result.get("code"):
+            if status_callback:
+                status_callback("Judge selected")
+            return judge_result["code"]
+        else:
+            self.log("Judge failed, taking first", "WARN")
+            if status_callback:
+                status_callback("Taking first")
+            return valid_responses[0]["code"]
     async def _query_openai_style(self, provider: str, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
         client = self._clients.get(provider)
         if not client:
@@ -251,70 +311,3 @@ ANSWER (code only):"""
         except Exception as e:
             self.log(f"[ERR] [{provider}] Judge error: {str(e)[:60]}", "ERROR")
             return {"code": None, "error": str(e), "judge": judge}
-
-    async def run_task(self, prompt: str, status_callback=None, mode: str = "full") -> str:
-        self.log("=" * 70, "INFO")
-        self.log(f"TASK: {prompt[:80]}", "INFO")
-        self.log(f"MODE: {mode}", "INFO")
-        self.log("=" * 70, "INFO")
-
-        candidates = self._get_candidates()
-        active_providers = set(c['provider'].upper() for c in candidates)
-        self.log(f"Active providers: {', '.join(sorted(active_providers))}", "INFO")
-        self.log(f"Total models: {len(candidates)}", "INFO")
-
-        if status_callback:
-            status_callback(f"Sending to {len(candidates)} models...")
-
-        tasks = [self.get_code_response(c, prompt) for c in candidates]
-        self.log("Parallel query...", "INFO")
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        valid_responses = []
-        for res in results:
-            if isinstance(res, Exception):
-                self.log(f"[ERR] Critical: {res}", "ERROR")
-            elif isinstance(res, dict) and res.get("code"):
-                valid_responses.append(res)
-            elif isinstance(res, dict):
-                self.log(f"[WARN] {res['candidate']['name']}: {res.get('error')}", "WARN")
-
-        self.log(f"Success: {len(valid_responses)} of {len(candidates)}", "INFO")
-
-        if valid_responses:
-            answered = [r['candidate']['name'] for r in valid_responses]
-            self.log(f"Answered: {', '.join(answered)}", "SUCCESS")
-
-        if not valid_responses:
-            if status_callback:
-                status_callback("All models failed")
-            self.log("All models failed", "ERROR")
-            return "All models failed. Check Debug log."
-
-        if mode == "fast":
-            winner = valid_responses[0]['candidate']['name']
-            if status_callback:
-                status_callback(f"Fast: {winner}")
-            self.log(f"Fast: {winner}", "SUCCESS")
-            return valid_responses[0]["code"]
-
-        if len(valid_responses) == 1:
-            if status_callback:
-                status_callback("1 response")
-            self.log("Only 1 response", "INFO")
-            return valid_responses[0]["code"]
-
-        if status_callback:
-            status_callback("Judge...")
-        judge_result = await self.judge_responses(prompt, valid_responses)
-
-        if judge_result.get("code"):
-            if status_callback:
-                status_callback("Judge selected")
-            return judge_result["code"]
-        else:
-            self.log("Judge failed, taking first", "WARN")
-            if status_callback:
-                status_callback("Taking first")
-            return valid_responses[0]["code"]

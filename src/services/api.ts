@@ -70,12 +70,12 @@ export async function pullModel(name: string): Promise<{ success: boolean; messa
 // Задачи ИИ и логи
 // ============================================================================
 
-export async function runAiTask(prompt: string, mode: string): Promise<{ success: boolean; result?: string; error?: string }> {
+export async function runAiTask(prompt: string, mode: string, model?: string): Promise<{ success: boolean; result?: string; error?: string }> {
   try {
     const res = await fetch('/api/task', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, mode }),
+      body: JSON.stringify({ prompt, mode, model: model || '' }),
     });
     return await res.json();
   } catch {

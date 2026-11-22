@@ -44,7 +44,7 @@ export default function App() {
   } = useAgents();
   const {
     consolePrompt, setConsolePrompt, consoleLoading,
-    providerMode, setProviderMode, runAiTask,
+    providerMode, setProviderMode, selectedModel, setSelectedModel, runAiTask,
   } = useConsole(addLog);
   const {
     selectedMDFile, mdContent, setMdContent, mdFileExists,
@@ -171,6 +171,9 @@ export default function App() {
             consoleLoading={consoleLoading}
             providerMode={providerMode}
             setProviderMode={setProviderMode}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            installedModels={installedModels}
             ollamaUrl={ollamaUrl}
             setOllamaUrl={setOllamaUrl}
             runAiTask={runAiTask}

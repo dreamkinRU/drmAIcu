@@ -5,6 +5,7 @@ export function useConsole(addLog: (entry: any) => void) {
   const [consolePrompt, setConsolePrompt] = useState('');
   const [consoleLoading, setConsoleLoading] = useState(false);
   const [providerMode, setProviderMode] = useState<'ollama' | 'groq' | 'all'>('all');
+  const [selectedModel, setSelectedModel] = useState<string>('');
 
   const runAiTask = async () => {
     if (!consolePrompt.trim()) return;
@@ -12,11 +13,11 @@ export function useConsole(addLog: (entry: any) => void) {
     addLog({
       time: new Date().toLocaleTimeString('ru-RU'),
       level: 'info',
-      message: 'Отправка задачи (режим: ' + providerMode + ')...',
+      message: 'Отправка задачи (режим: ' + providerMode + (selectedModel ? `, модель: ${selectedModel}` : '') + ')...',
       source: 'Console',
     });
     try {
-      const data = await runAiTaskApi(consolePrompt, providerMode);
+      const data = await runAiTaskApi(consolePrompt, providerMode, selectedModel);
       if (data.success) {
         setConsolePrompt(prev => prev + '\n\n--- ✅ РЕЗУЛЬТАТ ---\n' + data.result);
         addLog({
@@ -50,6 +51,7 @@ export function useConsole(addLog: (entry: any) => void) {
   return {
     consolePrompt, setConsolePrompt,
     consoleLoading, providerMode, setProviderMode,
+    selectedModel, setSelectedModel,
     runAiTask,
   };
 }
