@@ -7,6 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import main
+import patch_engine as engine
 
 @pytest.fixture
 def box(tmp_path, monkeypatch):
@@ -14,12 +15,12 @@ def box(tmp_path, monkeypatch):
     (base / "patch" / "archive").mkdir(parents=True)
     (base / "backups").mkdir()
     (base / "project_archive").mkdir()
-    monkeypatch.setattr(main, "BASE", str(base))
-    monkeypatch.setattr(main, "PATCH_DIR", str(base / "patch"))
-    monkeypatch.setattr(main, "ARCHIVE_DIR", str(base / "patch" / "archive"))
-    monkeypatch.setattr(main, "BACKUP_DIR", str(base / "backups"))
+    monkeypatch.setattr(engine, "BASE", str(base))
+    monkeypatch.setattr(engine, "PATCH_DIR", str(base / "patch"))
+    monkeypatch.setattr(engine, "ARCHIVE_DIR", str(base / "patch" / "archive"))
+    monkeypatch.setattr(engine, "BACKUP_DIR", str(base / "backups"))
     monkeypatch.setattr(main, "PROJ_ARCHIVE", str(base / "project_archive"))
-    monkeypatch.setattr(main, "MANIFEST", str(base / "patch_manifest.json"))
+    monkeypatch.setattr(engine, "MANIFEST", str(base / "patch_manifest.json"))
     monkeypatch.setattr(main, "IMPORTANT", str(base / ".project-important.json"))
     return base
 
@@ -116,7 +117,7 @@ class TestAtomicityUnderFailure:
         def fake_sha(data):
             counter["i"] += 1
             return "bogus" if counter["i"] > 2 else real_sha(data)
-        monkeypatch.setattr(main, "sha_bytes", fake_sha)
+        monkeypatch.setattr(engine, "sha_bytes", fake_sha)
         res = main.apply_patch({"patch_id": "T-SHA", "operations": [
             {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
             {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
