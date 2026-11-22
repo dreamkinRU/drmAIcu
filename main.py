@@ -1,4 +1,4 @@
-# main.py v3.5.0 MULTI-ATOMIC
+# main.py v3.5.3 MULTI-ATOMIC HARDENED
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse,  JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+    app.add_middleware(CORSMiddleware, allow_origins=['http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://localhost:8080'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 except RuntimeError:
     pass
 
@@ -328,6 +328,9 @@ def apply_search_replace(content, find, replace):
     
     # Попытка 1: Точное совпадение (быстро и безопасно)
     if norm_find in norm_content:
+        cnt = norm_content.count(norm_find)
+        if cnt > 1:
+            raise ValueError('Неоднозначно: подстрока найдена ' + str(cnt) + ' раз. Уточни find.')
         new_norm = norm_content.replace(norm_find, norm_replace, 1)
         return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
 
@@ -340,13 +343,16 @@ def apply_search_replace(content, find, replace):
     stripped_find = [strip_r(line) for line in find_lines]
     
     find_len = len(stripped_find)
-    for i in range(len(stripped_content) - find_len + 1):
-        if stripped_content[i:i+find_len] == stripped_find:
-            # Нашли блок! Заменяем строки с i по i+find_len на norm_replace.split('\n')
-            replace_lines = norm_replace.split('\n')
-            new_lines = content_lines[:i] + replace_lines + content_lines[i+find_len:]
-            new_norm = '\n'.join(new_lines)
-            return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
+    hits = [i for i in range(len(stripped_content) - find_len + 1) if stripped_content[i:i+find_len] == stripped_find]
+    if len(hits) > 1:
+        raise ValueError('Неоднозначно: блок (без trailing-пробелов) найден ' + str(len(hits)) + ' раз. Уточни find.')
+    if hits:
+        i = hits[0]
+        # Нашли блок! Заменяем строки с i по i+find_len на norm_replace.split('\n')
+        replace_lines = norm_replace.split('\n')
+        new_lines = content_lines[:i] + replace_lines + content_lines[i+find_len:]
+        new_norm = '\n'.join(new_lines)
+        return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
 
     # Если не найдено, возвращаем None, чтобы движок выдал понятную ошибку валидации
     return None
@@ -399,7 +405,7 @@ def normalize_ops(data):
     ops = data.get('operations')
     if isinstance(ops, list) and ops:
         return ops
-    return [{k: data.get(k) for k in ('type', 'target_file', 'diff', 'full_file_content', 'find', 'replace') if data.get(k) is not None}]
+    return [{k: data.get(k) for k in ('type', 'target_file', 'diff', 'full_file_content', 'find', 'replace', 'expected_sha') if data.get(k) is not None}]
 
 
 def list_patches():
@@ -449,10 +455,10 @@ def list_patches():
 def compute_new(o):
     tgt = o.get('target_file', '')
     if not tgt:
-        return None, None, 'Нет target_file'
+        return None, None, None, 'Нет target_file'
     path = safe_path(tgt)
     if path is None:
-        return None, None, 'Path outside project: ' + tgt
+        return None, None, None, 'Path outside project: ' + tgt
     pt = o.get('type', '')
     if not pt:
         if o.get('diff'):
@@ -461,44 +467,56 @@ def compute_new(o):
             pt = 'search_and_replace'
         elif o.get('full_file_content'):
             pt = 'full_replace'
+    base = None
+    existed = os.path.exists(path)
+    if existed:
+        try:
+            with open(path, 'rb') as f:
+                base = sha_bytes(f.read())
+        except OSError:
+            return None, None, None, 'Нельзя прочитать текущий файл: ' + tgt
+        expected = o.get('expected_sha')
+        if expected and base != expected:
+            return None, None, base, 'Stale target_file (expected_sha mismatch): ' + tgt
     if pt == 'create':
         new = o.get('full_file_content', '')
         if not new:
-            return None, None, 'Нет full_file_content для создания'
-        if os.path.exists(path):
-            return None, None, 'Файл уже существует: ' + tgt + '. Используйте full_replace.'
+            return None, None, base, 'Нет full_file_content для создания'
+        if existed:
+            return None, None, base, 'Файл уже существует: ' + tgt + '. Используйте full_replace.'
     elif pt == 'unified_diff':
         d = o.get('diff', '')
         if not d:
-            return None, None, 'Нет diff'
-        if not os.path.exists(path):
-            return None, None, 'Файл не существует: ' + tgt + '. Используйте create.'
+            return None, None, base, 'Нет diff'
+        if not existed:
+            return None, None, base, 'Файл не существует: ' + tgt + '. Используйте create.'
         try:
             new = apply_diff(read_text(path), d)
         except Exception as e:
-            return None, None, 'Diff не применим (' + tgt + '): ' + str(e)
+            return None, None, base, 'Diff не применим (' + tgt + '): ' + str(e)
     elif pt == 'search_and_replace':
         find = o.get('find', '')
         replace = o.get('replace', '')
         if not find:
-            return None, None, 'Нет find для search_and_replace'
+            return None, None, base, 'Нет find для search_and_replace'
         try:
             new = apply_search_replace(read_text(path), find, replace)
         except Exception as e:
-            return None, None, 'Search and replace не применим (' + tgt + '): ' + str(e)
+            return None, None, base, 'Search and replace не применим (' + tgt + '): ' + str(e)
     else:
         new = o.get('full_file_content', '')
         if not new:
-            return None, None, 'Нет full_file_content'
+            return None, None, base, 'Нет full_file_content'
     ok, err = validate(tgt, new)
     if not ok:
-        return None, None, 'Валидация (' + tgt + '): ' + err
-    return path, new, None
+        return None, None, base, 'Валидация (' + tgt + '): ' + err
+    return path, new, base, None
 
 
 def compute_ops(data):
     res = []
     cache = {}
+    bases = {}
     for o in normalize_ops(data):
         tgt = o.get('target_file', '')
         pt = o.get('type', '') or ('unified_diff' if o.get('diff') else 'full_replace')
@@ -509,6 +527,7 @@ def compute_ops(data):
                         'err': 'Bad target_file (security): ' + str(tgt)})
             continue
         key = os.path.normcase(path)
+        base = bases.get(key)
         if key in cache:
             new, err = None, None
             try:
@@ -533,10 +552,12 @@ def compute_ops(data):
             except Exception as e:
                 new, err = None, str(e)
         else:
-            path, new, err = compute_new(o)
+            path, new, base, err = compute_new(o)
         if err is None:
             cache[key] = new
-        res.append({'target_file': tgt, 'type': pt, 'path': path, 'new': new, 'err': err})
+        if err is None and base is not None:
+            bases[key] = base
+        res.append({'target_file': tgt, 'type': pt, 'path': path, 'new': new, 'base': base, 'err': err})
     return res
 
 
@@ -574,9 +595,17 @@ def test_apply(raw):
             'message': 'Тест пройден: ' + str(len(ops)) + ' файл(ов)'}
 
 
+TX_LOCK = threading.RLock()
+
+
 def apply_patch(raw):
     data = resolve(raw)
     pid = str(data.get('patch_id', 'unknown'))
+    with TX_LOCK:
+        return _apply_patch_locked(data, pid)
+
+
+def _apply_patch_locked(data, pid):
     ops = compute_ops(data)
     errs = [o['err'] for o in ops if o['err']]
     if errs:
@@ -597,9 +626,20 @@ def apply_patch(raw):
         if os.path.exists(o['path']) and not backs:
             log('Patch ' + pid + ' aborted: backup failed for existing file ' + o['target_file'], 'ERROR')
             return {'success': False, 'error': 'Критическая ошибка: не удалось создать резервную копию ' + o['target_file'] + '. Операция прервана для предотвращения потери данных.'}
+        try:
+            with open(o['path'], 'rb') as f:
+                disk_sha = sha_bytes(f.read()) if os.path.exists(o['path']) else None
+        except OSError:
+            disk_sha = 'unreadable'
+        if o.get('base') is not None and disk_sha != o['base']:
+            log('Patch ' + pid + ' aborted: stale file on disk ' + o['target_file'] + ' (changed outside the panel)', 'ERROR')
+            return {'success': False, 'error': 'Код на диске изменился вне панели (stale target_file): ' + o['target_file'] + '. Патч отвергнут целиком.'}
+        if o.get('base') is None and o['type'] == 'create' and os.path.exists(o['path']):
+            log('Patch ' + pid + ' aborted: create target appeared mid-transaction ' + o['target_file'], 'ERROR')
+            return {'success': False, 'error': 'Файл появился во время транзакции (create): ' + o['target_file']}
         data = to_bytes(o['new'], file_newline(o['path']))
         planned.append({'path': o['path'], 'new': o['new'], 'backs': backs, 'data': data,
-                        'tgt': o['target_file'], 'sha': sha_bytes(data), 'existed': os.path.exists(o['path']), 'existed': os.path.exists(o['path'])})
+                        'tgt': o['target_file'], 'sha': sha_bytes(data), 'existed': os.path.exists(o['path'])})
     written = []
     try:
         for pl in planned:
@@ -656,6 +696,11 @@ def apply_patch(raw):
 
 
 def rollback():
+    with TX_LOCK:
+        return _rollback_locked()
+
+
+def _rollback_locked():
     man = load_manifest()
     if not man.get('applied'):
         return {'success': False, 'error': 'Нет патчей для отката'}
@@ -663,7 +708,9 @@ def rollback():
     ops = last.get('operations')
     if ops:
         for op in reversed(ops):
-            path = os.path.join(BASE, op['target_file'])
+            path = safe_path(op['target_file'])
+            if path is None:
+                return {'success': False, 'error': 'Подозрительный target_file в манифесте (path traversal): ' + str(op['target_file'])}
             b = op.get('backups') or []
             # A-02 FIX: Используем конкретный timestamp-бэкап из манифеста, а не _LATEST
             if b and len(b) > 0:
@@ -681,10 +728,13 @@ def rollback():
         save_manifest(man)
         return {'success': True, 'message': 'Откат ' + str(last['patch_id']) + ' (' + str(len(ops)) + ' файл(ов))'}
     tgt = last['target_file']
+    dst = safe_path(tgt)
+    if dst is None:
+        return {'success': False, 'error': 'Подозрительный target_file в манифесте (path traversal): ' + str(tgt)}
     b = os.path.join(BACKUP_DIR, os.path.basename(tgt) + '_LATEST.bak')
     if not os.path.exists(b):
         return {'success': False, 'error': 'Бэкап не найден'}
-    shutil.copy2(b, os.path.join(BASE, tgt))
+    shutil.copy2(b, dst)
     man['applied'].pop()
     man['rollbacks'].append(last)
     save_manifest(man)
@@ -921,16 +971,16 @@ def get_engine():
     with lock:
         if engine_obj is not None:
             return engine_obj
-    try:
-        if 'agent_engine' in sys.modules:
-            importlib.reload(sys.modules['agent_engine'])
-        else:
-            import agent_engine
-        engine_obj = sys.modules['agent_engine'].AgentEngine(load_cfg(), log_callback=log)
-        log('Engine loaded', 'SUCCESS')
-    except Exception as e:
-        log('Engine error: ' + str(e), 'ERROR')
-    return engine_obj
+        try:
+            if 'agent_engine' in sys.modules:
+                importlib.reload(sys.modules['agent_engine'])
+            else:
+                import agent_engine
+            engine_obj = sys.modules['agent_engine'].AgentEngine(load_cfg(), log_callback=log)
+            log('Engine loaded', 'SUCCESS')
+        except Exception as e:
+            log('Engine error: ' + str(e), 'ERROR')
+        return engine_obj
 
 
 @app.get('/rollback')
@@ -953,7 +1003,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': '3.5.0 MULTI-ATOMIC',
+                         'version': '3.5.3 MULTI-ATOMIC HARDENED',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
@@ -1031,7 +1081,6 @@ def s_plist():
     return JSONResponse({'success': True, 'patches': list_patches()})
 
 
-@app.get('/api/patches/stats')
 @app.get('/api/patches/validate-all')
 def s_pvalidate_all():
     """Проверить валидность всех патчей без применения."""
@@ -1129,7 +1178,9 @@ def s_pback():
 
 @app.post('/api/patches/archive')
 def s_parch(payload: dict):
-    f = payload.get('filename', '')
+    f = os.path.basename(str(payload.get('filename', '')))
+    if not f or not f.endswith('.json'):
+        return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
     src = os.path.join(PATCH_DIR, f)
     dst = os.path.join(ARCHIVE_DIR, f)
     if not os.path.exists(src):
@@ -1145,7 +1196,12 @@ def s_parch(payload: dict):
 
 @app.post('/api/patches/delete')
 def s_pdel(payload: dict):
-    p = os.path.join(PATCH_DIR, payload.get('filename', ''))
+    f = os.path.basename(str(payload.get('filename', '')))
+    if not f or not f.endswith('.json'):
+        return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
+    p = os.path.join(PATCH_DIR, f)
+    if os.path.realpath(os.path.dirname(p)) != os.path.realpath(PATCH_DIR):
+        return JSONResponse({'success': False, 'error': 'forbidden'})
     if os.path.exists(p):
         os.remove(p)
         return JSONResponse({'success': True, 'message': 'deleted'})
@@ -1463,7 +1519,7 @@ def s_project_archive_list():
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    log('Starting drmAIcu Core v3.5.0 MULTI-ATOMIC...')
+    log('Starting drmAIcu Core v3.5.3 MULTI-ATOMIC HARDENED...')
     get_engine()
     create_ui()
     ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)

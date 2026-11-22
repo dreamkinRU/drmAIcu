@@ -1,5 +1,5 @@
 {
-  "name": "sandbox-workspace",
+  "name": "drmaicu",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,15 +19,13 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.18.4",
-    "recharts": "^2.10.0",
-    "uuid": "^14.0.2"
+    "recharts": "^2.10.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",
     "@types/canvas-confetti": "^1.6.4",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/uuid": "^9.0.7",
     "@vitejs/plugin-react": "^4.3.4",
     "tailwindcss": "^4.1.7",
     "typescript": "^5.7.0",

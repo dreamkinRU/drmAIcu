@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    host: '0.0.0.0',       // СЛУШАТЬ ВСЕ ИНТЕРФЕЙСЫ (IPv4 и IPv6) - 100% решение
+    host: '127.0.0.1',
     port: 5173,
     strictPort: true,
     proxy: {

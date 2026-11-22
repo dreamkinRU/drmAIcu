@@ -136,11 +136,11 @@ class TestAtomicityUnderFailure:
 
 class TestPathSecurity:
     def test_path_traversal_dotdot(self, box):
-        _, _, err = main.compute_new({"type": "create", "target_file": "../escaped.py", "full_file_content": "p = 1\n"})
+        _, _, _, err = main.compute_new({"type": "create", "target_file": "../escaped.py", "full_file_content": "p = 1\n"})
         assert err is not None
 
     def test_path_traversal_absolute(self, box):
-        _, _, err = main.compute_new({"type": "create", "target_file": "/etc/passwd", "full_file_content": "root:x:0:0\n"})
+        _, _, _, err = main.compute_new({"type": "create", "target_file": "/etc/passwd", "full_file_content": "root:x:0:0\n"})
         assert err is not None
 
     def test_null_byte_in_path(self):
