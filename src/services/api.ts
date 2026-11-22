@@ -186,10 +186,22 @@ export async function previewPatch(patch: PatchInfo): Promise<any> {
 
 export async function applyPatchApi(patch: PatchInfo): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
+    // F-01 FIX: Приводим payload к единому контракту {patch_id, operations: [...]}
+    const payload = {
+      patch_id: patch.patch_id,
+      operations: [{
+        type: patch.patch_type || (patch.diff ? 'unified_diff' : 'full_replace'),
+        target_file: patch.target_file,
+        full_file_content: patch.full_file_content || '',
+        diff: patch.diff || '',
+        find: (patch as any).find || '',
+        replace: (patch as any).replace || ''
+      }]
+    };
     const res = await fetch('/api/patches/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patchPayload(patch)),
+      body: JSON.stringify(payload),
     });
     return await res.json();
   } catch {

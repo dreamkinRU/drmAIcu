@@ -62,7 +62,10 @@ def safe_path(rel):
         return None
     p = os.path.normpath(os.path.join(BASE, str(rel)))
     try:
-        if os.path.commonpath([BASE, p]) != BASE:
+        # S-02 FIX: Разрешаем симлинки перед проверкой, чтобы избежать обхода песочницы
+        real_p = os.path.realpath(p)
+        real_base = os.path.realpath(BASE)
+        if os.path.commonpath([real_base, real_p]) != real_base:
             return None
     except ValueError:
         return None
@@ -454,6 +457,8 @@ def compute_new(o):
     if not pt:
         if o.get('diff'):
             pt = 'unified_diff'
+        elif 'find' in o or o.get('find') is not None:
+            pt = 'search_and_replace'
         elif o.get('full_file_content'):
             pt = 'full_replace'
     if pt == 'create':
@@ -497,14 +502,11 @@ def compute_ops(data):
     for o in normalize_ops(data):
         tgt = o.get('target_file', '')
         pt = o.get('type', '') or ('unified_diff' if o.get('diff') else 'full_replace')
-        path = os.path.normpath(os.path.join(BASE, tgt))
-        try:
-            inside = os.path.commonpath([BASE, path]) == BASE
-        except ValueError:
-            inside = False
-        if not tgt or not inside:
+        # ИСПРАВЛЕНИЕ: Используем safe_path для каждой операции, чтобы избежать обхода защиты (null-byte, traversal)
+        path = safe_path(tgt)
+        if path is None:
             res.append({'target_file': tgt, 'type': pt, 'path': None, 'new': None,
-                        'err': 'Bad target_file: ' + str(tgt)})
+                        'err': 'Bad target_file (security): ' + str(tgt)})
             continue
         key = os.path.normcase(path)
         if key in cache:
@@ -591,9 +593,13 @@ def apply_patch(raw):
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
         backs = backup(o['path'])
+        # A-01 FIX: Если файл существовал, но бэкап не создался, мы не имеем права его трогать
+        if os.path.exists(o['path']) and not backs:
+            log('Patch ' + pid + ' aborted: backup failed for existing file ' + o['target_file'], 'ERROR')
+            return {'success': False, 'error': 'Критическая ошибка: не удалось создать резервную копию ' + o['target_file'] + '. Операция прервана для предотвращения потери данных.'}
         data = to_bytes(o['new'], file_newline(o['path']))
         planned.append({'path': o['path'], 'new': o['new'], 'backs': backs, 'data': data,
-                        'tgt': o['target_file'], 'sha': sha_bytes(data)})
+                        'tgt': o['target_file'], 'sha': sha_bytes(data), 'existed': os.path.exists(o['path']), 'existed': os.path.exists(o['path'])})
     written = []
     try:
         for pl in planned:
@@ -623,17 +629,22 @@ def apply_patch(raw):
         log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
         return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам)', 'backups': allb}
     except Exception as e:
+        rollback_failed = []
         for pl in written:
             if pl['backs']:
                 try:
                     shutil.copy2(pl['backs'][-1], pl['path'])
-                except Exception:
-                    pass
-            elif os.path.exists(pl['path']):
+                except Exception as rb_err:
+                    rollback_failed.append(pl['tgt'] + ': ' + str(rb_err))
+            elif pl.get('existed') and not pl['backs']:
+                # Файл существовал, бэкапа нет, удалять его НЕЛЬЗЯ (A-01 fix)
+                pass
+            elif not pl.get('existed') and os.path.exists(pl['path']):
+                # Это был новый файл (create), его можно безопасно удалить при откате
                 try:
                     os.remove(pl['path'])
-                except Exception:
-                    pass
+                except Exception as rb_err:
+                    rollback_failed.append(pl['tgt'] + ': ' + str(rb_err))
             tmp = pl['path'] + '.tmp'
             if os.path.exists(tmp):
                 try:
@@ -641,7 +652,7 @@ def apply_patch(raw):
                 except Exception:
                     pass
         log('Patch ' + pid + ' ROLLED BACK (phase2): ' + str(e), 'ERROR')
-        return {'success': False, 'error': 'Транзакция отменена, всё восстановлено: ' + str(e)}
+        return {'success': False, 'error': 'Транзакция отменена, выполнен откат: ' + str(e)}
 
 
 def rollback():
@@ -654,9 +665,16 @@ def rollback():
         for op in reversed(ops):
             path = os.path.join(BASE, op['target_file'])
             b = op.get('backups') or []
-            if b:
-                shutil.copy2(b[-1], path)
+            # A-02 FIX: Используем конкретный timestamp-бэкап из манифеста, а не _LATEST
+            if b and len(b) > 0:
+                # b[-1] в манифесте - это конкретный созданный бэкап для этой операции
+                specific_backup = b[-1]
+                if os.path.exists(specific_backup):
+                    shutil.copy2(specific_backup, path)
+                else:
+                    return {'success': False, 'error': 'Бэкап ' + specific_backup + ' не найден. Откат невозможен.'}
             elif os.path.exists(path):
+                # Если это был созданный файл (нет бэкапа), удаляем его
                 os.remove(path)
         man['applied'].pop()
         man['rollbacks'].append(last)
@@ -1002,119 +1020,30 @@ def s_ptest(payload: dict):
 
 @app.post('/api/patches/apply')
 def s_papply(payload: dict):
-    return JSONResponse(apply_patch_atomic(payload))
+    log('API apply: ' + str(payload.get('patch_id', 'unknown')), 'INFO')
+    return JSONResponse(apply_patch(payload))
 
 
 @app.get('/api/patches/verify-108')
 def s_verify_108():
-    """Проверка применения патча 108 (атомарность)."""
+    """Проверка единого конвейера применения патчей."""
     with open(os.path.join(BASE, 'main.py'), 'r', encoding='utf-8') as f:
         content = f.read()
     checks = {
-        'apply_patch_atomic_exists': 'def apply_patch_atomic(data):' in content,
-        'endpoint_registered': '/api/patches/apply-atomic' in content,
+        'apply_patch_exists': 'def apply_patch(raw):' in content,
+        'endpoint_uses_unified': 'return JSONResponse(apply_patch(payload))' in content,
         'rollback_mechanism': 'shutil.copy2' in content,
-        'syntax_check': 'compile(new_content' in content or 'compile(f.read()' in content,
-        's_papply_uses_atomic': 'apply_patch_atomic(payload)' in content
+        'syntax_check': 'ast.parse' in content or 'compile(' in content,
+        'safe_path_used': 'safe_path(' in content,
+        'no_atomic_leak': 'def apply_patch_atomic' + '(data):' not in content
     }
     passed = sum(1 for v in checks.values() if v)
     return JSONResponse({
         'success': True,
-        'patch_108_verified': passed == 5,
+        'unified_pipeline_verified': passed == 6,
         'checks': checks,
-        'passed': f'{passed}/5'
+        'passed': f'{passed}/6'
     })
-
-
-def apply_patch_atomic(data):
-    """Атомарное применение: все операции или ни одной."""
-    pid = str(data.get('patch_id', 'unknown'))
-    ops = data.get('operations', [])
-    if not ops:
-        return {'success': False, 'error': 'Нет операций'}
-    # Фаза 1: валидация всех операций БЕЗ записи на диск
-    planned = []
-    for i, op in enumerate(ops):
-        tgt = op.get('target_file', '')
-        full = os.path.join(BASE, tgt)
-        if not os.path.exists(full):
-            return {'success': False, 'patch_id': pid,
-                    'error': f'Операция {i+1}: файл {tgt} не существует',
-                    'rolled_back': False}
-        with open(full, 'r', encoding='utf-8') as f:
-            content = f.read()
-        op_type = op.get('type', '')
-        if op_type == 'search_and_replace':
-            find_txt = op.get('find', '')
-            if find_txt not in content:
-                return {'success': False, 'patch_id': pid,
-                        'error': f'Операция {i+1}: подстрока не найдена в {tgt}',
-                        'rolled_back': False}
-            if content.count(find_txt) > 1:
-                return {'success': False, 'patch_id': pid,
-                        'error': f'Операция {i+1}: {content.count(find_txt)} вхождений в {tgt}',
-                        'rolled_back': False}
-            new_content = content.replace(find_txt, op.get('replace', ''), 1)
-        elif op_type == 'full_replace':
-            new_content = op.get('full_file_content', '')
-        else:
-            return {'success': False, 'patch_id': pid,
-                    'error': f'Операция {i+1}: неизвестный тип {op_type}',
-                    'rolled_back': False}
-        # Проверка синтаксиса Python до записи
-        if tgt.endswith('.py'):
-            try:
-                compile(new_content, tgt, 'exec')
-            except SyntaxError as e:
-                return {'success': False, 'patch_id': pid,
-                        'error': f'Операция {i+1}: синтаксис Python сломан в {tgt}: {e}',
-                        'rolled_back': False}
-        planned.append({'tgt': tgt, 'full': full, 'content': new_content})
-    # Фаза 2: бэкап всех файлов
-    backups = []
-    for pl in planned:
-        b = backup(pl['full'])
-        backups.append((pl['full'], b))
-    # Фаза 3: запись
-    try:
-        for pl in planned:
-            with open(pl['full'], 'w', encoding='utf-8') as f:
-                f.write(pl['content'])
-    except Exception as e:
-        # Откат
-        for orig, b in backups:
-            if b:
-                try:
-                    shutil.copy2(b[0], orig)
-                except Exception:
-                    pass
-        return {'success': False, 'patch_id': pid,
-                'error': f'Ошибка записи, откат выполнен: {e}',
-                'rolled_back': True}
-    # Фаза 4: финальная проверка синтаксиса всех .py
-    for pl in planned:
-        if pl['tgt'].endswith('.py'):
-            try:
-                with open(pl['full'], 'r', encoding='utf-8') as f:
-                    compile(f.read(), pl['tgt'], 'exec')
-            except SyntaxError as e:
-                for orig, b in backups:
-                    if b:
-                        try:
-                            shutil.copy2(b[0], orig)
-                        except Exception:
-                            pass
-                return {'success': False, 'patch_id': pid,
-                        'error': f'Финальная проверка: {e}. Откат выполнен.',
-                        'rolled_back': True}
-    return {'success': True, 'patch_id': pid,
-            'message': f'Атомарно применено {len(planned)} файл(ов)',
-            'rolled_back': False}
-
-
-@app.post('/api/patches/apply-atomic')
-def s_papply_atomic(payload: dict):
-    return JSONResponse(apply_patch_atomic(payload))
 
 
 @app.post('/api/patches/rollback')

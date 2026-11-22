@@ -232,3 +232,81 @@ class TestFuzz:
             result = main.apply_search_replace(content, anchor, "REPLACED\n")
             assert result is not None
             assert "REPLACED" in result
+
+
+class TestAPIIntegration:
+    """Интеграционные тесты, проверяющие реальный путь API /api/patches/apply.
+    Эмулируют ровно те JSON-пейлоады, которые приходят из UI."""
+
+    def test_api_blocks_path_traversal(self, box):
+        payload = {
+            "patch_id": "API-TRAVERSAL",
+            "operations": [{
+                "type": "create",
+                "target_file": "../escaped.py",
+                "full_file_content": "print('hacked')"
+            }]
+        }
+        res = main.apply_patch(payload)
+        assert res["success"] is False
+        assert "Bad target_file" in res["error"] or "Path outside" in res["error"]
+
+    def test_api_updates_manifest(self, box):
+        put(box, "a.py", "x = 1\n")
+        payload = {
+            "patch_id": "API-MANIFEST",
+            "operations": [{
+                "type": "full_replace",
+                "target_file": "a.py",
+                "full_file_content": "x = 2\n"
+            }]
+        }
+        res = main.apply_patch(payload)
+        assert res["success"] is True
+        man = main.load_manifest()
+        assert any(p["patch_id"] == "API-MANIFEST" for p in man["applied"])
+
+    def test_api_multi_ops_same_file(self, box):
+        put(box, "a.py", "x = 1\ny = 1\n")
+        payload = {
+            "patch_id": "API-MULTI",
+            "operations": [
+                {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+                {"type": "search_and_replace", "target_file": "a.py", "find": "y = 1", "replace": "y = 2"}
+            ]
+        }
+        res = main.apply_patch(payload)
+        assert res["success"] is True
+        assert read(box / "a.py") == "x = 2\ny = 2\n"
+
+    def test_api_rollback_after_partial_failure(self, box):
+        put(box, "good.py", "x = 1\n")
+        put(box, "bad.py", "y = 1\n")
+        payload = {
+            "patch_id": "API-FAIL",
+            "operations": [
+                {"type": "full_replace", "target_file": "good.py", "full_file_content": "x = 2\n"},
+                {"type": "full_replace", "target_file": "bad.py", "full_file_content": "def f(:\n"}
+            ]
+        }
+        res = main.apply_patch(payload)
+        assert res["success"] is False
+        assert read(box / "good.py") == "x = 1\n"
+        assert read(box / "bad.py") == "y = 1\n"
+
+    def test_compute_ops_blocks_path_traversal_on_multi_ops(self, box):
+        """Убеждаемся, что compute_ops использует safe_path для ВСЕХ операций, а не только первой."""
+        put(box, "a.py", "x = 1\n")
+        payload = {
+            "patch_id": "T-COMPUTE-OPS-SEC",
+            "operations": [
+                {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+                {"type": "create", "target_file": "../escaped.py", "full_file_content": "hacked"}
+            ]
+        }
+        ops = main.compute_ops(payload)
+        # Первая операция валидна
+        assert ops[0]['err'] is None
+        # Вторая операция должна быть заблокирована safe_path (traversal)
+        assert ops[1]['err'] is not None
+        assert "Bad target_file" in ops[1]['err']

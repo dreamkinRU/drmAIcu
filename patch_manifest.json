@@ -2408,6 +2408,152 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261121_001638_573344_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "129c",
+      "target_file": "main.py+tests/test_patching_hardcore.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "dcdbc66bbd2cf971773d3ee7b1e2be761b772e550de004fdb254b753cdc72e5e",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_213553_477731.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_213553_477731_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tests/test_patching_hardcore.py",
+          "checksum": "6415b290dab26abccb346d3bde2a0f25a65aa6b79eda1d5d7cb82da2101e4cf9",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_213553_482305.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_213553_482305_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-22T21:35:53.489340",
+      "checksum": "14333ad2f608efffea3dbdd6908e922b3be3f4a7e06fa65c2e19174580d91cff",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_213553_477731.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_213553_477731_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_213553_482305.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_213553_482305_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "130-fixed",
+      "target_file": "main.py+tests/test_patching_hardcore.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "6736e4cfa45a02e6efd91578ecc7d1eb398d0448c649fd8bc872ba0b282aeeb4",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_215025_800684.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_215025_800684_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "tests/test_patching_hardcore.py",
+          "checksum": "a2cbb9e3c6d6beefd00df64739326ae6b062a633183199e69755eb46170e019d",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_215025_803665.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_215025_803665_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-22T21:50:25.808191",
+      "checksum": "b2bf98814046938e63f3d10ee2086e2260c527fade24e838f8d90b54f2261026",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_215025_800684.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_215025_800684_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_215025_803665.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_20261122_215025_803665_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\tests__test_patching_hardcore.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "131",
+      "target_file": "main.py+src/services/api.ts",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "9dd7ce3118de0c1310fe724cc2c9a5fd12024ecd0ab8f2e5ae753228d3d6e67c",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_221238_636905.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_221238_636905_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        },
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "f34b215111d2f46fff3d6ae15a2334294aad61179fe2eaa7d559e028b275937b",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261122_221238_642885.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261122_221238_642885_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-22T22:12:38.647884",
+      "checksum": "67e70a996a881fe3ab1695411c9decc9ad533942d7cafa5481618db900a27ae5",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_221238_636905.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_221238_636905_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261122_221238_642885.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261122_221238_642885_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "137-audit-logging",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "fdb20114019f6683f43762feed006738aa97c83c0ed9df349f56afbe7ee6a77e",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_231415_303505.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_231415_303505_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-22T23:14:15.311154",
+      "checksum": "22491d65f500674a7f24e4a6baf2d498c09f7e114994c1b3453f933dc7b44c13",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_231415_303505.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_231415_303505_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "138-comprehensive-fix",
+      "target_file": "main.py",
+      "operations": [
+        {
+          "target_file": "main.py",
+          "checksum": "9e76ca900cb22b84eb5d8b692e323c8d6f0d465ebfa4b3c1f689189dd99606bc",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_232959_060784.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_232959_060784_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ]
+        }
+      ],
+      "applied_at": "2026-11-22T23:29:59.065845",
+      "checksum": "fa644be6e95952503ce7bf6e0aa38a88c594b640c6c8a5c21d042679ee400058",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_232959_060784.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261122_232959_060784_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -3180,6 +3326,49 @@
         "main.py"
       ],
       "timestamp": "2026-11-21T00:16:38.595685"
+    },
+    {
+      "action": "apply",
+      "patch_id": "129c",
+      "files": [
+        "main.py",
+        "tests/test_patching_hardcore.py"
+      ],
+      "timestamp": "2026-11-22T21:35:53.489340"
+    },
+    {
+      "action": "apply",
+      "patch_id": "130-fixed",
+      "files": [
+        "main.py",
+        "tests/test_patching_hardcore.py"
+      ],
+      "timestamp": "2026-11-22T21:50:25.808191"
+    },
+    {
+      "action": "apply",
+      "patch_id": "131",
+      "files": [
+        "main.py",
+        "src/services/api.ts"
+      ],
+      "timestamp": "2026-11-22T22:12:38.647884"
+    },
+    {
+      "action": "apply",
+      "patch_id": "137-audit-logging",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-22T23:14:15.311154"
+    },
+    {
+      "action": "apply",
+      "patch_id": "138-comprehensive-fix",
+      "files": [
+        "main.py"
+      ],
+      "timestamp": "2026-11-22T23:29:59.065845"
     }
   ],
   "rollbacks": [
