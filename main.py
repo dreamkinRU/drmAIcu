@@ -328,6 +328,9 @@ def apply_search_replace(content, find, replace):
     
     # Попытка 1: Точное совпадение (быстро и безопасно)
     if norm_find in norm_content:
+        cnt = norm_content.count(norm_find)
+        if cnt > 1:
+            raise ValueError('Неоднозначно: подстрока найдена ' + str(cnt) + ' раз. Уточни find.')
         new_norm = norm_content.replace(norm_find, norm_replace, 1)
         return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
 
@@ -340,13 +343,16 @@ def apply_search_replace(content, find, replace):
     stripped_find = [strip_r(line) for line in find_lines]
     
     find_len = len(stripped_find)
-    for i in range(len(stripped_content) - find_len + 1):
-        if stripped_content[i:i+find_len] == stripped_find:
-            # Нашли блок! Заменяем строки с i по i+find_len на norm_replace.split('\n')
-            replace_lines = norm_replace.split('\n')
-            new_lines = content_lines[:i] + replace_lines + content_lines[i+find_len:]
-            new_norm = '\n'.join(new_lines)
-            return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
+    hits = [i for i in range(len(stripped_content) - find_len + 1) if stripped_content[i:i+find_len] == stripped_find]
+    if len(hits) > 1:
+        raise ValueError('Неоднозначно: блок (без trailing-пробелов) найден ' + str(len(hits)) + ' раз. Уточни find.')
+    if hits:
+        i = hits[0]
+        # Нашли блок! Заменяем строки с i по i+find_len на norm_replace.split('\n')
+        replace_lines = norm_replace.split('\n')
+        new_lines = content_lines[:i] + replace_lines + content_lines[i+find_len:]
+        new_norm = '\n'.join(new_lines)
+        return new_norm.replace('\n', '\r\n') if '\r\n' in content else new_norm
 
     # Если не найдено, возвращаем None, чтобы движок выдал понятную ошибку валидации
     return None
@@ -921,16 +927,16 @@ def get_engine():
     with lock:
         if engine_obj is not None:
             return engine_obj
-    try:
-        if 'agent_engine' in sys.modules:
-            importlib.reload(sys.modules['agent_engine'])
-        else:
-            import agent_engine
-        engine_obj = sys.modules['agent_engine'].AgentEngine(load_cfg(), log_callback=log)
-        log('Engine loaded', 'SUCCESS')
-    except Exception as e:
-        log('Engine error: ' + str(e), 'ERROR')
-    return engine_obj
+        try:
+            if 'agent_engine' in sys.modules:
+                importlib.reload(sys.modules['agent_engine'])
+            else:
+                import agent_engine
+            engine_obj = sys.modules['agent_engine'].AgentEngine(load_cfg(), log_callback=log)
+            log('Engine loaded', 'SUCCESS')
+        except Exception as e:
+            log('Engine error: ' + str(e), 'ERROR')
+        return engine_obj
 
 
 @app.get('/rollback')
