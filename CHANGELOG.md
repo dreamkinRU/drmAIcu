@@ -1,5 +1,16 @@
 # drmAIcu — История изменений
 
+## Unreleased (после v3.5.3)
+
+### CI и гигиена репозитория
+
+#### Добавлено
+- **CI** (`.github/workflows/ci.yml`): джоба `engine` — `pytest tests` на Python 3.12; джоба `frontend` — `npm ci` → `tsc --noEmit` → `vite build` на Node 20. Запуск на push в `main` и на PR
+
+#### Изменено
+- **Чистка корня**: удалены 43 одноразовых дев-скрипта и дампы (`fix_*`, `apply_*`, `diag_*`, `make*`, `show_*`, `*_patch*.py`, `restore_run_task.py`, `main.py.backup_before_project_fix`); вся история доступна в git-логе. `tester.docx` перенесён в `docs/`. `setup_rollback.py` оставлен в корне (генератор `rollback.html`, который сервируется из `BASE`)
+- **README**: исправлена битая ссылка `docs/PATCH_FORMAT.md` (файл не существует) — теперь указывает на раздел PATCHMASTER в `USER_GUIDE.md` и живой пример `patch/143.json`
+
 ## v3.5.3 HARDENED (Текущая)
 
 ### Доработка системы патчей и закрытие ревью-дефектов
