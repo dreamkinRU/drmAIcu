@@ -1081,7 +1081,6 @@ def s_plist():
     return JSONResponse({'success': True, 'patches': list_patches()})
 
 
-@app.get('/api/patches/stats')
 @app.get('/api/patches/validate-all')
 def s_pvalidate_all():
     """Проверить валидность всех патчей без применения."""
