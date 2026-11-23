@@ -311,3 +311,45 @@ class TestAPIIntegration:
         # Вторая операция должна быть заблокирована safe_path (traversal)
         assert ops[1]['err'] is not None
         assert "Bad target_file" in ops[1]['err']
+
+
+class TestPreviewPurity:
+    """B30/B31: dry-run (preview/apply-test) не имеет права мутировать мир."""
+
+    def _snapshot(self, box):
+        files = {}
+        for p in sorted(box.rglob("*")):
+            if p.is_file() and "__pycache__" not in str(p):
+                files[str(p.relative_to(box))] = p.read_bytes()
+        return files
+
+    def test_preview_and_test_apply_leave_no_traces(self, box):
+        put(box, "a.py", "x = 1\n")
+        put(box, "b.py", "y = 1\n")
+        payload = {"patch_id": "B30-PURE", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+            {"type": "search_and_replace", "target_file": "b.py", "find": "y = 1", "replace": "y = 22"}
+        ]}
+        before = self._snapshot(box)
+        pv = main.preview_patch(dict(payload))
+        ta = main.test_apply(dict(payload))
+        after = self._snapshot(box)
+        assert pv["success"] and ta["success"]
+        assert pv["multi"] and ta["multi"]
+        assert after == before, "dry-run изменил состояние: файлы/бэкапы/манифест"
+        assert read(box / "a.py") == "x = 1\n"
+        assert read(box / "b.py") == "y = 1\n"
+
+    def test_preview_partial_invalid_no_side_effects(self, box):
+        payload = {"patch_id": "B31-PURE", "operations": [
+            {"type": "create", "target_file": "new.py", "full_file_content": "n = 1\n"},
+            {"type": "create", "target_file": "../escaped.py", "full_file_content": "bad"}
+        ]}
+        before = self._snapshot(box)
+        pv = main.preview_patch(payload)
+        ta = main.test_apply(payload)
+        after = self._snapshot(box)
+        assert pv["success"] is False
+        assert ta["success"] is False
+        assert after == before
+        assert not (box / "new.py").exists()

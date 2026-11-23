@@ -40,9 +40,16 @@ def sha_bytes(data):
 
 
 def safe_path(rel):
-    if chr(0) in str(rel):
+    # B28 FIX: пустая строка и None — не путь
+    if rel is None or not str(rel):
         return None
-    p = os.path.normpath(os.path.join(BASE, str(rel)))
+    rel = str(rel)
+    if chr(0) in rel:
+        return None
+    # B28 FIX: backslash-сепараторы и drive-буквы Windows запрещены ( в manifest используется '/')
+    if '\\' in rel or re.match(r'^[A-Za-z]:', rel):
+        return None
+    p = os.path.normpath(os.path.join(BASE, rel))
     try:
         # S-02 FIX: Разрешаем симлинки перед проверкой, чтобы избежать обхода песочницы
         real_p = os.path.realpath(p)
@@ -92,8 +99,21 @@ def load_manifest():
 
 
 def save_manifest(m):
-    with open(MANIFEST, 'w', encoding='utf-8') as f:
-        json.dump(m, f, indent=2, ensure_ascii=False)
+    # B26 FIX: atomic write — tmp + os.replace, сбой записи не режет живой манифест
+    tmp = MANIFEST + '.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(m, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, MANIFEST)
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def backup(path):
@@ -102,13 +122,20 @@ def backup(path):
         return out
     name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')
     ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    out = []
     for suffix in ('_' + ts + '.bak', '_' + ts + '_verified.bak', '_LATEST.bak'):
         dst = os.path.join(BACKUP_DIR, name + suffix)
         try:
             shutil.copy2(path, dst)
             out.append(dst)
         except Exception:
-            pass
+            # B27 FIX: all-or-nothing — частичный набор бэкапов равносилен отсутствию бэкапа
+            for x in out:
+                try:
+                    os.remove(x)
+                except OSError:
+                    pass
+            return []
     return out
 
 
@@ -287,10 +314,13 @@ def apply_search_replace(content, find, replace):
 
 
 def find_patch_file(pid, fname=''):
+    # B25 FIX: fname из payload не может совершить traversal — только basename + '.json' внутри PATCH_DIR
     if fname:
-        p = os.path.join(PATCH_DIR, fname)
-        if os.path.exists(p):
-            return p
+        f = os.path.basename(str(fname))
+        if f and f.endswith('.json'):
+            p = os.path.join(PATCH_DIR, f)
+            if os.path.exists(p):
+                return p
     if not pid:
         return None
     for c in (pid + '.json', 'patch_' + pid + '.json'):
