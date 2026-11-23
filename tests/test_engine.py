@@ -442,3 +442,68 @@ def test_B36_manifest_cap_trimming_keeps_last_working(box):
     assert man["applied"][-1]["patch_id"] == "B36-103"
     assert main.rollback()["success"]
     assert read(box / "a.py") == "x = 102\n"
+
+
+# ---------- B40-B44: волна 3 — тампер-детект, дубликаты, строгий diff ----------
+
+def test_B40_tampered_backup_detected_on_rollback(box):
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch({"patch_id": "B40", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]})["success"]
+    man = engine.load_manifest()
+    backup_path = man["applied"][-1]["operations"][0]["backups"][0]
+    with open(backup_path, "wb") as f:
+        f.write(b"TAMPERED\n")
+    res = main.rollback()
+    assert res["success"] is False
+    assert "контрольной суммой" in res["error"]
+    assert read(box / "a.py") == "x = 2\n"
+    assert len(engine.load_manifest()["applied"]) == 1
+
+
+def test_B40b_intact_backup_rollback_with_sha_still_works(box):
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch({"patch_id": "B40b", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]})["success"]
+    assert main.rollback()["success"]
+    assert read(box / "a.py") == "x = 1\n"
+
+
+def test_B43_duplicate_patch_id_rejected(box):
+    payload = {"patch_id": "B43-DUP", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]}
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch(payload)["success"]
+    res = main.apply_patch(payload)
+    assert res["success"] is False
+    assert "уже применён" in res["error"]
+    assert read(box / "a.py") == "x = 2\n"
+    assert len(engine.load_manifest()["applied"]) == 1
+
+
+def test_B43b_reapply_after_rollback_allowed(box):
+    payload = {"patch_id": "B43b", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]}
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch(payload)["success"]
+    assert main.rollback()["success"]
+    assert main.apply_patch(payload)["success"]
+    assert read(box / "a.py") == "x = 2\n"
+
+
+def test_B44_apply_diff_rejects_garbage():
+    corpus = {
+        "": "ни одного валидного ханка",
+        "not a diff at all": "ни одного валидного ханка",
+        "@@ garbage @@": "ни одного валидного ханка",
+        "@@ -1,1 +1,1 @@" : "Пустой ханк",
+        "@@ -1,1 +1,1 @@\n": "Пустой ханк",
+    }
+    for diff, expected in corpus.items():
+        with pytest.raises(ValueError) as ei:
+            main.apply_diff("line1\nline2\n", diff)
+        assert expected in str(ei.value), f"diff={diff!r}: {ei.value}"
