@@ -39,6 +39,10 @@ class AgentEngine:
     def _init_clients(self):
         from openai import AsyncOpenAI
 
+        self._ollama = ollama.Client(
+            host=self.config.get('ollama_url', 'http://127.0.0.1:11434')
+        )
+
         if self.providers.get('bionic'):
             self._clients['bionic'] = AsyncOpenAI(
                 base_url=self.config.get('bionic_url', 'http://localhost:1235/v1'),
@@ -127,6 +131,13 @@ class AgentEngine:
                 {"provider": "huggingface", "model": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "HF: Qwen 32B"}
             ])
 
+        if self.providers['bionic']:
+            candidates.append({"provider": "bionic", "model": "", "name": "Bionic: default"})
+        if self.providers['lmstudio']:
+            candidates.append({"provider": "lmstudio", "model": "", "name": "LM Studio: default"})
+        if self.providers['strata']:
+            candidates.append({"provider": "strata", "model": "", "name": "Strata: default"})
+
         return candidates
 
     def _get_judge_model(self) -> Dict:
@@ -142,7 +153,7 @@ class AgentEngine:
     async def _query_ollama(self, model: str, messages: List[Dict], timeout: float = 120.0) -> str:
         loop = asyncio.get_running_loop()
         def do_request():
-            return ollama.chat(model=model, messages=messages, options={"num_predict": 1000})
+            return self._ollama.chat(model=model, messages=messages, options={"num_predict": 1000})
         response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=timeout)
         return response['message']['content']
 
@@ -182,30 +193,158 @@ class AgentEngine:
             if status_callback:
                 status_callback("All models failed")
             self.log("All models failed", "ERROR")
-            return "All models failed. Check Debug log."
+            return {
+                "success": False,
+                "result": "",
+                "error": "All models failed",
+                "providers": [c["provider"] for c in candidates],
+                "candidates": candidates
+            }
+        winning_providers = [r['candidate']['provider'] for r in valid_responses]
         if mode == "fast":
             winner = valid_responses[0]['candidate']['name']
             if status_callback:
                 status_callback(f"Fast: {winner}")
             self.log(f"Fast: {winner}", "SUCCESS")
-            return valid_responses[0]["code"]
+            return {
+                "success": True,
+                "result": valid_responses[0]["code"],
+                "error": None,
+                "providers": winning_providers
+            }
         if len(valid_responses) == 1:
             if status_callback:
                 status_callback("1 response")
             self.log("Only 1 response", "INFO")
-            return valid_responses[0]["code"]
+            return {
+                "success": True,
+                "result": valid_responses[0]["code"],
+                "error": None,
+                "providers": winning_providers
+            }
         if status_callback:
             status_callback("Judge...")
         judge_result = await self.judge_responses(prompt, valid_responses)
         if judge_result.get("code"):
             if status_callback:
                 status_callback("Judge selected")
-            return judge_result["code"]
+            return {
+                "success": True,
+                "result": judge_result["code"],
+                "error": None,
+                "providers": [r['candidate']['provider'] for r in valid_responses]
+            }
         else:
             self.log("Judge failed, taking first", "WARN")
             if status_callback:
                 status_callback("Taking first")
-            return valid_responses[0]["code"]
+            return {
+                "success": True,
+                "result": valid_responses[0]["code"],
+                "error": "Judge failed",
+                "providers": [r["candidate"]["provider"] for r in valid_responses]
+            }
+
+    async def _ollama_chat_fallback(self, prompt: str, provider: str, model: str, system_prompt: str = None) -> AsyncGenerator[Dict, None]:
+        """B58 FIX: режим 'all' — ротационный failover по цепочке кандидатов
+        от внешних к локальным. B60 FIX: явное событие ошибки со списком
+        исключённых провайдеров, если не ответил ни один."""
+        start_time = time.perf_counter()
+        target_provider = (provider or "ollama").lower()
+        target_model = (model or "").strip()
+        sys_msg = (system_prompt or "").strip() or "You are a helpful AI assistant and expert programmer. Answer clearly and concisely in the user's language. When writing code, return clean code without markdown code fences."
+        messages = [
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": prompt}
+        ]
+
+        if target_provider == "all":
+            attempts = self._get_candidates()
+        else:
+            if not target_model:
+                target_model = await self._resolve_default_model(target_provider)
+            attempts = [{"provider": target_provider, "model": target_model, "name": f"{target_provider}: {target_model}"}]
+
+        self.log(f"[STREAM] failover chain: {len(attempts)} candidates", "INFO")
+        exhausted = []
+        for idx, cand in enumerate(attempts):
+            cprov = cand["provider"]
+            cmodel = cand["model"]
+            if cprov in ("bionic", "lmstudio", "strata") and (not cmodel or cmodel == "default"):
+                cmodel = await self._resolve_default_model(cprov)
+                cand = {"provider": cprov, "model": cmodel, "name": f"{cprov}: {cmodel}"}
+            self.log(f"[STREAM] attempt {idx + 1}: {cprov} / {cmodel}", "INFO")
+            queue: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            stop_flag = {"stop": False}
+
+            def worker(provider_name, model_name):
+                try:
+                    if provider_name == "ollama":
+                        stream = self._ollama.chat(model=model_name, messages=messages, stream=True, options={"num_predict": 2048})
+                        for part in stream:
+                            if stop_flag["stop"]:
+                                break
+                            chunk = part.get("message", {}).get("content", "")
+                            if chunk:
+                                loop.call_soon_threadsafe(queue.put_nowait, ("chunk", chunk))
+                    else:
+                        client = self._clients.get(provider_name)
+                        if not client:
+                            raise Exception(f"Client {provider_name} not initialized")
+                        resp = asyncio.run(client.chat.completions.create(
+                            model=model_name,
+                            messages=messages,
+                            temperature=0.3,
+                            stream=True
+                        ))
+                        for part in resp:
+                            if stop_flag["stop"]:
+                                break
+                            delta = part.choices[0].delta.content if part.choices else None
+                            if delta:
+                                loop.call_soon_threadsafe(queue.put_nowait, ("chunk", delta))
+                    loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
+                except Exception as err:
+                    loop.call_soon_threadsafe(queue.put_nowait, ("error", str(err)))
+
+            fut = loop.run_in_executor(None, worker, cprov, cmodel)
+            chunked = False
+            try:
+                while True:
+                    kind, val = await queue.get()
+                    if kind == "chunk":
+                        chunked = True
+                        yield {"type": "chunk", "content": val}
+                    elif kind == "error":
+                        raise Exception(val)
+                    elif kind == "done":
+                        break
+                if not chunked:
+                    raise Exception("пустой ответ провайдера")
+            except asyncio.CancelledError:
+                self.log(f"[STREAM] Cancelled: {cprov}/{cmodel}", "WARN")
+                raise
+            except Exception as e:
+                self.log(f"[STREAM ERR] {cprov}/{cmodel}: {str(e)[:120]}", "ERROR")
+                exhausted.append({"provider": cprov, "model": cmodel, "error": str(e)})
+                yield {"type": "failover", "provider": cprov, "model": cmodel, "error": str(e), "next": (idx + 1) < len(attempts)}
+                continue
+            finally:
+                stop_flag["stop"] = True
+                if not fut.done():
+                    fut.cancel()
+
+            yield {"type": "done", "provider": cprov, "model": cmodel}
+            return
+
+        yield {
+            "type": "error",
+            "error": "Ответ не получен ни от одного провайдера в цепочке failover",
+            "providers": [e["provider"] for e in exhausted],
+            "details": exhausted
+        }
+
     async def _query_openai_style(self, provider: str, model: str, messages: List[Dict], timeout: float = 60.0) -> str:
         client = self._clients.get(provider)
         if not client:
@@ -347,13 +486,13 @@ ANSWER (code only):"""
         target_model = (model or "").strip()
 
         if target_provider == "all" and not target_model:
-            candidates = self._get_candidates()
-            if candidates:
-                target_provider = candidates[0]["provider"]
-                target_model = candidates[0]["model"]
-            else:
-                target_provider = "ollama"
-                target_model = "qwen2.5-coder:1.5b"
+            async for ev in self._ollama_chat_fallback(prompt, "all", "", system_prompt=system_prompt):
+                if ev.get("type") == "chunk":
+                    if first_token_time is None:
+                        first_token_time = time.perf_counter() - start_time
+                    total_chars += len(ev.get("content", ""))
+                yield ev
+            return
         elif not target_model:
             if target_provider in ("bionic", "lmstudio", "strata"):
                 try:
@@ -437,9 +576,14 @@ ANSWER (code only):"""
                         yield {"type": "chunk", "content": delta}
             else:
                 res = await self.run_task(prompt, mode=mode, model=target_model, provider=target_provider)
+                text = res.get("result", "") if isinstance(res, dict) else (res or "")
+                ok = bool(res.get("success", True)) if isinstance(res, dict) else True
                 first_token_time = time.perf_counter() - start_time
-                total_chars = len(res or "")
-                yield {"type": "chunk", "content": res or ""}
+                total_chars = len(text)
+                if not ok:
+                    yield {"type": "error", "error": res.get("error", "generation failed"), "providers": res.get("providers", [])}
+                elif text:
+                    yield {"type": "chunk", "content": text}
 
             elapsed = max(time.perf_counter() - start_time, 0.001)
             est_tokens = max(1, total_chars // 4)
@@ -465,7 +609,7 @@ ANSWER (code only):"""
         if prov == "ollama":
             try:
                 loop = asyncio.get_running_loop()
-                listed = await loop.run_in_executor(None, ollama.list)
+                listed = await loop.run_in_executor(None, self._ollama.list)
                 models = listed.get("models", []) if isinstance(listed, dict) else getattr(listed, "models", [])
                 for m in models:
                     name = m.get("name") if isinstance(m, dict) else getattr(m, "model", "")

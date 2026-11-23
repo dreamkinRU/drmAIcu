@@ -44,3 +44,9 @@ public/main*.py
 public/*.html
 public/patches.html
 public/context.html
+# === Runtime state ===
+.project-history.json
+.project-important.json
+patch_manifest.json
+patch_journal.json
+restart.flag
