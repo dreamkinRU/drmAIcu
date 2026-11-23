@@ -628,6 +628,14 @@ def _apply_patch_locked(data, pid):
         return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам)', 'backups': allb}
     except Exception as e:
         rollback_failed = []
+        for pl in planned:
+            # B38 FIX: tmp-мусор чистим для ЛЮБОЙ запланированной цели, а не только записанных
+            tmp = pl['path'] + '.tmp'
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
         for pl in written:
             if pl['backs']:
                 try:
@@ -643,12 +651,6 @@ def _apply_patch_locked(data, pid):
                     os.remove(pl['path'])
                 except Exception as rb_err:
                     rollback_failed.append(pl['tgt'] + ': ' + str(rb_err))
-            tmp = pl['path'] + '.tmp'
-            if os.path.exists(tmp):
-                try:
-                    os.remove(tmp)
-                except Exception:
-                    pass
         log('Patch ' + pid + ' ROLLED BACK (phase2): ' + str(e), 'ERROR')
         return {'success': False, 'error': 'Транзакция отменена, выполнен откат: ' + str(e)}
 
@@ -670,10 +672,16 @@ def _rollback_locked():
             if path is None:
                 return {'success': False, 'error': 'Подозрительный target_file в манифесте (path traversal): ' + str(op['target_file'])}
             b = op.get('backups') or []
-            # A-02 FIX: Используем конкретный timestamp-бэкап из манифеста, а не _LATEST
+            # A-02 FIX: Используем timestamp-бэкап этой операции; _LATEST.bak перетирается каждым apply, поэтому
+            # (B32 FIX) избегаем его: восстанавливаем по первому timestamp-бэкапу, _LATEST — только фоллбек
             if b and len(b) > 0:
-                # b[-1] в манифесте - это конкретный созданный бэкап для этой операции
-                specific_backup = b[-1]
+                specific_backup = None
+                for cand in b:
+                    if not os.path.basename(cand).endswith('_LATEST.bak'):
+                        specific_backup = cand
+                        break
+                if specific_backup is None:
+                    specific_backup = b[-1]
                 if os.path.exists(specific_backup):
                     shutil.copy2(specific_backup, path)
                 else:

@@ -353,3 +353,85 @@ class TestPreviewPurity:
         assert ta["success"] is False
         assert after == before
         assert not (box / "new.py").exists()
+
+
+class TestConcurrency:
+    """B37/B38: TX_LOCK — файл никогда не 'порван', манифест не теряет записи."""
+
+    def test_no_torn_write_two_threads_same_file(self, box):
+        import threading as th
+        put(box, "a.py", "x = 1\n")
+        results = []
+        def apply_ver(v):
+            results.append(main.apply_patch({"patch_id": f"B37-{v}", "operations": [
+                {"type": "full_replace", "target_file": "a.py", "full_file_content": f"x = {v}\n"}
+            ]}))
+        t1 = th.Thread(target=apply_ver, args=(2,)); t2 = th.Thread(target=apply_ver, args=(3,))
+        t1.start(); t2.start(); t1.join(10); t2.join(10)
+        assert not t1.is_alive() and not t2.is_alive()
+        assert len(results) == 2 and all(r["success"] for r in results)
+        content = (box / "a.py").read_text(encoding="utf-8")
+        assert content in ("x = 2\n", "x = 3\n"), f"torn write: {content!r}"
+        man = engine.load_manifest()
+        assert len(man["applied"]) == 2 and len(man["history"]) == 2
+
+    def test_ten_threads_manifest_integrity(self, box):
+        import threading as th
+        errs = []
+        def apply_own(i):
+            r = main.apply_patch({"patch_id": f"B38-{i}", "operations": [
+                {"type": "create", "target_file": f"f{i}.py", "full_file_content": f"f = {i}\n"}
+            ]})
+            if not r["success"]:
+                errs.append(r.get("error"))
+        ts = [th.Thread(target=apply_own, args=(i,)) for i in range(10)]
+        [t.start() for t in ts]; [t.join(10) for t in ts]
+        assert not errs, errs
+        man = engine.load_manifest()
+        assert len(man["applied"]) == 10 and len(man["history"]) == 10
+        for i in range(10):
+            assert (box / f"f{i}.py").read_text(encoding="utf-8") == f"f = {i}\n"
+
+
+class TestCrashHygiene:
+    """B39: после любой аварии в целевых директориях нет *.trim."""
+
+    def _tmps(self, box):
+        return [str(p) for p in box.rglob("*.tmp")]
+
+    def test_no_tmp_after_phase1_reject(self, box):
+        put(box, "a.py", "x = 1\n")
+        put(box, "bad.py", "y = 1\n")
+        assert main.apply_patch({"patch_id": "B39-A", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+            {"type": "full_replace", "target_file": "bad.py", "full_file_content": "def f(:\n"},
+        ]})["success"] is False
+        assert self._tmps(box) == []
+
+    def test_no_tmp_after_replace_failure_midwrite(self, box, monkeypatch):
+        real_replace = engine.os.replace
+        state = {"n": 0}
+        def failing_replace(src, dst, *a, **kw):
+            if dst.endswith("b.py"):
+                state["n"] += 1
+                raise OSError("replace failed mid-transaction")
+            return real_replace(src, dst, *a, **kw)
+        monkeypatch.setattr(engine.os, "replace", failing_replace)
+        put(box, "a.py", "x = 1\n")
+        put(box, "b.py", "y = 1\n")
+        (box / "b.py.tmp").write_bytes(b"STALE FROM CRASH")
+        res = main.apply_patch({"patch_id": "B39-B", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+            {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
+        ]})
+        assert res["success"] is False
+        assert read(box / "a.py") == "x = 1\n"
+        assert read(box / "b.py") == "y = 1\n"
+        assert self._tmps(box) == []
+
+    def test_no_tmp_after_success(self, box):
+        put(box, "a.py", "x = 1\n")
+        assert main.apply_patch({"patch_id": "B39-C", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+        ]})["success"]
+        assert self._tmps(box) == []
