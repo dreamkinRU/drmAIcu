@@ -16,7 +16,7 @@ export default function Footer({ setActiveTab }: FooterProps) {
             <span>▤</span> Логи
           </button>
         </div>
-        <span>v.3.5.2 HARDENED • dreamkin • 2026</span>
+        <span>v.3.5.3 HARDENED • dreamkin • 2026</span>
       </div>
     </footer>
   );

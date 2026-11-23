@@ -666,7 +666,7 @@ def create_ui():
     
     # Шапка
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.5.2 NICEGUI').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.5.3 MULTI-ATOMIC HARDENED').classes('text-xl font-bold')
     
     # Вкладки
     with ui.tabs().classes('w-full') as tabs:
