@@ -4,7 +4,7 @@ import rollbackPlugin from './vite-rollback-plugin.js'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), rollbackPlugin()],
   server: {
     host: '127.0.0.1',
     port: 5173,
