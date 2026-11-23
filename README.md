@@ -1,6 +1,6 @@
 # drmAIcu - Universal AI-Guardian
 
-**Версия 3.6.0 HARDENED**
+**Версия 3.6.0 HARDENED** · Обновлено: 23.11.2026 · PR #10–#19 смержены в main
 
 ## Описание
 
