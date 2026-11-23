@@ -1,4 +1,241 @@
-import { LogEntry, OllamaModel, PatchInfo, ProjectFile, ProjectStats } from '../types';
+import { Agent, AgentPipeline, LogEntry, OllamaModel, PatchInfo, ProjectFile, ProjectStats } from '../types';
+
+// ============================================================================
+// Агенты
+// ============================================================================
+
+export async function loadAgentsApi(): Promise<Agent[] | null> {
+  try {
+    const res = await fetch('/api/agents');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success && Array.isArray(data.agents) ? data.agents : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveAgentsApi(agents: Agent[]): Promise<boolean> {
+  try {
+    const res = await fetch('/api/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agents }),
+    });
+    const data = await res.json();
+    return Boolean(data.success);
+  } catch {
+    return false;
+  }
+}
+
+export interface CouncilAgentResult {
+  name: string;
+  provider: string;
+  model: string;
+  elapsed_sec: number;
+  content: string | null;
+  error: string | null;
+}
+
+export async function runCouncilTaskStream(
+  prompt: string,
+  agents: Agent[],
+  judge: Agent | null,
+  handlers: {
+    onStatus?: (msg: string) => void;
+    onAgentDone?: (res: CouncilAgentResult) => void;
+    onSingleWinner?: (name: string, content: string) => void;
+    onJudgeChunk?: (judgeName: string, chunk: string) => void;
+    onMeta?: (meta: StreamMetrics) => void;
+    signal?: AbortSignal;
+  }
+): Promise<{ success: boolean; error?: string; aborted?: boolean }> {
+  try {
+    const res = await fetch('/api/task/council', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, agents, judge }),
+      signal: handlers.signal,
+    });
+    if (!res.ok || !res.body) {
+      return { success: false, error: `HTTP ${res.status}` };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const rawEvent of events) {
+        const line = rawEvent.trim();
+        if (!line.startsWith('data:')) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+        try {
+          const ev = JSON.parse(jsonStr);
+          if (ev.type === 'status' && handlers.onStatus) {
+            handlers.onStatus(ev.content || '');
+          } else if (ev.type === 'agent_done' && handlers.onAgentDone) {
+            handlers.onAgentDone(ev as CouncilAgentResult);
+          } else if (ev.type === 'single_winner' && handlers.onSingleWinner) {
+            handlers.onSingleWinner(ev.name || 'Agent', ev.content || '');
+          } else if (ev.type === 'judge_chunk' && handlers.onJudgeChunk) {
+            handlers.onJudgeChunk(ev.judge_name || 'Judge', ev.content || '');
+          } else if (ev.type === 'meta' && handlers.onMeta) {
+            handlers.onMeta(ev as StreamMetrics);
+          } else if (ev.type === 'error') {
+            return { success: false, error: ev.error || 'Ошибка консилиума' };
+          }
+        } catch {}
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return { success: false, aborted: true };
+    }
+    return { success: false, error: 'Ошибка сети' };
+  }
+}
+
+export async function loadPipelinesApi(): Promise<AgentPipeline[] | null> {
+  try {
+    const res = await fetch('/api/pipelines');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success && Array.isArray(data.pipelines) ? data.pipelines : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePipelinesApi(pipelines: AgentPipeline[]): Promise<boolean> {
+  try {
+    const res = await fetch('/api/pipelines', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipelines }),
+    });
+    const data = await res.json();
+    return Boolean(data.success);
+  } catch {
+    return false;
+  }
+}
+
+export interface PipelineStepPayload {
+  name: string;
+  provider: string;
+  model: string;
+  systemPrompt: string;
+  instruction?: string;
+}
+
+export async function runPipelineTaskStream(
+  prompt: string,
+  steps: PipelineStepPayload[],
+  handlers: {
+    onStepStart?: (info: { step: number; total: number; name: string; provider: string; model: string }) => void;
+    onStepChunk?: (step: number, chunk: string) => void;
+    onStepDone?: (info: { step: number; total: number; name: string; elapsed_sec: number }) => void;
+    onMeta?: (meta: StreamMetrics) => void;
+    signal?: AbortSignal;
+  }
+): Promise<{ success: boolean; error?: string; aborted?: boolean }> {
+  try {
+    const res = await fetch('/api/task/pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, steps }),
+      signal: handlers.signal,
+    });
+    if (!res.ok || !res.body) {
+      return { success: false, error: `HTTP ${res.status}` };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const rawEvent of events) {
+        const line = rawEvent.trim();
+        if (!line.startsWith('data:')) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+        try {
+          const ev = JSON.parse(jsonStr);
+          if (ev.type === 'step_start' && handlers.onStepStart) {
+            handlers.onStepStart(ev);
+          } else if (ev.type === 'step_chunk' && handlers.onStepChunk) {
+            handlers.onStepChunk(ev.step || 1, ev.content || '');
+          } else if (ev.type === 'step_done' && handlers.onStepDone) {
+            handlers.onStepDone(ev);
+          } else if (ev.type === 'meta' && handlers.onMeta) {
+            handlers.onMeta(ev as StreamMetrics);
+          } else if (ev.type === 'error') {
+            return { success: false, error: ev.error || 'Ошибка цепочки' };
+          }
+        } catch {}
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return { success: false, aborted: true };
+    }
+    return { success: false, error: 'Ошибка сети' };
+  }
+}
+
+export async function buildAgentContextApi(payload: {
+  files: string[];
+  include_logs?: boolean;
+  code_issues?: any[];
+}): Promise<{ success: boolean; context_text: string; attached_files: string[]; error?: string }> {
+  try {
+    const res = await fetch('/api/context/build', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return { success: false, context_text: '', attached_files: [], error: `HTTP ${res.status}` };
+    return await res.json();
+  } catch {
+    return { success: false, context_text: '', attached_files: [], error: 'Ошибка сети' };
+  }
+}
+
+export async function savePatchFromConsoleApi(rawText: string): Promise<{
+  success: boolean;
+  filename?: string;
+  patch_id?: string;
+  preview?: any;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/patches/save-from-console', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: rawText }),
+    });
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+    return await res.json();
+  } catch {
+    return { success: false, error: 'Ошибка сети' };
+  }
+}
 
 // ============================================================================
 // Ollama
@@ -133,13 +370,20 @@ export async function runAiTaskStream(
     onChunk: (chunk: string) => void;
     onMeta?: (meta: StreamMetrics) => void;
     signal?: AbortSignal;
+    systemPrompt?: string;
   }
 ): Promise<{ success: boolean; error?: string; aborted?: boolean }> {
   try {
     const res = await fetch('/api/task/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, mode: 'fast', provider, model: model || '' }),
+      body: JSON.stringify({
+        prompt,
+        mode: 'fast',
+        provider,
+        model: model || '',
+        system_prompt: handlers.systemPrompt || '',
+      }),
       signal: handlers.signal,
     });
     if (!res.ok || !res.body) {

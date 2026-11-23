@@ -38,8 +38,11 @@ export default function App() {
     codeTasks, generalTasks, completedTasks,
   } = useTasks();
   const {
-    agents, showAgentStore, setShowAgentStore,
-    toggleAgent, importAgent,
+    agents, pipelines, addPipeline, deletePipeline,
+    activeAgentId, setActiveAgentId, activeAgent,
+    activePipelineId, setActivePipelineId, activePipeline,
+    showAgentStore, setShowAgentStore,
+    toggleAgent, setJudgeAgent, updateAgent, recordAgentStats, addAgent, deleteAgent, importAgent,
   } = useAgents();
   const {
     consolePrompt, setConsolePrompt, consoleLoading,
@@ -47,8 +50,12 @@ export default function App() {
     bionicUrl, setBionicUrl, bionicModels,
     lmstudioUrl, setLmstudioUrl, lmstudioModels,
     strataUrl, setStrataUrl, strataModels,
+    contextFiles, setContextFiles,
+    includeLogs, setIncludeLogs,
+    includeCodeIssues, setIncludeCodeIssues,
+    exportingPatch, hasPatchCandidate, exportPatchToPatches,
     lastPrompt, consoleMetrics, runAiTask, stopAiTask, retryLastTask,
-  } = useConsole(addLog);
+  } = useConsole(addLog, activeAgent, agents, activeAgentId, activePipeline, codeIssues, recordAgentStats);
   const {
     selectedMDFile, mdContent, setMdContent, mdFileExists,
     loadRealMDFile, saveRealMDFile,
@@ -201,6 +208,23 @@ export default function App() {
             consolePrompt={consolePrompt}
             setConsolePrompt={setConsolePrompt}
             consoleLoading={consoleLoading}
+            agents={agents}
+            pipelines={pipelines}
+            projectFiles={projectFiles}
+            codeIssues={codeIssues}
+            contextFiles={contextFiles}
+            setContextFiles={setContextFiles}
+            includeLogs={includeLogs}
+            setIncludeLogs={setIncludeLogs}
+            includeCodeIssues={includeCodeIssues}
+            setIncludeCodeIssues={setIncludeCodeIssues}
+            exportingPatch={exportingPatch}
+            hasPatchCandidate={hasPatchCandidate}
+            exportPatchToPatches={exportPatchToPatches}
+            activeAgentId={activeAgentId}
+            setActiveAgentId={setActiveAgentId}
+            activePipelineId={activePipelineId}
+            setActivePipelineId={setActivePipelineId}
             providerMode={providerMode}
             setProviderMode={setProviderMode}
             selectedModel={selectedModel}
@@ -271,11 +295,27 @@ export default function App() {
         {activeTab === 'agents' && (
           <AgentsTab
             agents={agents}
+            pipelines={pipelines}
+            addPipeline={addPipeline}
+            deletePipeline={deletePipeline}
+            activeAgentId={activeAgentId}
+            setActiveAgentId={setActiveAgentId}
+            activePipelineId={activePipelineId}
+            setActivePipelineId={setActivePipelineId}
+            setActiveTab={setActiveTab}
             showAgentStore={showAgentStore}
             setShowAgentStore={setShowAgentStore}
             toggleAgent={toggleAgent}
+            setJudgeAgent={setJudgeAgent}
+            updateAgent={updateAgent}
+            addAgent={addAgent}
+            deleteAgent={deleteAgent}
             importAgent={importAgent}
             agentStore={agentStore}
+            installedModels={installedModels}
+            bionicModels={bionicModels}
+            lmstudioModels={lmstudioModels}
+            strataModels={strataModels}
           />
         )}
 

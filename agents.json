@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1,
+    "name": "Агент №1 — Развитие системы",
+    "status": "frozen",
+    "task": "Разработка и рефакторинг кода",
+    "stack": [
+      "Python",
+      "TypeScript",
+      "React"
+    ],
+    "progress": 45,
+    "lastActivity": "2 мин назад",
+    "enabled": false,
+    "description": "Основной инженерный агент для развития инфраструктуры drmAIcu.",
+    "provider": "ollama",
+    "model": "qwen2.5-coder:14b",
+    "systemPrompt": "Ты старший инженер-разработчик (Python, FastAPI, React, TypeScript). Пиши чистый, надёжный код без лишней воды. Отвечай на русском языке."
+  },
+  {
+    "id": 2,
+    "name": "Агент №2 — Аналитика данных",
+    "status": "frozen",
+    "task": "Анализ логов и метрик",
+    "stack": [
+      "Python",
+      "Pandas",
+      "SQL"
+    ],
+    "progress": 0,
+    "lastActivity": "—",
+    "enabled": false,
+    "description": "Агент для анализа данных, метрик производительности и отчётов.",
+    "provider": "ollama",
+    "model": "",
+    "systemPrompt": "Ты аналитик данных и системный инженер. Анализируй метрики, логи и структуры данных чётко, структурированно и с конкретными выводами на русском языке."
+  },
+  {
+    "id": 3,
+    "name": "Агент №3 — Ревьюер кода",
+    "status": "frozen",
+    "task": "Поиск багов и проверка типов",
+    "stack": [
+      "TypeScript",
+      "Python",
+      "Security"
+    ],
+    "progress": 0,
+    "lastActivity": "—",
+    "enabled": false,
+    "description": "Строгий ревьюер для поиска уязвимостей, утечек и ошибок логики.",
+    "provider": "ollama",
+    "model": "",
+    "systemPrompt": "Ты строгий code reviewer. Находи логические ошибки, проблемы безопасности, несоответствия типов и предлагай точные исправления. Отвечай кратко и по делу на русском языке."
+  }
+]

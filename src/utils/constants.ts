@@ -5,34 +5,43 @@ export const initialAgents: Agent[] = [
     id: 1,
     name: 'Агент №1 — Развитие системы',
     status: 'active',
-    task: 'Исправление ошибок компиляции',
-    stack: ['Java', 'Python', 'VBA/Excel'],
+    task: 'Разработка и рефакторинг кода',
+    stack: ['Python', 'TypeScript', 'React'],
     progress: 45,
     lastActivity: '2 мин назад',
     enabled: true,
-    description: 'Основной агент для развития инфраструктуры drmAIcu.',
+    description: 'Основной инженерный агент для развития инфраструктуры drmAIcu.',
+    provider: 'ollama',
+    model: 'qwen2.5-coder:14b',
+    systemPrompt: 'Ты старший инженер-разработчик (Python, FastAPI, React, TypeScript). Пиши чистый, надёжный код без лишней воды. Отвечай на русском языке.',
   },
   {
     id: 2,
     name: 'Агент №2 — Аналитика данных',
     status: 'frozen',
-    task: 'На паузе',
+    task: 'Анализ логов и метрик',
     stack: ['Python', 'Pandas', 'SQL'],
     progress: 0,
     lastActivity: '—',
     enabled: false,
-    description: 'Агент для анализа данных и построения отчётов.',
+    description: 'Агент для анализа данных, метрик производительности и отчётов.',
+    provider: 'ollama',
+    model: '',
+    systemPrompt: 'Ты аналитик данных и системный инженер. Анализируй метрики, логи и структуры данных чётко, структурированно и с конкретными выводами на русском языке.',
   },
   {
     id: 3,
-    name: 'Агент №3 — Автоматизация отчётов',
+    name: 'Агент №3 — Ревьюер кода',
     status: 'frozen',
-    task: 'На паузе',
-    stack: ['Python', 'Excel VBA', 'TTS'],
+    task: 'Поиск багов и проверка типов',
+    stack: ['TypeScript', 'Python', 'Security'],
     progress: 0,
     lastActivity: '—',
     enabled: false,
-    description: 'Агент для автоматизации создания отчётов.',
+    description: 'Строгий ревьюер для поиска уязвимостей, утечек и ошибок логики.',
+    provider: 'ollama',
+    model: '',
+    systemPrompt: 'Ты строгий code reviewer. Находи логические ошибки, проблемы безопасности, несоответствия типов и предлагай точные исправления. Отвечай кратко и по делу на русском языке.',
   },
 ];
 
@@ -40,23 +49,32 @@ export const agentStore = [
   {
     id: 'agent-ml',
     name: 'Агент ML',
-    description: 'Машинное обучение, нейронные сети.',
-    stack: ['Python', 'TensorFlow'],
+    description: 'Машинное обучение, оптимизация локальных LLM и инференса.',
+    stack: ['Python', 'PyTorch', 'GGUF'],
     category: 'AI/ML',
+    provider: 'ollama' as const,
+    model: '',
+    systemPrompt: 'Ты эксперт по локальным LLM, квантованию GGUF, VRAM-оптимизации и ML-пайплайнам. Давай практичные рекомендации с точными параметрами на русском языке.',
   },
   {
     id: 'agent-web',
     name: 'Агент Web',
-    description: 'Full-stack веб-разработчик.',
-    stack: ['JavaScript', 'React'],
+    description: 'Full-stack веб-разработчик (React, TypeScript, Tailwind CSS).',
+    stack: ['TypeScript', 'React', 'Tailwind'],
     category: 'Web',
+    provider: 'ollama' as const,
+    model: '',
+    systemPrompt: 'Ты senior frontend-разработчик на React, TypeScript и Tailwind CSS. Создавай лаконичные, типобезопасные компоненты без лишних зависимостей.',
   },
   {
     id: 'agent-devops',
     name: 'Агент DevOps',
-    description: 'CI/CD, контейнеризация.',
-    stack: ['Docker', 'Kubernetes'],
+    description: 'Автоматизация Windows/Linux, скрипты, CI/CD и диагностика.',
+    stack: ['PowerShell', 'Batch', 'Git'],
     category: 'DevOps',
+    provider: 'ollama' as const,
+    model: '',
+    systemPrompt: 'Ты DevOps-инженер. Специализируешься на Windows PowerShell, .bat-скриптах, Git-автоматизации и диагностике сервисов.',
   },
 ];
 
@@ -70,7 +88,7 @@ export const initialProviders: Provider[] = [
 ];
 
 export const initialLogs: LogEntry[] = [
-  { time: '14:32:01', level: 'info', message: 'ЦУ v.3.4.3 TOGGLES запущена', source: 'main.py' },
+  { time: '14:32:01', level: 'info', message: 'ЦУ v.3.6.1 Model запущена', source: 'main.py' },
 ];
 
 export const initialCodeIssues: CodeIssue[] = [
@@ -129,7 +147,6 @@ export const mdFiles: MDFile[] = [
   { name: 'ARCHITECTURE.md', description: 'Архитектура системы' },
 ];
 
-// Интервалы опроса в миллисекундах.
 export const POLL_INTERVALS = {
   OLLAMA: 5000,
   LOGS: 3000,

@@ -29,7 +29,7 @@ PROJ_ARCHIVE = os.path.join(BASE, 'project_archive')
 IMPORTANT = os.path.join(BASE, '.project-important.json')
 LOG = []
 SKIP = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea', 'dist', 'project_archive', '.vite', '.pytest_cache'}
-CRIT_FILES = {'main.py', 'patch_engine.py', 'agent_engine.py', 'settings.json', 'launcher.bat', 'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json', 'index.html', 'README.md'}
+CRIT_FILES = {'main.py', 'patch_engine.py', 'agent_engine.py', 'settings.json', 'config.json', 'agents.json', 'pipelines.json', 'launcher.bat', 'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json', 'index.html', 'README.md'}
 CRIT_DIRS = ('src/', 'patch/', 'docs/', 'tests/')
 
 for d in (PATCH_DIR, ARCHIVE_DIR, BACKUP_DIR, PROJ_ARCHIVE):
@@ -494,6 +494,37 @@ async def s_task(payload: dict):
         return JSONResponse({'success': False, 'error': str(ex)})
 
 
+AGENTS_FILE = os.path.join(BASE, 'agents.json')
+
+
+@app.get('/api/agents')
+def s_agents_get():
+    if os.path.exists(AGENTS_FILE):
+        try:
+            with open(AGENTS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return JSONResponse({'success': True, 'agents': data})
+        except Exception as e:
+            return JSONResponse({'success': False, 'error': str(e), 'agents': None})
+    return JSONResponse({'success': True, 'agents': None})
+
+
+@app.post('/api/agents')
+def s_agents_post(payload: dict):
+    try:
+        items = payload.get('agents')
+        if not isinstance(items, list):
+            return JSONResponse({'success': False, 'error': 'agents must be a list'})
+        tmp = AGENTS_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(items, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, AGENTS_FILE)
+        return JSONResponse({'success': True})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e)})
+
+
 @app.post('/api/task/stream')
 async def s_task_stream(payload: dict):
     e = get_engine()
@@ -503,10 +534,11 @@ async def s_task_stream(payload: dict):
     mode = payload.get('mode', 'fast')
     model = payload.get('model', '')
     provider = payload.get('provider', 'ollama')
+    system_prompt = payload.get('system_prompt', '')
 
     async def event_gen():
         try:
-            async for ev in e.stream_task(prompt, mode=mode, model=model, provider=provider):
+            async for ev in e.stream_task(prompt, mode=mode, model=model, provider=provider, system_prompt=system_prompt):
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         except asyncio.CancelledError:
             return
@@ -514,6 +546,193 @@ async def s_task_stream(payload: dict):
             yield f"data: {json.dumps({'type': 'error', 'error': str(ex)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_gen(), media_type='text/event-stream')
+
+
+PIPELINES_FILE = os.path.join(BASE, 'pipelines.json')
+
+
+@app.get('/api/pipelines')
+def s_pipelines_get():
+    if os.path.exists(PIPELINES_FILE):
+        try:
+            with open(PIPELINES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return JSONResponse({'success': True, 'pipelines': data})
+        except Exception as e:
+            return JSONResponse({'success': False, 'error': str(e), 'pipelines': None})
+    return JSONResponse({'success': True, 'pipelines': None})
+
+
+@app.post('/api/pipelines')
+def s_pipelines_post(payload: dict):
+    try:
+        items = payload.get('pipelines')
+        if not isinstance(items, list):
+            return JSONResponse({'success': False, 'error': 'pipelines must be a list'})
+        tmp = PIPELINES_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(items, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, PIPELINES_FILE)
+        return JSONResponse({'success': True})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e)})
+
+
+@app.post('/api/task/council')
+async def s_task_council(payload: dict):
+    e = get_engine()
+    if not e:
+        return JSONResponse({'success': False, 'error': 'Engine not loaded'}, status_code=503)
+    prompt = payload.get('prompt', '')
+    agents = payload.get('agents') or []
+    judge = payload.get('judge')
+
+    async def event_gen():
+        try:
+            async for ev in e.stream_council(prompt, agents=agents, judge=judge):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            return
+        except Exception as ex:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(ex)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_gen(), media_type='text/event-stream')
+
+
+@app.post('/api/task/pipeline')
+async def s_task_pipeline(payload: dict):
+    e = get_engine()
+    if not e:
+        return JSONResponse({'success': False, 'error': 'Engine not loaded'}, status_code=503)
+    prompt = payload.get('prompt', '')
+    steps = payload.get('steps') or []
+
+    async def event_gen():
+        try:
+            async for ev in e.stream_pipeline(prompt, steps=steps):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            return
+        except Exception as ex:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(ex)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_gen(), media_type='text/event-stream')
+
+
+@app.post('/api/context/build')
+def s_context_build(payload: dict):
+    files = payload.get('files') or []
+    include_logs = bool(payload.get('include_logs'))
+    code_issues = payload.get('code_issues') or []
+    blocks = []
+    attached = []
+    total_chars = 0
+    max_total = 36000
+
+    for rel in files[:10]:
+        rel_str = str(rel).strip()
+        if not rel_str:
+            continue
+        fp = safe_path(rel_str)
+        if fp and os.path.isfile(fp):
+            try:
+                txt = read_text(fp)
+                if len(txt) > 12000:
+                    txt = txt[:12000] + '\n... [обрезано по лимиту 12000 символов]'
+                if total_chars + len(txt) > max_total:
+                    break
+                total_chars += len(txt)
+                blocks.append(f'--- ФАЙЛ ПРОЕКТА: {rel_str} ---\n{txt}')
+                attached.append(rel_str)
+            except Exception:
+                continue
+
+    if include_logs and LOG:
+        tail = LOG[-25:]
+        log_lines = [f"[{x.get('time', '')}] [{x.get('level', '')}] {x.get('message', '')}" for x in tail]
+        blocks.append('--- ПОСЛЕДНИЕ ЛОГИ ЯДРА ---\n' + '\n'.join(log_lines))
+
+    if isinstance(code_issues, list) and len(code_issues) > 0:
+        issue_lines = [
+            f"- {it.get('file', '?')}:{it.get('line', '?')} — {it.get('title', '')}: {it.get('description', '')}"
+            for it in code_issues[:15] if isinstance(it, dict)
+        ]
+        if issue_lines:
+            blocks.append('--- ОТКРЫТЫЕ ЗАМЕЧАНИЯ В КОДЕ ---\n' + '\n'.join(issue_lines))
+
+    return JSONResponse({
+        'success': True,
+        'context_text': '\n\n'.join(blocks),
+        'attached_files': attached,
+    })
+
+
+@app.post('/api/patches/save-from-console')
+def s_save_patch_from_console(payload: dict):
+    raw_text = str(payload.get('raw_text') or '').strip()
+    if not raw_text:
+        return JSONResponse({'success': False, 'error': 'Пустой текст ответа'})
+
+    patch_obj = None
+    try:
+        cand = json.loads(raw_text)
+        if isinstance(cand, dict) and ('operations' in cand or 'target_file' in cand):
+            patch_obj = cand
+    except Exception:
+        pass
+
+    if patch_obj is None:
+        decoder = json.JSONDecoder()
+        idx = 0
+        best = None
+        while idx < len(raw_text):
+            brace = raw_text.find('{', idx)
+            if brace == -1:
+                break
+            try:
+                obj, end_idx = decoder.raw_decode(raw_text, brace)
+                if isinstance(obj, dict) and ('operations' in obj or 'target_file' in obj):
+                    best = obj
+                idx = end_idx
+            except Exception:
+                idx = brace + 1
+        patch_obj = best
+
+    if not isinstance(patch_obj, dict):
+        return JSONResponse({'success': False, 'error': 'В ответе не найден валидный JSON-патч с operations или target_file'})
+
+    raw_pid = str(patch_obj.get('patch_id') or '').strip()
+    safe_pid = re.sub(r'[^a-zA-Z0-9_-]', '', raw_pid)
+    if not safe_pid:
+        max_num = 160
+        for d in (PATCH_DIR, ARCHIVE_DIR):
+            if os.path.isdir(d):
+                for fn in os.listdir(d):
+                    m = re.match(r'^(\d+)\.json$', fn)
+                    if m:
+                        max_num = max(max_num, int(m.group(1)))
+        safe_pid = str(max_num + 1)
+
+    patch_obj['patch_id'] = safe_pid
+    filename = f'{safe_pid}.json'
+    dst = os.path.join(PATCH_DIR, filename)
+    try:
+        tmp = dst + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(patch_obj, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, dst)
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': f'Ошибка записи патча: {str(e)}'})
+
+    prev = preview_patch(patch_obj)
+    log(f'Console patch exported: {filename} (preflight={prev.get("success")})', 'INFO')
+    return JSONResponse({
+        'success': True,
+        'filename': filename,
+        'patch_id': safe_pid,
+        'preview': prev,
+    })
 @app.get('/api/bionic/models')
 def s_bionic_models(url: str = ''):
     try:

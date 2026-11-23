@@ -1,3 +1,5 @@
+export type AgentProviderId = 'ollama' | 'strata' | 'lmstudio' | 'bionic' | 'groq' | 'openrouter' | 'together' | 'huggingface' | 'gemini' | 'all';
+
 export interface Agent {
   id: number;
   name: string;
@@ -8,6 +10,26 @@ export interface Agent {
   lastActivity: string;
   enabled: boolean;
   description: string;
+  provider?: AgentProviderId;
+  model?: string;
+  systemPrompt?: string;
+  isJudge?: boolean;
+  tasksCompleted?: number;
+  avgTps?: number;
+  patchesCreated?: number;
+  contextFiles?: string[];
+}
+
+export interface AgentPipelineStep {
+  agentId: number;
+  instruction?: string;
+}
+
+export interface AgentPipeline {
+  id: string;
+  name: string;
+  description: string;
+  steps: AgentPipelineStep[];
 }
 
 export interface Provider {

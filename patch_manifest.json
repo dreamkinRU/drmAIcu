@@ -1,54 +1,6 @@
 {
   "applied": [
     {
-      "patch_id": "007-full",
-      "target_file": "main.py",
-      "patch_type": "full_replace",
-      "applied_at": "2026-11-15T17:14:40.681770",
-      "checksum": "ce070e9d324b07cfd668031733252605b45cbd9fded18bce72fd5f1e555bb75c",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_171440.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_171440_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "009",
-      "target_file": "launcher.bat",
-      "patch_type": "full_replace",
-      "applied_at": "2026-11-15T17:42:09.683318",
-      "checksum": "9c2544e26c08112d444c6e21c406b3d2068fd93ca62ed2ac7f71695088b8bdef",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_174209.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_174209_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "012",
-      "target_file": "main.py",
-      "patch_type": "full_replace",
-      "applied_at": "2026-11-15T18:11:22.197015",
-      "checksum": "581c07958d4bb09a5e8df0a6b70ec93d88e2f2da2aa0b329040093fb0837daa8",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_181122.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_181122_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "013",
-      "target_file": "main.py",
-      "patch_type": "full_replace",
-      "applied_at": "2026-11-15T18:32:39.485659",
-      "checksum": "9476dfbe26336769237684e795ade2843e55bcfb1015040785c38b57439a13ac",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_183239.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_183239_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
       "patch_id": "014",
       "target_file": "main.py",
       "patch_type": "full_replace",
@@ -3521,6 +3473,514 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_20261123_173458_664631_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\CHANGELOG.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "162",
+      "target_file": "src/types/index.ts+src/utils/constants.ts+agent_engine.py+main.py+src/services/api.ts+src/hooks/useAgents.ts+src/hooks/useConsole.ts+src/components/tabs/AgentsTab.tsx+src/components/tabs/ConsoleTab.tsx+src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/types/index.ts",
+          "checksum": "27cab59cc3ae23fa1241c5839466ce4d42f1b89c7c4718d8ff9da8c058d3b8e2",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_174753_630189.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_174753_630189_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak"
+          ],
+          "backup_sha": "ea230e49e93b1bf8c198b6a00e2009fc3c7fff660fbd6222ffe6749734384c72"
+        },
+        {
+          "target_file": "src/utils/constants.ts",
+          "checksum": "78ae618f832367c5629b4c73425dcab06d42c27670be539222a24296fd1a2839",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__utils__constants.ts_20261123_174753_633708.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__utils__constants.ts_20261123_174753_633708_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__utils__constants.ts_LATEST.bak"
+          ],
+          "backup_sha": "9eb2eef0536764acc4986981115203c92e9235e39ffeed67c45e5df569770b2e"
+        },
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "a1871e01a215dfd62f46b9ae2961a59a8c0bc64ff7041641643cac2607c23601",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_174753_637240.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_174753_637240_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "2aa03e12b6c5492ee4fe698e2c8fa381d76a27e8c9251ffbcf62d5b230550d35"
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "ac94ac7ccd166784c1420638acc354ca62c9998d9115a43efcf3e03421393321",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_174753_668555.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_174753_668555_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ],
+          "backup_sha": "67fc128000532b88df75b8ccad724c6be432c8b8925ebb7558fb9f1231705a73"
+        },
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "e1a85ab164a17dc274c540a080cbe76b670c92ceb4c5b763ff64eb0933672f96",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_174753_707419.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_174753_707419_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+          ],
+          "backup_sha": "0e76c0a44790ece22eb993bdc54fad4357b5b10bd9e557dc3a74f38f9540db96"
+        },
+        {
+          "target_file": "src/hooks/useAgents.ts",
+          "checksum": "5143d17a466915b0ccc1bb4bfe755a4f255c0c4f42ad0de4728760202dc321f8",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_174753_710984.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_174753_710984_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak"
+          ],
+          "backup_sha": "65596b627efd327c730501e7fc0b266ef936370ee08eecc27dc33105017ae8e9"
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "a7e1dbaee11617714349bd4722b6ebfed92708897a9d69f549226fc3257b2584",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_174753_725661.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_174753_725661_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak"
+          ],
+          "backup_sha": "9da93a720496260c1d30af3c710983befa64585a221e9658d2637a9f2bb47a2f"
+        },
+        {
+          "target_file": "src/components/tabs/AgentsTab.tsx",
+          "checksum": "5cbb590a4856e70bc57f6b53c5b3a357342c6aa21b3aa7df7efe014b66b31ea8",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_174753_736784.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_174753_736784_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "d69eba73a3c5701a446882a293feb9ea6181aa99ffc30955f9626ed65c97c193"
+        },
+        {
+          "target_file": "src/components/tabs/ConsoleTab.tsx",
+          "checksum": "7d7a0368f1918916d14f90ed557a1c4ef06c7da58cc40af1026aa22904bcb48f",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_174753_739844.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_174753_739844_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "07c5df63dcf17e2aeea83e5e44ea0a53ce2f0669b868faf7a681041325d72145"
+        },
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "9366d4bde93500ad4dd90196ed687b3949c45c4e27dd4791ef8ad644358fbf0d",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_174753_742914.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_174753_742914_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ],
+          "backup_sha": "e21aac4079ad7b7308eb0d1d45919f8bf8d106d6491fc1193b08cab9d9c7f065"
+        }
+      ],
+      "applied_at": "2026-11-23T17:47:53.793327",
+      "checksum": "77005987c0f7c7e750cd599f35f7895f36182ed4601102dd0001ddcca7592e3f",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_174753_630189.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_174753_630189_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__utils__constants.ts_20261123_174753_633708.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__utils__constants.ts_20261123_174753_633708_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__utils__constants.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_174753_637240.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_174753_637240_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_174753_668555.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_174753_668555_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_174753_707419.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_174753_707419_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_174753_710984.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_174753_710984_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_174753_725661.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_174753_725661_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_174753_736784.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_174753_736784_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_174753_739844.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_174753_739844_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_174753_742914.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_174753_742914_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "163",
+      "target_file": "src/types/index.ts+agent_engine.py+main.py+src/services/api.ts+src/hooks/useAgents.ts+src/hooks/useConsole.ts+src/components/tabs/AgentsTab.tsx+src/components/tabs/ConsoleTab.tsx+src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/types/index.ts",
+          "checksum": "0ffb2271ff176321f1ac40eeb2d5d395660c294459c1f9815b7e5a18775ea81c",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_175458_400124.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_175458_400124_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak"
+          ],
+          "backup_sha": "27cab59cc3ae23fa1241c5839466ce4d42f1b89c7c4718d8ff9da8c058d3b8e2"
+        },
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "ef34c7399289d00e94e8b47b84e059f6c0004b71cd5ade13f0bc4fa21351dd87",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_175458_403655.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_175458_403655_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "a1871e01a215dfd62f46b9ae2961a59a8c0bc64ff7041641643cac2607c23601"
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "eb711cd8dc170b868dfb1a6e680b41048305774827e1bb27feddaa27077a532a",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_175458_406258.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_175458_406258_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ],
+          "backup_sha": "ac94ac7ccd166784c1420638acc354ca62c9998d9115a43efcf3e03421393321"
+        },
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "b14d194c5ba175632638249f2fc55f5c50b11f8d266c4c3bb8148bf375091081",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_175458_429096.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_175458_429096_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+          ],
+          "backup_sha": "e1a85ab164a17dc274c540a080cbe76b670c92ceb4c5b763ff64eb0933672f96"
+        },
+        {
+          "target_file": "src/hooks/useAgents.ts",
+          "checksum": "3ebf9d5bc1316e814119f04d66173dc0b67f56ea6a65f20cdd78088bf207ea07",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_175458_431609.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_175458_431609_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak"
+          ],
+          "backup_sha": "5143d17a466915b0ccc1bb4bfe755a4f255c0c4f42ad0de4728760202dc321f8"
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "3e1a6c41d8bcddcaa7a88d289763cf2d4fef13777e81c498382fa80e7addeba6",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_175458_434131.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_175458_434131_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak"
+          ],
+          "backup_sha": "a7e1dbaee11617714349bd4722b6ebfed92708897a9d69f549226fc3257b2584"
+        },
+        {
+          "target_file": "src/components/tabs/AgentsTab.tsx",
+          "checksum": "3c679d1c4f5a7f203a17616e964e65818b639c4ccace6f4af88c0f62e1dc5f55",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_175458_436123.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_175458_436123_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "5cbb590a4856e70bc57f6b53c5b3a357342c6aa21b3aa7df7efe014b66b31ea8"
+        },
+        {
+          "target_file": "src/components/tabs/ConsoleTab.tsx",
+          "checksum": "b874dfd233a1dd8984243d366d41040e3df20a7a00a737b2c01d50ba2ad1bea1",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_175458_438637.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_175458_438637_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "7d7a0368f1918916d14f90ed557a1c4ef06c7da58cc40af1026aa22904bcb48f"
+        },
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "a5fd33f14910640de5a852fc9997bd4fd1c46b76ff8ce067358f1aae97732f20",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_175458_440638.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_175458_440638_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ],
+          "backup_sha": "9366d4bde93500ad4dd90196ed687b3949c45c4e27dd4791ef8ad644358fbf0d"
+        }
+      ],
+      "applied_at": "2026-11-23T17:54:58.465732",
+      "checksum": "607605db2bb5a43aa390050ad19582094536c63fcef0dcb4cb878db03c11797a",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_175458_400124.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_175458_400124_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_175458_403655.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_175458_403655_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_175458_406258.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_175458_406258_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_175458_429096.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_175458_429096_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_175458_431609.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_175458_431609_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_175458_434131.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_175458_434131_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_175458_436123.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_175458_436123_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_175458_438637.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_175458_438637_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_175458_440638.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_175458_440638_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "164",
+      "target_file": "src/types/index.ts+agent_engine.py+main.py+src/services/api.ts+src/hooks/useAgents.ts+src/hooks/useConsole.ts+src/components/tabs/AgentsTab.tsx+src/components/tabs/ConsoleTab.tsx+src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/types/index.ts",
+          "checksum": "6051cd6ff5c2cee280634d4fa1960016b75c7082ca614b52eb96f9e7ef9fb97c",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_180153_407741.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_180153_407741_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak"
+          ],
+          "backup_sha": "0ffb2271ff176321f1ac40eeb2d5d395660c294459c1f9815b7e5a18775ea81c"
+        },
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "7f78aeee3b5907224aa1e9104fa7c857142b5d9b0c1da41352fb992d8630c557",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_180153_449700.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_180153_449700_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "ef34c7399289d00e94e8b47b84e059f6c0004b71cd5ade13f0bc4fa21351dd87"
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "e9929ac41fbabd5caf44421df8f008e13749a628a3217619e4caee95308e0bd4",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_180153_452639.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_180153_452639_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ],
+          "backup_sha": "eb711cd8dc170b868dfb1a6e680b41048305774827e1bb27feddaa27077a532a"
+        },
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "5acefc360739c30eae8b82786b49316f32312d3229980bab3d63b89c8a68dac3",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_180153_454875.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_180153_454875_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+          ],
+          "backup_sha": "b14d194c5ba175632638249f2fc55f5c50b11f8d266c4c3bb8148bf375091081"
+        },
+        {
+          "target_file": "src/hooks/useAgents.ts",
+          "checksum": "e014430d18fc0a10f83cc994efa77f26db23432dedbbf0cc2bd898f27b6335c7",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_180153_457802.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_180153_457802_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak"
+          ],
+          "backup_sha": "3ebf9d5bc1316e814119f04d66173dc0b67f56ea6a65f20cdd78088bf207ea07"
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "93300df21e4f370c7707c8a0228690acafa8b850062f18fc2353fb67fcef05f8",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_180153_459319.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_180153_459319_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak"
+          ],
+          "backup_sha": "3e1a6c41d8bcddcaa7a88d289763cf2d4fef13777e81c498382fa80e7addeba6"
+        },
+        {
+          "target_file": "src/components/tabs/AgentsTab.tsx",
+          "checksum": "aa2a63f5919a948e8048fc6167e4e91a2821bc95e99b7872bf430dc543880882",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_180153_461918.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_180153_461918_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "3c679d1c4f5a7f203a17616e964e65818b639c4ccace6f4af88c0f62e1dc5f55"
+        },
+        {
+          "target_file": "src/components/tabs/ConsoleTab.tsx",
+          "checksum": "f3b6085c24314f282f5d4332a0fc2b72ceb9552c8cc170b2dc547cab60a80265",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_180153_463941.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_180153_463941_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "b874dfd233a1dd8984243d366d41040e3df20a7a00a737b2c01d50ba2ad1bea1"
+        },
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "6ffb0abf79ed259251b93c14d189b3c9956034bc376c1cbbce5412e050976bfe",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_180153_466621.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_180153_466621_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ],
+          "backup_sha": "a5fd33f14910640de5a852fc9997bd4fd1c46b76ff8ce067358f1aae97732f20"
+        }
+      ],
+      "applied_at": "2026-11-23T18:01:53.487373",
+      "checksum": "5c57f24e5d4e37cf18ece1f8bbca8a161ed14f6dc129ff18654b058e37d1c0c6",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_180153_407741.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_180153_407741_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_180153_449700.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_180153_449700_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_180153_452639.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_180153_452639_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_180153_454875.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_180153_454875_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_180153_457802.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_180153_457802_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_180153_459319.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_180153_459319_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_180153_461918.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_180153_461918_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_180153_463941.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_180153_463941_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_180153_466621.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_180153_466621_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "165",
+      "target_file": "src/types/index.ts+main.py+src/services/api.ts+src/hooks/useAgents.ts+src/hooks/useConsole.ts+src/components/tabs/ConsoleTab.tsx+src/components/tabs/AgentsTab.tsx+src/App.tsx",
+      "operations": [
+        {
+          "target_file": "src/types/index.ts",
+          "checksum": "934a71115c4271c82df210e6adbd1e13bf8c8338ed4d91a2b120b6baf7cf775f",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_184342_590764.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_184342_590764_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak"
+          ],
+          "backup_sha": "6051cd6ff5c2cee280634d4fa1960016b75c7082ca614b52eb96f9e7ef9fb97c"
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "029ed76e5aad7e711108bdb778fb3f4f9e3ff857d4cd5edd2bac32a348e7b6b2",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_184342_594286.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_184342_594286_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
+          ],
+          "backup_sha": "e9929ac41fbabd5caf44421df8f008e13749a628a3217619e4caee95308e0bd4"
+        },
+        {
+          "target_file": "src/services/api.ts",
+          "checksum": "fe4e41f1a9d6a4beb93ba367c248cae4affdb34d42ca80bac3c3191c62b0f17d",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_184342_596800.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_184342_596800_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak"
+          ],
+          "backup_sha": "5acefc360739c30eae8b82786b49316f32312d3229980bab3d63b89c8a68dac3"
+        },
+        {
+          "target_file": "src/hooks/useAgents.ts",
+          "checksum": "25491a93a4a3ecf204f7d60591203cb28aa5d8adef8567514124a01a83da6401",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_184342_599880.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_184342_599880_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak"
+          ],
+          "backup_sha": "e014430d18fc0a10f83cc994efa77f26db23432dedbbf0cc2bd898f27b6335c7"
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "5f7436fe0c03ae2486f1441924e0c62329372c0bc2a0babdce8d1685d55a5395",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_184342_601891.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_184342_601891_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak"
+          ],
+          "backup_sha": "93300df21e4f370c7707c8a0228690acafa8b850062f18fc2353fb67fcef05f8"
+        },
+        {
+          "target_file": "src/components/tabs/ConsoleTab.tsx",
+          "checksum": "aba3a0e81ab34814a78b8c7c96f5ac0f3cee290e66e2a1886e6fb55040e9e146",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_184342_603818.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_184342_603818_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "f3b6085c24314f282f5d4332a0fc2b72ceb9552c8cc170b2dc547cab60a80265"
+        },
+        {
+          "target_file": "src/components/tabs/AgentsTab.tsx",
+          "checksum": "85433ccf565bd9719b56b2ed0d37cafbc4e0a546928eec9687a30c8182a80d70",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_184342_605936.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_184342_605936_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "aa2a63f5919a948e8048fc6167e4e91a2821bc95e99b7872bf430dc543880882"
+        },
+        {
+          "target_file": "src/App.tsx",
+          "checksum": "9aa0c266daf688ecb4e0a851b09dc7daaa9d9859b6e704785de32417436c68a3",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_184342_607951.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_184342_607951_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+          ],
+          "backup_sha": "6ffb0abf79ed259251b93c14d189b3c9956034bc376c1cbbce5412e050976bfe"
+        }
+      ],
+      "applied_at": "2026-11-23T18:43:42.638818",
+      "checksum": "db58d6dd0d8e6486d03f7a409be89ff9d38f2f605859131937664536f9b7b96a",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_184342_590764.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_20261123_184342_590764_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__types__index.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_184342_594286.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261123_184342_594286_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_184342_596800.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_20261123_184342_596800_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__services__api.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_184342_599880.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_20261123_184342_599880_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useAgents.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_184342_601891.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_20261123_184342_601891_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__hooks__useConsole.ts_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_184342_603818.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_20261123_184342_603818_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__ConsoleTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_184342_605936.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_20261123_184342_605936_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__components__tabs__AgentsTab.tsx_LATEST.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_184342_607951.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_184342_607951_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -4532,6 +4992,70 @@
         "CHANGELOG.md"
       ],
       "timestamp": "2026-11-23T17:34:58.698403"
+    },
+    {
+      "action": "apply",
+      "patch_id": "162",
+      "files": [
+        "src/types/index.ts",
+        "src/utils/constants.ts",
+        "agent_engine.py",
+        "main.py",
+        "src/services/api.ts",
+        "src/hooks/useAgents.ts",
+        "src/hooks/useConsole.ts",
+        "src/components/tabs/AgentsTab.tsx",
+        "src/components/tabs/ConsoleTab.tsx",
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-23T17:47:53.793327"
+    },
+    {
+      "action": "apply",
+      "patch_id": "163",
+      "files": [
+        "src/types/index.ts",
+        "agent_engine.py",
+        "main.py",
+        "src/services/api.ts",
+        "src/hooks/useAgents.ts",
+        "src/hooks/useConsole.ts",
+        "src/components/tabs/AgentsTab.tsx",
+        "src/components/tabs/ConsoleTab.tsx",
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-23T17:54:58.466732"
+    },
+    {
+      "action": "apply",
+      "patch_id": "164",
+      "files": [
+        "src/types/index.ts",
+        "agent_engine.py",
+        "main.py",
+        "src/services/api.ts",
+        "src/hooks/useAgents.ts",
+        "src/hooks/useConsole.ts",
+        "src/components/tabs/AgentsTab.tsx",
+        "src/components/tabs/ConsoleTab.tsx",
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-23T18:01:53.487373"
+    },
+    {
+      "action": "apply",
+      "patch_id": "165",
+      "files": [
+        "src/types/index.ts",
+        "main.py",
+        "src/services/api.ts",
+        "src/hooks/useAgents.ts",
+        "src/hooks/useConsole.ts",
+        "src/components/tabs/ConsoleTab.tsx",
+        "src/components/tabs/AgentsTab.tsx",
+        "src/App.tsx"
+      ],
+      "timestamp": "2026-11-23T18:43:42.638818"
     }
   ],
   "rollbacks": [
