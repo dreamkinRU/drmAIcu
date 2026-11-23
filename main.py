@@ -17,6 +17,7 @@ from patch_engine import (
     resolve, rollback, safe_path, save_manifest, sha, sha_bytes, stats,
     test_apply, to_bytes, validate,
 )
+from guards import is_critical_rel, is_doc_rel, validate_url
 BASE = _pe.BASE
 PATCH_DIR = _pe.PATCH_DIR
 ARCHIVE_DIR = _pe.ARCHIVE_DIR
@@ -29,8 +30,6 @@ PROJ_ARCHIVE = os.path.join(BASE, 'project_archive')
 IMPORTANT = os.path.join(BASE, '.project-important.json')
 LOG = []
 SKIP = {'node_modules', '.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea', 'dist', 'project_archive', '.vite', '.pytest_cache'}
-CRIT_FILES = {'main.py', 'patch_engine.py', 'agent_engine.py', 'settings.json', 'config.json', 'agents.json', 'pipelines.json', 'launcher.bat', 'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json', 'index.html', 'README.md'}
-CRIT_DIRS = ('src/', 'patch/', 'docs/', 'tests/')
 
 for d in (PATCH_DIR, ARCHIVE_DIR, BACKUP_DIR, PROJ_ARCHIVE):
     os.makedirs(d, exist_ok=True)
@@ -126,7 +125,7 @@ def classify_file(name, rel, size):
     r = rel.replace('\\', '/').lower()
     n = name.lower()
     # Критическое ядро
-    if name in CRIT_FILES or r.startswith(CRIT_DIRS):
+    if is_critical_rel(rel):
         return {'category': 'critical', 'risk': 'critical', 'icon': 'lock',
                 'reason': 'Критическое ядро системы. Удаление сломает приложение.', 'action': 'keep'}
     # Одноразовые скрипты миграции/фиксов — мусор
@@ -457,6 +456,8 @@ def s_sys_resources():
 
 @app.get('/api/md/{name:path}')
 def s_md_get(name):
+    if not is_doc_rel(name):
+        return JSONResponse({'content': '', 'name': name, 'error': 'Разрешены только Markdown-файлы документации (*.md)'})
     p = safe_path(name)
     if p is None:
         return JSONResponse({'content': '', 'name': name, 'error': 'forbidden'})
@@ -467,6 +468,8 @@ def s_md_get(name):
 
 @app.post('/api/md/{name:path}')
 def s_md_post(name, payload: dict):
+    if not is_doc_rel(name):
+        return JSONResponse({'success': False, 'error': 'Разрешены только Markdown-файлы документации (*.md)'})
     p = safe_path(name)
     if p is None:
         return JSONResponse({'success': False, 'error': 'forbidden'})
@@ -753,6 +756,9 @@ def s_lmstudio_models(url: str = ''):
     try:
         import requests
         base = (url or load_cfg().get('lmstudio_url', 'http://localhost:1234/v1')).rstrip('/')
+        ok, why = validate_url(base)
+        if not ok:
+            return JSONResponse({'success': False, 'error': 'URL отклонён: ' + why, 'models': []})
         r = requests.get(base + '/models', timeout=4)
         if r.status_code != 200:
             return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
@@ -768,6 +774,9 @@ def s_strata_models(url: str = ''):
     try:
         import requests
         base = (url or load_cfg().get('strata_url', 'http://127.0.0.1:47831/v1')).rstrip('/')
+        ok, why = validate_url(base)
+        if not ok:
+            return JSONResponse({'success': False, 'error': 'URL отклонён: ' + why, 'models': []})
         r = requests.get(base + '/models', timeout=4)
         if r.status_code != 200:
             return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
@@ -785,6 +794,18 @@ def s_providers_ping(payload: dict):
 
     items = payload.get('providers') or []
 
+    KNOWN_PROVIDER_BASE = {
+        'groq': 'https://api.groq.com/openai/v1',
+        'openrouter': 'https://openrouter.ai/api/v1',
+        'together': 'https://api.together.xyz/v1',
+    }
+
+    def guarded_get(u, **kw):
+        ok, why = validate_url(u)
+        if not ok:
+            raise ValueError('URL отклонён: ' + why)
+        return requests.get(u, **kw)
+
     def check_one(item):
         pid = str(item.get('id', ''))
         url = str(item.get('url', '')).strip().rstrip('/')
@@ -793,7 +814,7 @@ def s_providers_ping(payload: dict):
         try:
             if pid == 'ollama':
                 base = url or 'http://localhost:11434'
-                r = requests.get(base + '/api/tags', timeout=2.5)
+                r = guarded_get(base + '/api/tags', timeout=2.5)
                 ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
                     models = [m.get('name', '') for m in r.json().get('models', []) if m.get('name')]
@@ -802,7 +823,7 @@ def s_providers_ping(payload: dict):
             elif pid == 'gemini':
                 if not api_key:
                     return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет ключа'}
-                r = requests.get(f'https://generativelanguage.googleapis.com/v1beta/models?key={api_key}', timeout=3.0)
+                r = requests.get('https://generativelanguage.googleapis.com/v1beta/models', headers={'x-goog-api-key': api_key}, timeout=3.0)
                 ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
                     return pid, {'online': True, 'latency': ms, 'models': ['gemini-1.5-flash', 'gemini-2.0-flash']}
@@ -816,12 +837,17 @@ def s_providers_ping(payload: dict):
                     return pid, {'online': True, 'latency': ms, 'models': ['meta-llama/Llama-3.1-8B-Instruct', 'Qwen/Qwen2.5-Coder-32B-Instruct']}
                 return pid, {'online': False, 'latency': 0, 'models': [], 'error': f'HTTP {r.status_code}'}
             else:
-                if not url:
-                    return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет URL'}
-                if pid in ('groq', 'openrouter', 'together') and not api_key:
-                    return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет API-ключа'}
-                headers = {'Authorization': f'Bearer {api_key}'} if api_key else {}
-                r = requests.get(url + '/models', headers=headers, timeout=2.5)
+                base = KNOWN_PROVIDER_BASE.get(pid)
+                if base is not None:
+                    if not api_key:
+                        return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет API-ключа'}
+                    headers = {'Authorization': f'Bearer {api_key}'}
+                else:
+                    if not url:
+                        return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет URL'}
+                    base = url
+                    headers = {}
+                r = guarded_get(base + '/models', headers=headers, timeout=2.5)
                 ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
                     data = r.json().get('data', [])
@@ -1073,7 +1099,7 @@ def s_proj_arch(payload: dict):
         return JSONResponse({'success': False, 'error': 'forbidden'})
     if not os.path.exists(p):
         return JSONResponse({'success': False, 'error': 'not found'})
-    if os.path.basename(rel) in CRIT_FILES or rel.replace('\\', '/').startswith(CRIT_DIRS):
+    if is_critical_rel(rel):
         return JSONResponse({'success': False, 'error': 'Критичный файл'})
     folder = datetime.now().strftime('%Y%m%d_%H%M%S')
     dst = os.path.join(PROJ_ARCHIVE, folder, os.path.basename(rel))
@@ -1090,9 +1116,11 @@ def s_proj_del(payload: dict):
         return JSONResponse({'success': False, 'error': 'forbidden'})
     if not os.path.exists(p):
         return JSONResponse({'success': False, 'error': 'not found'})
-    if os.path.basename(rel) in CRIT_FILES or rel.replace('\\', '/').startswith(CRIT_DIRS):
+    if is_critical_rel(rel):
         return JSONResponse({'success': False, 'error': 'Критичный файл'})
-    backup(p)
+    b = backup(p)
+    if not b:
+        return JSONResponse({'success': False, 'error': 'Не удалось создать резервную копию — удаление запрещено'})
     os.remove(p)
     return JSONResponse({'success': True, 'message': 'Удалён: ' + rel})
 
@@ -1251,16 +1279,20 @@ def s_project_bulk(payload: dict):
         return JSONResponse({'success': False, 'error': 'Нет выбранных файлов'})
     backups = []
     processed = []
+    skipped = []
     for rel_path in paths:
         full_path = safe_path(rel_path)
         if not full_path or not os.path.exists(full_path):
             continue
+        if action in ('archive', 'delete') and is_critical_rel(rel_path):
+            skipped.append(rel_path)
+            continue
         if action == 'archive':
             b = backup(full_path)
-            if b:
-                backups.append(b[0])
-            else:
-                backups.append('')
+            if not b:
+                skipped.append(rel_path)
+                continue
+            backups.append(b[0])
             archive_dir = os.path.join(BASE, 'project_archive', datetime.now().strftime('%Y%m%d_%H%M%S'))
             os.makedirs(archive_dir, exist_ok=True)
             shutil.move(full_path, os.path.join(archive_dir, os.path.basename(full_path)))
@@ -1275,15 +1307,15 @@ def s_project_bulk(payload: dict):
             processed.append(rel_path)
         elif action == 'delete':
             b = backup(full_path)
-            if b:
-                backups.append(b[0])
-            else:
-                backups.append('')
+            if not b:
+                skipped.append(rel_path)
+                continue
+            backups.append(b[0])
             os.remove(full_path)
             processed.append(rel_path)
     if processed:
         log_action(action, processed, backups)
-    return JSONResponse({'success': True, 'processed': len(processed)})
+    return JSONResponse({'success': True, 'processed': len(processed), 'skipped': len(skipped)})
 
 
 @app.post('/api/project/restore')

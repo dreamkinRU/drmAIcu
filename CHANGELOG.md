@@ -2,6 +2,15 @@
 
 ## v.3.6.1 Model (Текущая) — 23.11.2026
 
+### Серверная оборона: P0-02 / P0-03 / P0-04 (B45–B47)
+
+Исправлено (находки уровня P0 в серверных API панели):
+- **P0-02 (B45) — `/api/md` перезаписывал любые файлы**: эндпоинт документации мог написать напрямую в `main.py`, `settings.json`, `agents.json` — мимо Patch Engine, без бэкапа. Теперь чтение и запись разрешены только для `*.md` в корне проекта и в `docs/` (`guards.is_doc_rel`)
+- **P0-03 (B46) — массовые операции обходили защиту критичных файлов**: `/api/project/bulk` (archive/delete) теперь проверяет `CRIT_FILES`/`CRIT_DIRS` как и одиночное удаление; проверка стала case-insensitive на случай Windows-ФС (`MAIN.PY`); в одиночном удалении и bulk-удалении/архивации операция невозможна, пока не создана резервная копия; в ответе bulk появилось поле `skipped`
+- **P0-04 (B47) — SSRF через `/api/providers/ping`**: URL от клиента больше не уходит в запрос напрямую. Новый gate `guards.validate_url`: только http/https; без `user:pass@`; запрет link-local/metadata (`169.254.169.254`, `fe80::/10`), multicast и reserved-адресов; литералы-IP и DNS-резолв проверяются до запроса. Для известных облачных провайдеров (groq/openrouter/together) URL жёстко закреплён на официальном хосте; на URL из конфигурации клиента секреты больше не отправляются; ключ gemini перенесён из query-string в заголовок `x-goog-api-key`; тот же gate подключён в `/api/lmstudio/models` и `/api/strata/models`
+- Новый ui-free модуль **`guards.py`**: единый источник `CRIT_FILES`/`CRIT_DIRS`, `is_critical_rel`, `is_doc_rel`, `validate_url` — импортируется без nicegui/fastapi
+- Тесты: 88 → 102 (B45а–d MD-guard, B46 crit/backup-гейты bulk и одиночного удаления, B47 SSRF-gate и отклонение metadata-URL в ping)
+
 ### Новые локальные провайдеры и единая вкладка «Провайдеры» (патчи 151–160)
 
 - **Новые локальные провайдеры**: в `agent_engine.py` и `main.py` добавлены **Strata** (`http://127.0.0.1:47831/v1`), **LM Studio** (`http://localhost:1234/v1`) и **Bionic AI** (`http://localhost:1235/v1`) с автоподгрузкой списка чат-моделей и фильтрацией `embed`-моделей

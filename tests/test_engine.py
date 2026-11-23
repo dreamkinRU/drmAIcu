@@ -1,5 +1,6 @@
 # tests/test_engine.py
 import importlib
+import json
 import pytest
 
 main = importlib.import_module("main")
@@ -507,3 +508,131 @@ def test_B44_apply_diff_rejects_garbage():
         with pytest.raises(ValueError) as ei:
             main.apply_diff("line1\nline2\n", diff)
         assert expected in str(ei.value), f"diff={diff!r}: {ei.value}"
+
+
+# ---------- B45-B47: P0-исправления сервера (MD-guard, CRIT для bulk, SSRF-gate) ----------
+
+def test_B45_api_md_refuses_non_md(box):
+    (box / 'settings.json').write_text('{"v": 1}', encoding='utf-8')
+    for target in ('settings.json', 'main.py', 'patch_engine.py', 'agents.json'):
+        res = main.s_md_post(target, {'content': 'pwned'})
+        data = json.loads(res.body)
+        assert data['success'] is False, target
+    assert json.loads((box / 'settings.json').read_text(encoding='utf-8')) == {'v': 1}
+    assert not (box / 'main.py').exists()
+    assert not (box / 'agents.json').exists()
+
+
+def test_B45b_api_md_guard_allows_only_doc_md():
+    assert main.is_doc_rel('README.md')
+    assert main.is_doc_rel('RELEASE_NOTES.MD')
+    assert main.is_doc_rel('docs/ARCHITECTURE.md')
+    assert not main.is_doc_rel('notes.md.bak')
+    assert not main.is_doc_rel('src/readme.md')
+    assert not main.is_doc_rel('docs/../main.md')
+    assert not main.is_doc_rel('')
+    assert not main.is_doc_rel(None)
+
+
+def test_B45c_api_md_get_refuses_non_md():
+    data = json.loads(main.s_md_get('settings.json').body)
+    assert data['content'] == '' and data['error']
+
+
+def test_B45d_api_md_post_still_writes_doc_md(box):
+    res = main.s_md_post('NEW.md', {'content': '# привет'})
+    assert json.loads(res.body)['success'] is True
+    assert (box / 'NEW.md').read_text(encoding='utf-8') == '# привет'
+
+
+def test_B46_is_critical_rel_case_insensitive():
+    assert main.is_critical_rel('MAIN.PY')
+    assert main.is_critical_rel('settings.JSON')
+    assert main.is_critical_rel('SRC/app.py')
+    assert main.is_critical_rel('src\\app.tsx')
+    assert main.is_critical_rel('tests/test_engine.py')
+    assert not main.is_critical_rel('notes.txt')
+    assert not main.is_critical_rel('')
+    assert not main.is_critical_rel(None)
+
+
+def test_B46_bulk_delete_respects_critical_files(box):
+    put(box, 'settings.json', '{}')
+    put(box, 'src/core.py', 'x = 1')
+    put(box, 'notes.txt', 'x')
+    res = main.s_project_bulk({'action': 'delete', 'paths': ['settings.json', 'src/core.py', 'notes.txt']})
+    data = json.loads(res.body)
+    assert data['processed'] == 1
+    assert data['skipped'] == 2
+    assert (box / 'settings.json').exists()
+    assert (box / 'src' / 'core.py').exists()
+    assert not (box / 'notes.txt').exists()
+
+
+def test_B46_bulk_delete_requires_backup(box, monkeypatch):
+    monkeypatch.setattr(main, 'backup', lambda p: [])
+    put(box, 'notes.txt', 'x')
+    data = json.loads(main.s_project_bulk({'action': 'delete', 'paths': ['notes.txt']}).body)
+    assert data['processed'] == 0 and data['skipped'] == 1
+    assert (box / 'notes.txt').exists()
+
+
+def test_B46_bulk_archive_requires_backup(box, monkeypatch):
+    monkeypatch.setattr(main, 'backup', lambda p: [])
+    put(box, 'notes.txt', 'x')
+    data = json.loads(main.s_project_bulk({'action': 'archive', 'paths': ['notes.txt']}).body)
+    assert data['processed'] == 0 and data['skipped'] == 1
+    assert (box / 'notes.txt').exists()
+
+
+def test_B46_bulk_archive_respects_critical_files(box):
+    put(box, 'settings.json', '{}')
+    data = json.loads(main.s_project_bulk({'action': 'archive', 'paths': ['settings.json']}).body)
+    assert data['processed'] == 0 and data['skipped'] == 1
+    assert (box / 'settings.json').exists()
+
+
+def test_B46_single_delete_requires_backup(box, monkeypatch):
+    monkeypatch.setattr(main, 'backup', lambda p: ())
+    put(box, 'notes.txt', 'x')
+    res = main.s_proj_del({'path': 'notes.txt'})
+    data = json.loads(res.body)
+    assert data['success'] is False and 'резервную копию' in data['error']
+    assert (box / 'notes.txt').exists()
+
+
+def test_B46_single_delete_blocks_critical(box):
+    put(box, 'main.py', 'x = 1')
+    put(box, 'MAIN.PY', 'x = 1')
+    assert json.loads(main.s_proj_del({'path': 'main.py'}).body)['success'] is False
+    assert json.loads(main.s_proj_del({'path': 'MAIN.PY'}).body)['success'] is False
+    assert (box / 'main.py').exists()
+
+
+def test_B47_url_guard_rejects_metadata_and_garbage():
+    assert main.validate_url('ftp://example.com/x')[0] is False
+    assert main.validate_url('http://')[0] is False
+    assert main.validate_url('')[0] is False
+    assert main.validate_url(None)[0] is False
+    assert main.validate_url('http://user:pw@localhost:11434')[0] is False
+    ok, why = main.validate_url('http://169.254.169.254/latest/meta-data')
+    assert not ok and 'link-local' in why.lower()
+    ok, why = main.validate_url('http://[fe80::1]/')
+    assert not ok and 'link-local' in why.lower()
+    ok, why = main.validate_url('http://224.0.0.1/x')
+    assert not ok and 'зарезервированный' in why
+    assert main.validate_url('http://10.0.0.5:8080', allowed_hosts={'api.groq.com'})[0] is False
+    assert main.validate_url('http://evil.example.com/v1', allowed_hosts={'api.groq.com'})[0] is False
+
+
+def test_B47_url_guard_allows_legit():
+    assert main.validate_url('http://localhost:11434')[0]
+    assert main.validate_url('http://127.0.0.1:11434/api')[0]
+    assert main.validate_url('http://192.168.1.20:1234/v1')[0]
+    assert main.validate_url('http://10.1.2.3')[0]
+    assert main.validate_url('http://8.8.8.8')[0]
+
+
+def test_B47_ping_blocks_metadata_url():
+    st = json.loads(main.s_providers_ping({'providers': [{'id': 'ollama', 'url': 'http://169.254.169.254'}]}).body)['statuses']['ollama']
+    assert st['online'] is False and 'отклонён' in st['error']
