@@ -1,30 +1,44 @@
 @echo off
 chcp 65001 >nul
+setlocal enabledelayedexpansion
+cd /d "%~dp0"
 echo === Синхронизация с GitHub ===
 
-:: 1. Проверяем, есть ли локальные изменения
-git add .
+:: 1. Что есть локального
+git add -A
 git diff --cached --quiet
-if %errorlevel% equ 0 goto pull_changes
+if %errorlevel% neq 0 (
+    git status -s
+    set /p commit_msg="Введите сообщение коммита: "
+    if "!commit_msg!"=="" (
+        echo [ОШИБКА] Пустое сообщение — коммит отменён, изменения остались в индексе.
+        pause & exit /b 1
+    )
+    git commit -m "!commit_msg!"
+    if !errorlevel! neq 0 (
+        echo [ОШИБКА] Коммит не создан.
+        pause & exit /b 1
+    )
+) else (
+    echo Локальных изменений нет.
+)
 
-git status -s
-set /p commit_msg="Введите сообщение коммита: "
-git commit -m "%commit_msg%"
-
-:pull_changes
-:: 2. Забираем новые коммиты с GitHub
+:: 2. Забираем
 echo === Получаем изменения с GitHub ===
 git pull --rebase origin main
 if %errorlevel% neq 0 (
-    echo [ОШИБКА] Возник конфликт при получении изменений!
-    echo Разрешите конфликт вручную, затем выполните: git rebase --continue
-    pause
-    exit /b 1
+    echo [ОШИБКА] Конфликт при pull --rebase.
+    echo Разрешите вручную, затем: git rebase --continue
+    pause & exit /b 1
 )
 
-:: 3. Отправляем изменения на GitHub
+:: 3. Отправляем
 echo === Отправляем изменения на GitHub ===
 git push origin main
+if %errorlevel% neq 0 (
+    echo [ОШИБКА] push не прошёл (защита ветки / сеть). Изменения остались локально в main.
+    pause & exit /b 1
+)
 
 echo === Готово! ===
 pause
