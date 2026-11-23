@@ -1,6 +1,7 @@
 # tests/test_engine.py
 import importlib
 import json
+import os
 import pytest
 
 main = importlib.import_module("main")
@@ -19,6 +20,7 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setattr(engine, "BACKUP_DIR", str(base / "backups"))
     monkeypatch.setattr(main, "PROJ_ARCHIVE", str(base / "project_archive"))
     monkeypatch.setattr(engine, "MANIFEST", str(base / "patch_manifest.json"))
+    monkeypatch.setattr(engine, "JOURNAL", str(base / "patch_journal.json"))
     monkeypatch.setattr(main, "IMPORTANT", str(base / ".project-important.json"))
     return base
 
@@ -636,3 +638,162 @@ def test_B47_url_guard_allows_legit():
 def test_B47_ping_blocks_metadata_url():
     st = json.loads(main.s_providers_ping({'providers': [{'id': 'ollama', 'url': 'http://169.254.169.254'}]}).body)['statuses']['ollama']
     assert st['online'] is False and 'отклонён' in st['error']
+
+
+# ---------- B48-B52: P1-волна — целостность откатов, crash-журнал, блокировка манифеста ----------
+
+
+def test_B48_rollback_refuses_user_edits_after_apply(box):
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch({"patch_id": "B48", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+    ]})["success"]
+    (box / "a.py").write_bytes(b"x = USER_EDIT\n")
+    res = main.rollback()
+    assert res["success"] is False
+    assert "изменён после применения" in res["error"]
+    assert read(box / "a.py") == "x = USER_EDIT\n"
+    assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == ["B48"]
+    (box / "a.py").write_bytes(b"x = 2\n")
+    res = main.rollback()
+    assert res["success"] is True
+    assert read(box / "a.py") == "x = 1\n"
+
+
+def test_B48b_rollback_refuses_deleted_file(box):
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch({"patch_id": "B48b", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+    ]})["success"]
+    (box / "a.py").unlink()
+    res = main.rollback()
+    assert res["success"] is False
+    assert "исчез" in res["error"]
+    assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == ["B48b"]
+
+
+def test_B49_rollback_staging_interrupted_then_resumes(box, monkeypatch):
+    put(box, "a.py", "x = 1\n")
+    put(box, "b.py", "y = 1\n")
+    assert main.apply_patch({"patch_id": "B49", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+        {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
+    ]})["success"]
+    real_copy2 = engine.shutil.copy2
+    mp = pytest.MonkeyPatch()
+
+    def flaky_copy2(src, dst, *a, **kw):
+        if str(dst).endswith(".rbk.tmp") and "b.py" in str(dst):
+            raise OSError("3rd-party interference at staging")
+        return real_copy2(src, dst, *a, **kw)
+
+    mp.setattr(engine.shutil, "copy2", flaky_copy2)
+    res = main.rollback()
+    mp.undo()
+    assert res["success"] is False
+    assert res["interrupted"] is True
+    assert read(box / "a.py") == "x = 2\n"
+    assert read(box / "b.py") == "y = 2\n"
+    assert (box / "patch_journal.json").exists()
+    res = main.rollback()
+    assert res["success"] is True
+    assert read(box / "a.py") == "x = 1\n"
+    assert read(box / "b.py") == "y = 1\n"
+    assert engine.load_manifest()["applied"] == []
+    assert engine.load_manifest()["rollbacks"][0]["patch_id"] == "B49"
+    assert not (box / "patch_journal.json").exists()
+
+
+def test_B50_partial_rollback_reported_not_hidden(box, monkeypatch):
+    real_replace = engine.os.replace
+    real_copy2 = engine.shutil.copy2
+
+    def flaky_replace(src, dst, *a, **kw):
+        if os.path.basename(str(dst)) == "b.py":
+            raise OSError(28, "No space left on device")
+        return real_replace(src, dst, *a, **kw)
+
+    calls = {"n": 0}
+
+    def counting_copy2(src, dst, *a, **kw):
+        calls["n"] += 1
+        if calls["n"] > 6:
+            raise OSError("copy interfered during rollback")
+        return real_copy2(src, dst, *a, **kw)
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(engine.os, "replace", flaky_replace)
+    mp.setattr(engine.shutil, "copy2", counting_copy2)
+    put(box, "a.py", "x = 1\n")
+    put(box, "b.py", "y = 1\n")
+    res = main.apply_patch({"patch_id": "B50", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+        {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
+    ]})
+    mp.undo()
+    assert res["success"] is False
+    assert res["rollback_incomplete"] is True
+    assert "неполный" in res["error"] and "a.py" in res["error"]
+    assert res["rollback_failed"]
+    assert read(box / "a.py") == "x = 2\n"
+    assert read(box / "b.py") == "y = 1\n"
+    assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == []
+
+
+def test_B51_crash_journal_recovers_apply(box, monkeypatch):
+    real_replace = engine.os.replace
+
+    def flaky_replace(src, dst, *a, **kw):
+        if os.path.basename(str(dst)) == "b.py":
+            raise KeyboardInterrupt
+        return real_replace(src, dst, *a, **kw)
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(engine.os, "replace", flaky_replace)
+    put(box, "a.py", "x = 1\n")
+    put(box, "b.py", "y = 1\n")
+    with pytest.raises(KeyboardInterrupt):
+        main.apply_patch({"patch_id": "B51", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+            {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
+        ]})
+    mp.undo()
+    assert read(box / "a.py") == "x = 2\n"
+    assert read(box / "b.py") == "y = 1\n"
+    assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == []
+    assert (box / "patch_journal.json").exists()
+    rec = engine.recover_journal()
+    assert rec["action"] == "apply-reverted"
+    assert read(box / "a.py") == "x = 1\n"
+    assert read(box / "b.py") == "y = 1\n"
+    assert not (box / "patch_journal.json").exists()
+    assert main.apply_patch({"patch_id": "B51", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
+        {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
+    ]})["success"]
+    assert not (box / "patch_journal.json").exists()
+
+
+def test_B52_corrupt_manifest_blocks_engine_until_reset(box):
+    (box / "patch_manifest.json").write_text('{"applied": [ BROKEN', encoding="utf-8")
+    put(box, "c.py", "z = 0\n")
+    try:
+        res = main.apply_patch({"patch_id": "B52", "operations": [
+            {"type": "full_replace", "target_file": "c.py", "full_file_content": "z = 1\n"},
+        ]})
+        assert res["success"] is False
+        assert "поврежд" in res["error"]
+        assert (box / "patch_manifest.json.corrupt").exists()
+        assert read(box / "c.py") == "z = 0\n"
+        assert main.rollback()["success"] is False
+        assert engine.stats()["locked"] is True
+        res = engine.force_unlock_manifest()
+        assert res["success"] is True
+        assert engine.stats()["locked"] is False
+    finally:
+        engine.MANIFEST_LOCK = ""
+    assert main.apply_patch({"patch_id": "B52", "operations": [
+        {"type": "full_replace", "target_file": "c.py", "full_file_content": "z = 1\n"},
+    ]})["success"]
+    assert read(box / "c.py") == "z = 1\n"
+    assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == ["B52"]
