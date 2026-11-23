@@ -368,3 +368,77 @@ def test_B29_safe_path_symlink_escape(box, tmp_path):
     _, _, _, err = main.compute_new({"type": "create", "target_file": "leak/pwned.py", "full_file_content": "p = 1\n"})
     assert err is not None
     assert not (outside / "pwned.py").exists()
+
+
+# ---------- B32-B36: волна 2 — глубина отката и целостность транзакций ----------
+
+def test_B32_rollback_chain_restores_each_step(box):
+    put(box, "a.py", "x = 1\n")
+    states = ["x = 1\n", "x = 2\n", "x = 3\n", "x = 4\n"]
+    for i in (2, 3, 4):
+        assert main.apply_patch({"patch_id": f"B32-{i}", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": f"x = {i}\n"}
+        ]})["success"]
+    for expected in ("x = 3\n", "x = 2\n", "x = 1\n"):
+        assert main.rollback()["success"]
+        assert read(box / "a.py") == expected
+    res = main.rollback()
+    assert res["success"] is False
+
+
+def test_B33_rollback_removes_created_but_restores_modified(box):
+    put(box, "old.py", "y = 1\n")
+    assert main.apply_patch({"patch_id": "B33-MIX", "operations": [
+        {"type": "create", "target_file": "new.py", "full_file_content": "n = 1\n"},
+        {"type": "full_replace", "target_file": "old.py", "full_file_content": "y = 2\n"},
+    ]})["success"]
+    assert (box / "new.py").exists()
+    assert read(box / "old.py") == "y = 2\n"
+    assert main.rollback()["success"]
+    assert not (box / "new.py").exists()
+    assert read(box / "old.py") == "y = 1\n"
+
+
+def test_B34_rollback_missing_backup_fails_cleanly(box):
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch({"patch_id": "B34", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]})["success"]
+    man = engine.load_manifest()
+    backup_path = man["applied"][-1]["operations"][-1]["backups"][0]
+    os_import = __import__("os")
+    os_import.remove(backup_path)
+    res = main.rollback()
+    assert res["success"] is False
+    assert read(box / "a.py") == "x = 2\n"
+    after = engine.load_manifest()
+    assert len(after["applied"]) == 1
+
+
+def test_B35_rollback_legacy_manifest_entry(box):
+    import json as _json
+    put(box, "a.py", "y = 2\n")
+    legacy_backup = (box / "backups" / "a.py_LATEST.bak")
+    legacy_backup.write_text("y = 1\n", encoding="utf-8")
+    legacy_entry = {"patch_id": "B35-LEGACY", "target_file": "a.py",
+                    "applied_at": "2026-11-23T00:00:00", "checksum": "x",
+                    "backups": [str(legacy_backup)]}
+    engine.save_manifest({"applied": [legacy_entry], "history": [], "rollbacks": []})
+    res = main.rollback()
+    assert res["success"]
+    assert read(box / "a.py") == "y = 1\n"
+    man = engine.load_manifest()
+    assert len(man["applied"]) == 0 and len(man["rollbacks"]) == 1
+
+
+def test_B36_manifest_cap_trimming_keeps_last_working(box):
+    put(box, "a.py", "x = 1\n")
+    for i in range(2, 104):
+        assert main.apply_patch({"patch_id": f"B36-{i}", "operations": [
+            {"type": "full_replace", "target_file": "a.py", "full_file_content": f"x = {i}\n"}
+        ]})["success"]
+    man = engine.load_manifest()
+    assert len(man["applied"]) == 100
+    assert man["applied"][-1]["patch_id"] == "B36-103"
+    assert main.rollback()["success"]
+    assert read(box / "a.py") == "x = 102\n"
