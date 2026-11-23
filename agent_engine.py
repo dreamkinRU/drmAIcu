@@ -1,11 +1,12 @@
 # agent_engine.py
-# Version 2.3 (FIXED)
+# Version: единый источник — version.py (B68 FIX P2-21)
 
 import asyncio
 import time
 import ollama
 from typing import List, Dict, AsyncGenerator
 import traceback
+from version import VERSION as MASS_VERSION
 
 
 class AgentEngine:
@@ -25,8 +26,7 @@ class AgentEngine:
             'together': bool(config.get('together_api_key', '').strip())
         }
 
-        self.log("=" * 60, "INFO")
-        self.log("Agent engine v2.3 initialized", "SUCCESS")
+        self.log(f"Agent engine v{MASS_VERSION} initialized", "SUCCESS")
         self.log("Available providers:", "INFO")
         for provider, active in self.providers.items():
             status = "OK" if active else "NO"

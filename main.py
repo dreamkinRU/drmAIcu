@@ -1,4 +1,5 @@
-# main.py v3.6.1 HARDENED (UI + API; engine lives in patch_engine.py)
+# main.py HARDENED (UI + API; engine lives in patch_engine.py; версия — version.py)
+from version import VERSION as _VER
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
@@ -364,7 +365,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': '3.6.1 MULTI-ATOMIC HARDENED',
+                         'version': _VER + ' MULTI-ATOMIC HARDENED',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
@@ -414,7 +415,7 @@ def _get_vram_total_gb():
         import winreg
         base_key = r'SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
         for i in range(16):
-            sub = f'{base_key}\{i:04d}'
+            sub = rf'{base_key}\{i:04d}'
             try:
                 with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub) as k:
                     val, _ = winreg.QueryValueEx(k, 'HardwareInformation.qwMemorySize')
@@ -956,7 +957,11 @@ def s_pvalidate_all():
             errors = []
             for i, op in enumerate(ops):
                 tgt = op.get('target_file', '')
-                full_path = os.path.join(BASE, tgt)
+                full_path = safe_path(tgt)
+                # B64 FIX (P2-17): путь через safe_path — как в Patch Engine, иначе подозрительный целевой файл
+                if full_path is None:
+                    errors.append(f'Операция {i+1}: подозрительный target_file (за пределами проекта): {tgt}')
+                    continue
                 if not os.path.exists(full_path):
                     errors.append(f'Операция {i+1}: файл {tgt} не существует')
                     continue
@@ -1009,7 +1014,20 @@ def s_papply(payload: dict):
                 payload = json.loads(read_text(fp))
             except Exception:
                 pass
-    return JSONResponse(apply_patch(payload))
+    r = apply_patch(payload)
+    # B72 FIX (P3-25): авто-рестарт после .py-патча — создаём restart.flag для launcher.bat
+    if r.get('success') and isinstance(payload, dict):
+        for _op in (payload.get('operations') or []):
+            if str(_op.get('target_file', '')).lower().endswith('.py'):
+                try:
+                    with open(RESTART_FLAG, 'w', encoding='utf-8') as _ff:
+                        _ff.write(datetime.now().isoformat())
+                    r['restart_scheduled'] = True
+                    log('Auto-restart flag set: patch touches .py files', 'INFO')
+                except OSError as _e:
+                    log('Cannot write restart.flag: ' + str(_e), 'WARN')
+                break
+    return JSONResponse(r)
 
 
 @app.get('/api/patches/verify-108')
@@ -1095,7 +1113,9 @@ def s_pall(payload: dict = {}):
         except Exception as e:
             res.append({'patch_id': p['patch_id'], 'success': False, 'error': str(e)})
             break
-    return JSONResponse({'success': True, 'results': res})
+    # B63 FIX (P2-16): success НИКОГДА не ложный — отражает реальный итог apply-all
+    ok = all(r.get('success') for r in res) if res else True
+    return JSONResponse({'success': ok, 'results': res})
 
 
 @app.get('/api/project/scan')
@@ -1206,7 +1226,7 @@ def create_ui():
     
     # Шапка
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.6.1 HARDENED').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v' + _VER + ' HARDENED').classes('text-xl font-bold')
     
     # Вкладки
     with ui.tabs().classes('w-full') as tabs:
@@ -1514,7 +1534,7 @@ def s_project_archive_list():
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    log('Starting drmAIcu Core v3.6.1 HARDENED...')
+    log('Starting drmAIcu Core v' + _VER + ' HARDENED...')
     # B51 FIX (P1-04): crash-восстановление незавершённой транзакции после перезапуска
     rec_j = _pe.recover_journal()
     if rec_j:

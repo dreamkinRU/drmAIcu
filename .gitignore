@@ -23,6 +23,7 @@ desktop.ini
 
 # === Чувствительные данные и конфиги ===
 settings.json
+config.json
 .env
 *.pem
 *.key

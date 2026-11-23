@@ -412,7 +412,7 @@ def test_B34_rollback_missing_backup_fails_cleanly(box):
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})["success"]
     man = engine.load_manifest()
-    backup_path = man["applied"][-1]["operations"][-1]["backups"][0]
+    backup_path = engine._backup_path(man["applied"][-1]["operations"][-1]["backups"][0])
     os_import = __import__("os")
     os_import.remove(backup_path)
     res = main.rollback()
@@ -459,7 +459,7 @@ def test_B40_tampered_backup_detected_on_rollback(box):
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})["success"]
     man = engine.load_manifest()
-    backup_path = man["applied"][-1]["operations"][0]["backups"][0]
+    backup_path = engine._backup_path(man["applied"][-1]["operations"][0]["backups"][0])
     with open(backup_path, "wb") as f:
         f.write(b"TAMPERED\n")
     res = main.rollback()
@@ -721,7 +721,7 @@ def test_B50_partial_rollback_reported_not_hidden(box, monkeypatch):
 
     def counting_copy2(src, dst, *a, **kw):
         calls["n"] += 1
-        if calls["n"] > 6:
+        if calls["n"] > 4:
             raise OSError("copy interfered during rollback")
         return real_copy2(src, dst, *a, **kw)
 
@@ -983,3 +983,202 @@ def test_B60_run_task_successful_result_structured(box):
     assert res["success"] is True
     assert res["result"] == "x = 1\n"
 
+
+
+# ========================= ВОЛНА 3: B61–B72 (P2-14 … P3-25) =========================
+
+B72T = "from version import VERSION"
+
+
+def test_B61_backup_two_copies_and_no_verified(box):
+    p = put(box, "a.py", "x = 1\n")
+    for _ in range(3):
+        backs = engine.backup(str(p))
+        assert len(backs) == 2
+        assert not any("_verified" in os.path.basename(b) for b in backs)
+        assert any(os.path.basename(b).endswith("_LATEST.bak") for b in backs)
+
+
+def test_B61_backup_rotation_keep10(box):
+    p = put(box, "b.py", "y = 1\n")
+    for _ in range(14):
+        engine.backup(str(p))
+    name = "b.py"
+    stamps = [f for f in os.listdir(engine.BACKUP_DIR)
+              if f.startswith(name + "_") and f.endswith(".bak") and not f.endswith("_LATEST.bak")]
+    assert len(stamps) == 10
+    latest = [f for f in os.listdir(engine.BACKUP_DIR) if f.endswith("_LATEST.bak")]
+    assert len(latest) == 1
+
+
+def test_B69_manifest_backup_paths_relative(box):
+    put(box, "a.py", "x = 1\n")
+    r = main.apply_patch({"patch_id": "B69", "operations": [
+        {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+    ]})
+    assert r["success"]
+    raw = open(engine.MANIFEST, "r", encoding="utf-8").read()
+    assert str(box) not in raw
+    entry = engine.load_manifest()["applied"][-1]
+    for b in entry["backups"]:
+        assert not os.path.isabs(b)
+        assert b.replace("\\", "/").startswith("backups/")
+    assert all(os.path.exists(engine._backup_path(b)) for b in entry["backups"])
+
+
+def test_B69_rollback_with_relative_paths(box):
+    put(box, "a.py", "x = 1\n")
+    r = main.apply_patch({"patch_id": "B69r", "operations": [
+        {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+    ]})
+    assert r["success"]
+    rr = main.rollback()
+    assert rr["success"], rr
+    assert read(box / "a.py") == "x = 1\n"
+
+
+def test_B69_rollback_accepts_legacy_absolute_backup_paths(box):
+    put(box, "a.py", "x = 1\n")
+    r = main.apply_patch({"patch_id": "B69l", "operations": [
+        {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+    ]})
+    assert r["success"]
+    man = engine.load_manifest()
+    entry = man["applied"][-1]
+    for op in entry["operations"]:
+        op["backups"] = [os.path.join(str(box), p.replace("/", os.sep)) if not os.path.isabs(p) else p
+                         for p in op["backups"]]
+    entry["backups"] = [os.path.join(str(box), p.replace("/", os.sep)) if not os.path.isabs(p) else p
+                        for p in entry["backups"]]
+    engine.save_manifest(man)
+    rr = main.rollback()
+    assert rr["success"], rr
+    assert read(box / "a.py") == "x = 1\n"
+
+
+class _FakeR:
+    def __init__(self, code, out="", err=""):
+        self.returncode = code
+        self.stdout = out
+        self.stderr = err
+
+
+def test_B62_ts_types_error_blocks_apply(box, monkeypatch):
+    (box / "tools").mkdir()
+    (box / "tools" / "tscheck.cjs").write_text("// dummy", encoding="utf-8")
+    monkeypatch.setattr(engine, "_tsc_cmd", lambda: ["fake-tsc"])
+    monkeypatch.setattr(engine, "check_ts", lambda *a, **k: None)
+    monkeypatch.setattr(engine.subprocess, "run", lambda *a, **k: _FakeR(1, "TS2322: type mismatch"))
+    put(box, "src/c.ts", "const a: number = 1;\n")
+    res = main.apply_patch({"patch_id": "B62bad", "operations": [
+        {"type": "search_and_replace", "target_file": "src/c.ts", "find": "1", "replace": "2"},
+    ]})
+    assert res["success"] is False
+    assert "tsc --noEmit" in res["error"]
+    assert read(box / "src" / "c.ts") == "const a: number = 1;\n"
+    assert engine.load_manifest()["applied"] == []
+
+
+def test_B62_ts_types_ok_patch_applies(box, monkeypatch):
+    (box / "tools").mkdir()
+    (box / "tools" / "tscheck.cjs").write_text("// dummy", encoding="utf-8")
+    monkeypatch.setattr(engine, "_tsc_cmd", lambda: ["fake-tsc"])
+    monkeypatch.setattr(engine, "check_ts", lambda *a, **k: None)
+    monkeypatch.setattr(engine.subprocess, "run", lambda *a, **k: _FakeR(0, ""))
+    put(box, "src/c.ts", "const a: number = 1;\n")
+    res = main.apply_patch({"patch_id": "B62ok", "operations": [
+        {"type": "search_and_replace", "target_file": "src/c.ts", "find": "1", "replace": "2"},
+    ]})
+    assert res["success"], res
+    assert read(box / "src" / "c.ts") == "const a: number = 2;\n"
+
+
+def test_B62_tsc_unavailable_skips_full_check(box, monkeypatch):
+    (box / "tools").mkdir()
+    (box / "tools" / "tscheck.cjs").write_text("// dummy", encoding="utf-8")
+    monkeypatch.setattr(engine, "_tsc_cmd", lambda: None)
+    monkeypatch.setattr(engine, "check_ts", lambda *a, **k: None)
+    put(box, "src/c.tsx", "const A = () => { return <b>x</b>; };\n")
+    res = main.apply_patch({"patch_id": "B62skip", "operations": [
+        {"type": "search_and_replace", "target_file": "src/c.tsx", "find": "x", "replace": "y"},
+    ]})
+    assert res["success"], res
+    assert read(box / "src" / "c.tsx") == "const A = () => { return <b>y</b>; };\n"
+
+
+def test_B62_check_ts_full_returns_none_when_unavailable(monkeypatch):
+    monkeypatch.setattr(engine, "_tsc_cmd", lambda: None)
+    assert engine.check_ts_full() is None
+
+
+def test_B63_apply_all_honest_success(box):
+    (box / "patch" / "B63P.json").write_text(json.dumps({
+        "patch_id": "B63P",
+        "operations": [
+            {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+        ],
+    }), encoding="utf-8")
+    put(box, "a.py", "z = 0\n")
+    body = json.loads(main.s_pall({}).body)
+    assert body["success"] is False
+    assert body["results"][0]["success"] is False
+    assert read(box / "a.py") == "z = 0\n"
+
+
+def test_B63_apply_all_success_when_all_good(box):
+    (box / "patch" / "B63G.json").write_text(json.dumps({
+        "patch_id": "B63G",
+        "operations": [
+            {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+        ],
+    }), encoding="utf-8")
+    put(box, "a.py", "x = 1\n")
+    body = json.loads(main.s_pall({}).body)
+    assert body["success"] is True
+    assert body["results"][0]["success"] is True
+    assert read(box / "a.py") == "x = 2\n"
+
+
+def test_B64_validate_all_uses_safe_path(box, monkeypatch):
+    monkeypatch.setattr(main, "PATCH_DIR", str(box / "patch"))
+    (box / "patch" / "B64evil.json").write_text(json.dumps({
+        "patch_id": "B64evil",
+        "operations": [
+            {"type": "search_and_replace", "target_file": "../outside.txt", "find": "a", "replace": "b"},
+        ],
+    }), encoding="utf-8")
+    (tmp_out := box.parent / "outside.txt").write_text("a\n", encoding="utf-8")
+    res = main.s_pvalidate_all()
+    body = json.loads(res.body)
+    entry = [x for x in body["patches"] if x["filename"] == "B64evil.json"][0]
+    assert any("подозрительный target_file" in e for e in entry["errors"])
+
+
+def test_B72_apply_py_sets_restart_flag(box, monkeypatch):
+    monkeypatch.setattr(main, "RESTART_FLAG", str(box / "restart.flag"))
+    put(box, "a.py", "x = 1\n")
+    body = json.loads(main.s_papply({"patch_id": "B72py", "operations": [
+        {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
+    ]}).body)
+    assert body["success"] is True
+    assert body.get("restart_scheduled") is True
+    assert (box / "restart.flag").exists()
+
+
+def test_B72_apply_nonpy_sets_no_restart_flag(box, monkeypatch):
+    monkeypatch.setattr(main, "RESTART_FLAG", str(box / "restart.flag"))
+    put(box, "conf.txt", "k = v\n")
+    body = json.loads(main.s_papply({"patch_id": "B72txt", "operations": [
+        {"type": "search_and_replace", "target_file": "conf.txt", "find": "k = v", "replace": "k = w"},
+    ]}).body)
+    assert body["success"] is True
+    assert "restart_scheduled" not in body
+    assert not (box / "restart.flag").exists()
+
+
+def test_B68_version_single_source():
+    version = importlib.import_module("version")
+    assert version.VERSION == "3.6.2"
+    pkg = json.load(open(os.path.join(os.path.dirname(__file__), "..", "package.json"), encoding="utf-8"))
+    assert pkg["version"] == "3.6.2"
+    assert engine.stats()["version"] == version.VERSION

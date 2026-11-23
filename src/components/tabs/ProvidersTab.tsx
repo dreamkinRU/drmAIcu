@@ -113,6 +113,7 @@ export default function ProvidersTab(props: ProvidersTabProps) {
   const [showKey, setShowKey] = useState(false);
   const [checkingNow, setCheckingNow] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [liveStatuses, setLiveStatuses] = useState<Record<string, LiveStatus>>({});
 
   const [forms, setForms] = useState<Record<ProviderKey, ProviderFormState>>(() => {
@@ -234,16 +235,37 @@ export default function ProvidersTab(props: ProvidersTabProps) {
       if (d.id === 'gemini') cfgUpdates.gemini_api_key = f.apiKey;
     }
 
+    let saveOk = false;
+    let saveErrMsg = '';
     try {
-      await fetch('/api/providers/config', {
+      const r = await fetch('/api/providers/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: cfgUpdates }),
       });
-    } catch {}
+      try {
+        const j = r.ok ? await r.json() : null;
+        if (j && j.success) {
+          saveOk = true;
+        } else {
+          saveErrMsg = (j && j.error) || `HTTP ${r.status}`;
+        }
+      } catch {
+        saveErrMsg = `HTTP ${r.status}`;
+      }
+    } catch (e: any) {
+      saveErrMsg = String(e?.message || e);
+    }
 
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 2000);
+    // B65 FIX (P2-18): «Сохранено» показываем ТОЛЬКО при подтверждённом success от бэкенда
+    if (saveOk) {
+      setSaveError('');
+      setSavedNotice(true);
+      setTimeout(() => setSavedNotice(false), 2000);
+    } else {
+      setSaveError(saveErrMsg || 'Не удалось сохранить настройки');
+      setTimeout(() => setSaveError(''), 5000);
+    }
     await pollStatuses();
   };
 
@@ -443,6 +465,7 @@ export default function ProvidersTab(props: ProvidersTabProps) {
                 />
               </button>
               {savedNotice && <span className="text-xs text-emerald-400 font-semibold">✓ Сохранено</span>}
+              {saveError && <span className="text-xs text-red-400 font-semibold">⚠ Ошибка сохранения: {saveError}</span>}
             </div>
 
             <div className="flex items-center gap-2.5">

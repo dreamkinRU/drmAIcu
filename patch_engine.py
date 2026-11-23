@@ -1,5 +1,6 @@
 # patch_engine.py
-# Patch engine v3.6.1 HARDENED: atomic two-phase commits, no UI dependencies
+# Patch engine HARDENED: atomic two-phase commits, no UI dependencies (версия — version.py)
+from version import VERSION as _ENGINE_VERSION
 import json, os, re, ast, shutil, hashlib, threading, subprocess
 from datetime import datetime
 
@@ -168,6 +169,23 @@ def _pick_backup(backs):
     return (backs or [None])[-1]
 
 
+def _rotate_backups(name, keep=10):
+    # B61 FIX (P2-14): ротация — не более keep timestamp-бэкапов на файл (_LATEST.bak не считается)
+    prefix = name + '_'
+    try:
+        stamps = sorted(
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith(prefix) and f.endswith('.bak') and not f.endswith('_LATEST.bak')
+        )
+        for old in stamps[:max(0, len(stamps) - keep)]:
+            try:
+                os.remove(os.path.join(BACKUP_DIR, old))
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def backup(path):
     out = []
     if not os.path.exists(path):
@@ -175,7 +193,9 @@ def backup(path):
     name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')
     ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     out = []
-    for suffix in ('_' + ts + '.bak', '_' + ts + '_verified.bak', '_LATEST.bak'):
+    # B61 FIX (P2-14): 1 timestamp-бэкап + _LATEST.bak (убраны _verified.bak),
+    # старые timestamp-бэкапы удаляются ротацией (_keep=10)
+    for suffix in ('_' + ts + '.bak', '_LATEST.bak'):
         dst = os.path.join(BACKUP_DIR, name + suffix)
         try:
             shutil.copy2(path, dst)
@@ -188,7 +208,24 @@ def backup(path):
                 except OSError:
                     pass
             return []
+    _rotate_backups(name, keep=10)
     return out
+
+
+def _rel_backup(p):
+    # B69 FIX (P2-22): в манифесте храним путь относительно BASE с '/' вместо Windows-абсолютных путей
+    return os.path.relpath(p, BASE).replace(os.sep, '/')
+
+
+def _backup_path(p):
+    # B69 FIX (P2-22): резолвер backup-путей — относительный (новый манифест) относительно BASE,
+    # абсолютный (легаси-манифесты со старых машин) — как есть
+    if not p:
+        return p
+    p = str(p)
+    if os.path.isabs(p):
+        return p
+    return os.path.join(BASE, p.replace('/', os.sep))
 
 
 def find_block(lines, block, hint):
@@ -282,22 +319,38 @@ def apply_diff(content, diff):
     return '\n'.join(lines)
 
 
+def _tsc_cmd():
+    # B62 FIX (P2-15): только локальный tsc — без npx (npx тянет сеть)
+    local = os.path.join(BASE, 'node_modules', 'typescript', 'bin', 'tsc')
+    if os.path.exists(local):
+        return ['node', local]
+    found = shutil.which('tsc')
+    if found:
+        return [found]
+    return None
+
+
 def check_ts_full():
-    """Полная типовая проверка проекта через tsc --noEmit."""
+    """Полная типовая проверка проекта через tsc --noEmit.
+    B62 FIX (P2-15): возвращает None, если tsc недоступен (пропуск проверки),
+    строку с ошибкой типов — если проверка провалилась."""
     import sys
+    cmd = _tsc_cmd()
+    if cmd is None:
+        return None
+    iargs = ['--noEmit']
     try:
-        # На Windows npx — это npx.cmd, нужен shell=True
-        if sys.platform == 'win32':
-            cmd = 'npx tsc --noEmit'
-            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=BASE)
+        if sys.platform == 'win32' and cmd[0] != 'node':
+            r = subprocess.run(subprocess.list2cmdline(cmd + iargs),
+                               shell=True, capture_output=True, text=True, timeout=60, cwd=BASE)
         else:
-            r = subprocess.run(['npx', 'tsc', '--noEmit'],
-                               capture_output=True, text=True, timeout=30, cwd=BASE)
+            r = subprocess.run(cmd + iargs,
+                               capture_output=True, text=True, timeout=60, cwd=BASE)
         if r.returncode == 0:
             return None
         return 'TypeScript errors: ' + (r.stdout or r.stderr).strip()[:300]
     except subprocess.TimeoutExpired:
-        return 'tsc --noEmit timeout (30s)'
+        return 'tsc --noEmit timeout (60s)'
     except Exception as e:
         return 'tsc error: ' + str(e)
 
@@ -683,6 +736,13 @@ def _apply_patch_locked(data, pid):
     for o in ops:
         final[os.path.normcase(o['path'])] = o
     ops = list(final.values())
+    # B62 FIX (P2-15): полная типовая проверка tsc --noEmit перед изменением ЛЮБОГО .ts/.tsx;
+    # ошибка типов останавливает транзакцию до записи файлов и бэкапов
+    if any(str(o['target_file']).lower().endswith(('.ts', '.tsx')) for o in ops) and _tsc_cmd() is not None:
+        ts_err = check_ts_full()
+        if ts_err:
+            log('Patch ' + pid + ' rejected (tsc --noEmit): ' + ts_err[:300], 'ERROR')
+            return {'success': False, 'error': 'Патч отклонён tsc --noEmit (проверка типов до записи): ' + ts_err[:300]}
     planned = []
     for o in ops:
         dir_name = os.path.dirname(o['path'])
@@ -735,9 +795,10 @@ def _apply_patch_locked(data, pid):
             if actual != pl['sha']:
                 raise ValueError('Checksum mismatch: ' + pl['tgt'])
         # B40 FIX: в манифест попадает sha контента ДО apply — верификация бэкапа при откате
-        oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'], 'backups': pl['backs'],
+        oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'],
+                   'backups': [_rel_backup(x) for x in pl['backs']],
                    'backup_sha': pl['old_sha']} for pl in planned]
-        allb = [x for pl in planned for x in pl['backs']]
+        allb = [_rel_backup(x) for pl in planned for x in pl['backs']]
         combined = sha(json.dumps(oprecs, sort_keys=True))
         man = load_manifest()
         man['applied'].append({'patch_id': pid, 'target_file': planned[0]['tgt'] if len(planned) == 1 else '+'.join(pl['tgt'] for pl in planned),
@@ -849,7 +910,7 @@ def _rollback_locked():
             b = op.get('backups') or []
             # A-02/B32 FIX: timestamp-бэкап этой операции, _LATEST — только фоллбэк
             if b:
-                specific_backup = _pick_backup(b)
+                specific_backup = _backup_path(_pick_backup(b))
                 if not os.path.exists(specific_backup):
                     return {'success': False, 'error': 'Бэкап ' + str(specific_backup) + ' не найден. Откат невозможен.'}
                 expected = op.get('backup_sha')
@@ -966,7 +1027,7 @@ def _recover_apply(j):
                 except OSError:
                     pass
         try:
-            src = _pick_backup(st.get('backs') or [])
+            src = _backup_path(_pick_backup(st.get('backs') or []))
             if st.get('existed') and src and os.path.exists(src):
                 shutil.copy2(src, sp)
                 recovered.append(str(tgt))
@@ -1036,7 +1097,7 @@ def stats():
     ps = list_patches()
     man = load_manifest()
     ap = len([p for p in ps if p['is_applied']])
-    return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap,
+    return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap, 'version': _ENGINE_VERSION,
             'errors': len([p for p in ps if p.get('error')]),
             'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),
