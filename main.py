@@ -121,6 +121,19 @@ def important_set():
     return set()
 
 
+def _archive_parts(rel_path):
+    safe_rel = str(rel_path).replace(chr(92), '/').strip('/')
+    return [q for q in safe_rel.split('/') if q and q not in ('.', '..')]
+
+
+def _archive_rel_entry(archive_full):
+    parts = os.path.abspath(archive_full).replace(chr(92), '/').split('/')
+    for i, q in enumerate(parts):
+        if q == 'project_archive':
+            return '/'.join(parts[i + 1:])
+    return None
+
+
 def classify_file(name, rel, size):
     r = rel.replace('\\', '/').lower()
     n = name.lower()
@@ -492,9 +505,9 @@ async def s_task(payload: dict):
         model = payload.get('model', '')
         provider = payload.get('provider', 'ollama')
         r = await e.run_task(prompt, mode=mode, model=model, provider=provider)
-        return JSONResponse({'success': True, 'result': r})
+        return JSONResponse(r)
     except Exception as ex:
-        return JSONResponse({'success': False, 'error': str(ex)})
+        return JSONResponse({'success': False, 'result': '', 'error': str(ex), 'providers': []})
 
 
 AGENTS_FILE = os.path.join(BASE, 'agents.json')
@@ -868,8 +881,7 @@ def s_providers_ping(payload: dict):
 @app.post('/api/providers/config')
 def s_providers_config(payload: dict):
     try:
-        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
-        cfg = load_cfg() if 'load_cfg' in globals() else {}
+        cfg = load_cfg()
         if not isinstance(cfg, dict):
             cfg = {}
         updates = payload.get('config') or {}
@@ -877,11 +889,20 @@ def s_providers_config(payload: dict):
             for k, v in updates.items():
                 if isinstance(k, str) and isinstance(v, (str, int, float, bool)):
                     cfg[k] = v
-        tmp = cfg_path + '.tmp'
+        tmp = CONFIG + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(cfg, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, cfg_path)
-        return JSONResponse({'success': True})
+        os.replace(tmp, CONFIG)
+
+        global engine_obj
+        with lock:
+            if engine_obj is not None:
+                try:
+                    importlib.reload(sys.modules['agent_engine'])
+                    engine_obj = sys.modules['agent_engine'].AgentEngine(load_cfg(), log_callback=log)
+                except Exception as e:
+                    log('Engine rebuild error: ' + str(e), 'ERROR')
+        return JSONResponse({'success': True, 'file': 'settings.json'})
     except Exception as e:
         return JSONResponse({'success': False, 'error': str(e)})
 
@@ -1097,6 +1118,12 @@ def s_pfile(path: str):
     return JSONResponse({'success': True, 'content': c, 'size': len(c)})
 
 
+def _archive_paths(archive_dir, rel_path):
+    safe_rel = str(rel_path).replace(chr(92), '/').strip('/')
+    parts = [q for q in safe_rel.split('/') if q and q not in ('.', '..')]
+    return os.path.join(archive_dir, *parts)
+
+
 @app.post('/api/project/archive')
 def s_proj_arch(payload: dict):
     rel = payload.get('path', '')
@@ -1108,10 +1135,21 @@ def s_proj_arch(payload: dict):
     if is_critical_rel(rel):
         return JSONResponse({'success': False, 'error': 'Критичный файл'})
     folder = datetime.now().strftime('%Y%m%d_%H%M%S')
-    dst = os.path.join(PROJ_ARCHIVE, folder, os.path.basename(rel))
+    archive_dir = os.path.join(PROJ_ARCHIVE, folder)
+    dst = _archive_paths(archive_dir, rel)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
+    before = _load_state_snapshot(IMPORTANT)
     shutil.move(p, dst)
-    return JSONResponse({'success': True, 'message': 'Архив: project_archive/' + folder})
+    after = _load_state_snapshot(IMPORTANT)
+    log_action('archive', [rel], [dst], before, after)
+    entry = '/'.join(['project_archive', folder] + _archive_parts(rel))
+    return JSONResponse({
+        'success': True,
+        'message': 'Архив: project_archive/' + folder,
+        'paths': [rel],
+        'backups': [dst],
+        'archive': {rel: entry}
+    })
 
 
 @app.post('/api/project/delete')
@@ -1237,7 +1275,10 @@ def create_ui():
                     if r.status_code == 200:
                         result = r.json()
                         if result.get('success'):
-                            response_display.content = result.get('result', '*Нет ответа*')
+                            payload = result.get('result', '')
+                            if isinstance(payload, dict):
+                                payload = payload.get('result') or ''
+                            response_display.content = payload or '*Нет ответа*'
                         else:
                             response_display.content = f"**Ошибка:** {result.get('error', 'Неизвестная ошибка')}"
                     else:
@@ -1262,19 +1303,73 @@ def create_ui():
 # Project History & Bulk Operations
 # ============================================================================
 
-PROJECT_HISTORY = []
 MAX_HISTORY = 50
+PROJECT_HISTORY_FILE = os.path.join(BASE, '.project-history.json')
+PROJECT_HISTORY = []
 
 
-def log_action(action, paths, backups):
+def _load_project_history():
+    try:
+        if os.path.exists(PROJECT_HISTORY_FILE):
+            with open(PROJECT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = []
+    except Exception as e:
+        log('History load error: ' + str(e), 'ERROR')
+        data = []
+    if not isinstance(data, list):
+        data = []
+    return [h for h in data if isinstance(h, dict) and h.get('action') and isinstance(h.get('paths'), list)]
+
+
+def _save_project_history():
+    try:
+        tmp = PROJECT_HISTORY_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(PROJECT_HISTORY, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, PROJECT_HISTORY_FILE)
+    except Exception as e:
+        log('History save error: ' + str(e), 'ERROR')
+
+
+def _load_state_snapshot(path):
+    try:
+        if not os.path.exists(path):
+            return {'exists': False, 'important': []}
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        items = data.get('important', []) if isinstance(data, dict) else []
+        return {'exists': True, 'important': [str(x) for x in items]}
+    except Exception as e:
+        log('Important load error: ' + str(e), 'ERROR')
+        return {'exists': False, 'important': []}
+
+
+def _parse_state_snapshot(snap):
+    if not isinstance(snap, dict):
+        return None
+    items = snap.get('important')
+    if not isinstance(items, list):
+        return None
+    return set(items)
+
+
+PROJECT_HISTORY = _load_project_history()
+
+
+def log_action(action, paths, backups, important_before=None, important_after=None):
     PROJECT_HISTORY.append({
         'action': action,
         'paths': paths,
         'backups': backups,
+        'important_before': important_before,
+        'important_after': important_after,
         'timestamp': datetime.now().isoformat()
     })
     if len(PROJECT_HISTORY) > MAX_HISTORY:
         PROJECT_HISTORY.pop(0)
+    _save_project_history()
 
 
 @app.post('/api/project/bulk')
@@ -1283,9 +1378,16 @@ def s_project_bulk(payload: dict):
     paths = payload.get('paths', [])
     if not paths:
         return JSONResponse({'success': False, 'error': 'Нет выбранных файлов'})
+    important_before = None
+    if action == 'important':
+        important_before = _load_state_snapshot(IMPORTANT)
+    important_state = important_set()
     backups = []
     processed = []
     skipped = []
+    archive_map = {}
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    archive_dir = os.path.join(PROJ_ARCHIVE, stamp)
     for rel_path in paths:
         full_path = safe_path(rel_path)
         if not full_path or not os.path.exists(full_path):
@@ -1299,17 +1401,17 @@ def s_project_bulk(payload: dict):
                 skipped.append(rel_path)
                 continue
             backups.append(b[0])
-            archive_dir = os.path.join(BASE, 'project_archive', datetime.now().strftime('%Y%m%d_%H%M%S'))
-            os.makedirs(archive_dir, exist_ok=True)
-            shutil.move(full_path, os.path.join(archive_dir, os.path.basename(full_path)))
+            adst = _archive_paths(archive_dir, rel_path)
+            os.makedirs(os.path.dirname(adst), exist_ok=True)
+            shutil.move(full_path, adst)
+            archive_map[rel_path] = '/'.join(['project_archive', stamp] + _archive_parts(rel_path))
             processed.append(rel_path)
         elif action == 'important':
-            important = load_important()
-            if rel_path in important:
-                important.remove(rel_path)
+            if rel_path in important_state:
+                important_state.remove(rel_path)
             else:
-                important.add(rel_path)
-            save_important(important)
+                important_state.add(rel_path)
+            save_important(important_state)
             processed.append(rel_path)
         elif action == 'delete':
             b = backup(full_path)
@@ -1320,8 +1422,11 @@ def s_project_bulk(payload: dict):
             os.remove(full_path)
             processed.append(rel_path)
     if processed:
-        log_action(action, processed, backups)
-    return JSONResponse({'success': True, 'processed': len(processed), 'skipped': len(skipped)})
+        important_after = None
+        if action == 'important':
+            important_after = _load_state_snapshot(IMPORTANT)
+        log_action(action, processed, backups, important_before, important_after)
+    return JSONResponse({'success': True, 'processed': len(processed), 'skipped': len(skipped), 'archive': archive_map})
 
 
 @app.post('/api/project/restore')
@@ -1330,12 +1435,24 @@ def s_project_restore(payload: dict):
     archive_full = safe_path(archive_path)
     if not archive_full or not os.path.exists(archive_full):
         return JSONResponse({'success': False, 'error': 'Файл не найден в архиве'})
-    filename = os.path.basename(archive_full)
-    target = os.path.join(BASE, filename)
+    if not archive_path.replace(chr(92), '/').startswith('project_archive/'):
+        return JSONResponse({'success': False, 'error': 'Файл не из project_archive'})
+    entry = _archive_rel_entry(archive_full)
+    if not entry or len(entry.split('/')) < 2:
+        return JSONResponse({'success': False, 'error': ' некорректный путь архива'})
+    target_rel = '/'.join(entry.split('/')[1:])
+    if not target_rel:
+        return JSONResponse({'success': False, 'error': ' некорректный путь архива'})
+    if is_critical_rel(target_rel):
+        return JSONResponse({'success': False, 'error': 'Восстановление критичного файла запрещено'})
+    target = safe_path(target_rel)
+    if target is None:
+        return JSONResponse({'success': False, 'error': 'Восстановление в критичный путь запрещено'})
     if os.path.exists(target):
-        return JSONResponse({'success': False, 'error': f'Файл {filename} уже существует'})
+        return JSONResponse({'success': False, 'error': f'Файл {target_rel} уже существует'})
+    os.makedirs(os.path.dirname(target), exist_ok=True)
     shutil.copy2(archive_full, target)
-    return JSONResponse({'success': True, 'message': f'Восстановлен {filename}'})
+    return JSONResponse({'success': True, 'message': f'Восстановлен {target_rel}'})
 
 
 @app.post('/api/project/rollback')
@@ -1344,11 +1461,32 @@ def s_project_rollback():
         return JSONResponse({'success': False, 'error': 'История пуста'})
     last = PROJECT_HISTORY.pop()
     restored = 0
+    errors = []
     for backup_path, original_path in zip(last['backups'], last['paths']):
         if backup_path and os.path.exists(backup_path):
-            shutil.copy2(backup_path, original_path)
-            restored += 1
-    return JSONResponse({'success': True, 'message': f'Откат: {last["action"]} ({restored} файлов)'})
+            dest = safe_path(original_path)
+            if dest is None:
+                errors.append(f'{original_path}: восстановление в критичный путь запрещено')
+                continue
+            try:
+                os.makedirs(os.path.dirname(dest) or BASE, exist_ok=True)
+                shutil.copy2(backup_path, dest)
+                restored += 1
+            except Exception as e:
+                errors.append(f'{original_path}: {e}')
+        else:
+            errors.append(f'{original_path}: резервная копия не найдена')
+    before = _parse_state_snapshot(last.get('important_before'))
+    after = _parse_state_snapshot(last.get('important_after'))
+    imp_restored = 0
+    if before is not None and after is not None and before != after:
+        save_important(before)
+        imp_restored = len(before ^ after)
+    _save_project_history()
+    msg = f'Откат: {last["action"]} ({restored} файлов)' + (f', important: {imp_restored}' if imp_restored else '')
+    if errors:
+        return JSONResponse({'success': True, 'message': msg + ' (с ошибками: ' + '; '.join(errors) + ')', 'errors': errors})
+    return JSONResponse({'success': True, 'message': msg})
 
 
 @app.get('/api/project/history')

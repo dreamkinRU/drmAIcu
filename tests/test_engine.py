@@ -1,4 +1,5 @@
 # tests/test_engine.py
+import asyncio
 import importlib
 import json
 import os
@@ -6,6 +7,7 @@ import pytest
 
 main = importlib.import_module("main")
 import patch_engine as engine
+import agent_engine
 
 
 @pytest.fixture
@@ -22,6 +24,8 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setattr(engine, "MANIFEST", str(base / "patch_manifest.json"))
     monkeypatch.setattr(engine, "JOURNAL", str(base / "patch_journal.json"))
     monkeypatch.setattr(main, "IMPORTANT", str(base / ".project-important.json"))
+    monkeypatch.setattr(main, "PROJECT_HISTORY_FILE", str(base / ".project-history.json"))
+    monkeypatch.setattr(main, "PROJECT_HISTORY", [])
     return base
 
 
@@ -797,3 +801,185 @@ def test_B52_corrupt_manifest_blocks_engine_until_reset(box):
     ]})["success"]
     assert read(box / "c.py") == "z = 1\n"
     assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == ["B52"]
+
+# ---------- B53-B60: P1/P2-волна 2 — персистентная история, снапшот important, структурный архив, providers/ollama, structured errors ----------
+
+
+def test_B53_history_survives_restart(box, monkeypatch):
+    put(box, "notes.txt", "x")
+    res = json.loads(main.s_project_bulk({"action": "delete", "paths": ["notes.txt"]}).body)
+    assert res["success"] is True and res["processed"] == 1
+    assert not (box / "notes.txt").exists()
+    assert (box / ".project-history.json").exists()
+    monkeypatch.setattr(main, "PROJECT_HISTORY", main._load_project_history())
+    data = json.loads(main.s_project_rollback().body)
+    assert data["success"] is True
+    assert "delete" in data["message"]
+    assert read(box / "notes.txt") == "x"
+
+
+def test_B54_rollback_important_restores_state(box, monkeypatch):
+    put(box, "notes.txt", "x")
+    res = json.loads(main.s_project_bulk({"action": "important", "paths": ["notes.txt"]}).body)
+    assert res["processed"] == 1
+    assert "notes.txt" in main.load_important()
+    monkeypatch.setattr(main, "PROJECT_HISTORY", main._load_project_history())
+    data = json.loads(main.s_project_rollback().body)
+    assert data["success"] is True
+    assert "important" in data["message"]
+    assert "notes.txt" not in main.load_important()
+
+
+def test_B55_archive_preserves_relative_path(box, monkeypatch):
+    monkeypatch.setattr(main, "BASE", str(box))
+    put(box, "libs/utils/data.json", '{"a": 1}')
+    put(box, "samples/data.json", '{"b": 2}')
+    data = json.loads(main.s_project_bulk({"action": "archive", "paths": ["libs/utils/data.json", "samples/data.json"]}).body)
+    assert data["processed"] == 2
+    assert len(data["archive"]) == 2
+    assert not (box / "libs" / "utils" / "data.json").exists()
+    stored = set()
+    for orig, archived in data["archive"].items():
+        assert archived.endswith(orig)
+        assert (box / archived).exists()
+        stored.add(archived)
+    assert len(stored) == 2
+    assert not (box / "data.json").exists()
+    for orig, archived in data["archive"].items():
+        res = json.loads(main.s_project_restore({"archive_path": archived}).body)
+        assert res["success"] is True
+    assert read(box / "libs" / "utils" / "data.json") == '{"a": 1}'
+    assert read(box / "samples" / "data.json") == '{"b": 2}'
+
+
+def test_B55_archive_collision_same_filename(box):
+    put(box, "libs/a/data.txt", "1")
+    put(box, "samples/b/data.txt", "2")
+    data = json.loads(main.s_project_bulk({"action": "archive", "paths": ["libs/a/data.txt", "samples/b/data.txt"]}).body)
+    assert data["processed"] == 2
+    p1 = data["archive"]["libs/a/data.txt"]
+    p2 = data["archive"]["samples/b/data.txt"]
+    assert p1 != p2
+    p1 = data["archive"]["libs/a/data.txt"]
+    p2 = data["archive"]["samples/b/data.txt"]
+
+
+def test_B55_restore_rejects_non_archive_and_critical(box):
+    res = json.loads(main.s_project_restore({"archive_path": "notes.txt"}).body)
+    assert res["success"] is False
+    put(box, "settings.json", "{}")
+    dst = box / "project_archive" / "stamp" / "settings.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text("{}")
+    res = json.loads(main.s_project_restore({"archive_path": "project_archive/stamp/settings.json"}).body)
+    assert res["success"] is False and "критичн" in res["error"]
+
+
+def test_B56_providers_config_writes_settings_and_rebuilds_engine(box, monkeypatch):
+    monkeypatch.setattr(main, "CONFIG", str(box / "settings.json"))
+    main.engine_obj = {"stub": True}
+    try:
+        res = json.loads(main.s_providers_config({"config": {"groq_api_key": "k-123"}}).body)
+        assert res["success"] is True and res["file"] == "settings.json"
+        assert json.loads((box / "settings.json").read_text(encoding="utf-8"))["groq_api_key"] == "k-123"
+        assert not isinstance(main.engine_obj, dict)
+        assert getattr(main.engine_obj, "config", {}).get("groq_api_key") == "k-123"
+    finally:
+        main.engine_obj = None
+
+
+def test_B57_ollama_client_uses_configured_host():
+    e = agent_engine.AgentEngine({"ollama_url": "http://127.0.0.1:11437"}, log_callback=lambda *a, **kw: None)
+    assert str(e._ollama._client.base_url).rstrip("/") == "http://127.0.0.1:11437"
+    seen = {}
+
+    def fake_chat(model, messages, **kw):
+        seen["model"] = model
+        return {"message": {"content": "ok"}}
+
+    e._ollama.chat = fake_chat
+    assert asyncio.run(e._query_ollama("m1", [])) == "ok"
+    assert seen["model"] == "m1"
+
+
+def test_B58_candidates_include_local_providers():
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    provs = {c["provider"] for c in e._get_candidates()}
+    assert {"bionic", "lmstudio", "strata"} <= provs
+
+
+def collect(agen):
+    async def run():
+        out = []
+        async for ev in agen:
+            out.append(ev)
+        return out
+    return asyncio.run(run())
+
+
+def test_B58_stream_all_fails_over_to_next(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    monkeycands = [{"provider": "ollama", "model": "m1", "name": "m1"},
+                   {"provider": "ollama", "model": "m2", "name": "m2"}]
+    e._get_candidates = lambda: monkeycands
+
+    def fake_chat(model, messages, stream=False, **kw):
+        if model == "m1":
+            raise ConnectionError("refused")
+        assert stream is True
+        return iter([{"message": {"content": "ok"}}])
+
+    e._ollama.chat = fake_chat
+    evs = collect(e.stream_task("hi", provider="all"))
+    kinds = [x["type"] for x in evs]
+    assert "chunk" in kinds
+    fo = [x for x in evs if x["type"] == "failover"]
+    assert fo and fo[0]["provider"] == "ollama" and fo[0]["model"] == "m1" and fo[0]["next"] is True
+    assert "".join(x["content"] for x in evs if x["type"] == "chunk") == "ok"
+    assert kinds[-1] == "done" and evs[-1]["model"] == "m2"
+    assert "error" not in kinds
+
+
+def test_B58_stream_all_reports_error_when_chain_exhausted(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    monkeycands = [{"provider": "ollama", "model": "m1", "name": "m1"},
+                   {"provider": "ollama", "model": "m2", "name": "m2"}]
+    e._get_candidates = lambda: monkeycands
+
+    def fake_chat(model, messages, stream=False, **kw):
+        raise ConnectionError("down")
+
+    e._ollama.chat = fake_chat
+    evs = collect(e.stream_task("hi", provider="all"))
+    errors = [x for x in evs if x["type"] == "error"]
+    assert len(errors) == 1
+    assert errors[0]["providers"] == ["ollama", "ollama"]
+    assert errors[0]["details"][0]["model"] == "m1"
+
+
+def test_B60_run_task_structured_error(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+
+    def fake_chat(model, messages, **kw):
+        raise ConnectionError("down")
+
+    e._ollama.chat = fake_chat
+    res = asyncio.run(e.run_task("hi", mode="fast", provider="ollama", model="m1"))
+    assert isinstance(res, dict)
+    assert res["success"] is False
+    assert res["result"] == ""
+    assert res["providers"] == ["ollama"]
+    assert "All models failed" in res["error"]
+
+
+def test_B60_run_task_successful_result_structured(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+
+    def fake_chat(model, messages, **kw):
+        return {"message": {"content": "x = 1\n"}}
+
+    e._ollama.chat = fake_chat
+    res = asyncio.run(e.run_task("hi", mode="fast", provider="ollama", model="m1"))
+    assert res["success"] is True
+    assert res["result"] == "x = 1\n"
+

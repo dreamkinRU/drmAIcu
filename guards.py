@@ -7,7 +7,7 @@ import os
 import socket
 from urllib.parse import urlparse
 
-CRIT_FILES = {'main.py', 'patch_engine.py', 'agent_engine.py', 'settings.json', 'config.json', 'agents.json', 'pipelines.json', 'launcher.bat', 'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json', 'index.html', 'README.md'}
+CRIT_FILES = {'main.py', 'patch_engine.py', 'agent_engine.py', 'guards.py', 'settings.json', 'config.json', 'agents.json', 'pipelines.json', 'launcher.bat', 'sync.bat', 'package.json', 'package-lock.json', 'vite.config.js', 'tsconfig.json', 'index.html', 'README.md', '.project-important.json', '.project-history.json', 'patch_manifest.json'}
 CRIT_DIRS = ('src/', 'patch/', 'docs/', 'tests/')
 
 CRIT_FILES_LOWER = {f.lower() for f in CRIT_FILES}
