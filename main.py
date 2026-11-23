@@ -888,7 +888,7 @@ def s_providers_config(payload: dict):
         updates = payload.get('config') or {}
         if isinstance(updates, dict):
             for k, v in updates.items():
-                if isinstance(k, str) and isinstance(v, (str, int, float, bool)):
+                if isinstance(k, str) and isinstance(v, (str, int, float, bool, dict)):
                     cfg[k] = v
         tmp = CONFIG + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:

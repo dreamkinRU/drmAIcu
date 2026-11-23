@@ -48,6 +48,12 @@ interface LiveStatus {
   error?: string;
 }
 
+interface ModelTuning {
+  num_ctx: number;
+  num_predict: number;
+  temperature: number;
+}
+
 const PROVIDER_DEFS: Array<{
   id: ProviderKey;
   label: string;
@@ -98,6 +104,7 @@ function buildUrlFromParts(host: string, port: string, suffix: string): string {
 }
 
 const STORAGE_SETTINGS_KEY = 'drmaicu_provider_settings_v2';
+const MODEL_SETTINGS_KEY = 'drmaicu_model_settings_v1';
 
 export default function ProvidersTab(props: ProvidersTabProps) {
   const {
@@ -115,6 +122,14 @@ export default function ProvidersTab(props: ProvidersTabProps) {
   const [savedNotice, setSavedNotice] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [liveStatuses, setLiveStatuses] = useState<Record<string, LiveStatus>>({});
+  const [editingModelName, setEditingModelName] = useState<string | null>(null);
+  const [modelSettingsMap, setModelSettingsMap] = useState<Record<string, ModelTuning>>(() => {
+    try {
+      const raw = localStorage.getItem(MODEL_SETTINGS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  });
 
   const [forms, setForms] = useState<Record<ProviderKey, ProviderFormState>>(() => {
     let saved: Partial<Record<ProviderKey, ProviderFormState>> = {};
@@ -212,6 +227,7 @@ export default function ProvidersTab(props: ProvidersTabProps) {
   const handleSaveSettings = async () => {
     try {
       localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(forms));
+      localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(modelSettingsMap));
     } catch {}
 
     const fullUrl = buildUrlFromParts(activeForm.host, activeForm.port, activeDef.suffix);
@@ -220,7 +236,7 @@ export default function ProvidersTab(props: ProvidersTabProps) {
     if (selectedId === 'lmstudio' && fullUrl && setLmstudioUrl) setLmstudioUrl(fullUrl);
     if (selectedId === 'bionic' && fullUrl && setBionicUrl) setBionicUrl(fullUrl);
 
-    const cfgUpdates: Record<string, string> = {};
+    const cfgUpdates: Record<string, any> = { model_settings: modelSettingsMap };
     for (const d of PROVIDER_DEFS) {
       const f = forms[d.id];
       const u = buildUrlFromParts(f.host, f.port, d.suffix);
@@ -257,7 +273,6 @@ export default function ProvidersTab(props: ProvidersTabProps) {
       saveErrMsg = String(e?.message || e);
     }
 
-    // B65 FIX (P2-18): «Сохранено» показываем ТОЛЬКО при подтверждённом success от бэкенда
     if (saveOk) {
       setSaveError('');
       setSavedNotice(true);
@@ -322,7 +337,6 @@ export default function ProvidersTab(props: ProvidersTabProps) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Левая колонка: список провайдеров */}
       <div className="lg:col-span-5 space-y-3">
         <div className="flex items-center justify-between px-1 mb-2">
           <div className="flex items-center gap-2">
@@ -377,9 +391,7 @@ export default function ProvidersTab(props: ProvidersTabProps) {
         </div>
       </div>
 
-      {/* Правая колонка: настройки подключения + модели выбранного провайдера */}
       <div className="lg:col-span-7 space-y-5">
-        {/* Карточка подключения */}
         <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -488,7 +500,6 @@ export default function ProvidersTab(props: ProvidersTabProps) {
           </div>
         </div>
 
-        {/* Карточка доступных моделей */}
         <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -506,7 +517,7 @@ export default function ProvidersTab(props: ProvidersTabProps) {
             </div>
           )}
 
-          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
             {modelsList.length === 0 ? (
               <div className="text-center py-6 text-xs text-gray-500 border border-dashed border-gray-800 rounded-lg">
                 Модели не обнаружены. Убедитесь, что сервер запущен и включён.
@@ -517,37 +528,94 @@ export default function ProvidersTab(props: ProvidersTabProps) {
                   Boolean(activeDef.consoleMode) &&
                   providerMode === activeDef.consoleMode &&
                   selectedModel === m.name;
+                const ms = modelSettingsMap[m.name] || { num_ctx: 8192, num_predict: 2048, temperature: 0.25 };
+                const isTuning = editingModelName === m.name;
+                const setM = (patch: Partial<ModelTuning>) => {
+                  const updated = { ...modelSettingsMap, [m.name]: { ...ms, ...patch } };
+                  setModelSettingsMap(updated);
+                  try {
+                    localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(updated));
+                  } catch {}
+                };
                 return (
-                  <div
-                    key={m.name}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg border transition-all ${
-                      isCurrentActive
-                        ? 'border-emerald-500/50 bg-emerald-500/10'
-                        : 'border-gray-800 bg-gray-950/60 hover:border-gray-700'
-                    }`}
-                  >
-                    <span className="font-mono text-sm text-white truncate pr-3">{m.name}</span>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {isCurrentActive ? (
-                        <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/20 border border-emerald-500/50 text-emerald-300">
-                          Активна
-                        </span>
-                      ) : activeDef.consoleMode ? (
+                  <div key={m.name} className="space-y-2">
+                    <div
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg border transition-all ${
+                        isCurrentActive
+                          ? 'border-emerald-500/50 bg-emerald-500/10'
+                          : 'border-gray-800 bg-gray-950/60 hover:border-gray-700'
+                      }`}
+                    >
+                      <span className="font-mono text-sm text-white truncate pr-3">{m.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
-                          onClick={() => {
-                            setProviderMode(activeDef.consoleMode!);
-                            setSelectedModel(m.name);
-                          }}
-                          className="px-3 py-1 rounded-md text-xs font-semibold bg-gray-800 hover:bg-cyan-500/20 border border-gray-700 hover:border-cyan-500/50 text-gray-200"
+                          onClick={() => setEditingModelName(isTuning ? null : m.name)}
+                          className="px-2.5 py-1 rounded-md text-xs font-mono bg-gray-800 hover:bg-purple-500/20 border border-gray-700 hover:border-purple-500/50 text-purple-300"
+                          title="Настройки модели: контекст, лимит токенов, температура"
                         >
-                          Выбрать
+                          ⚙ ctx:{ms.num_ctx}
                         </button>
-                      ) : null}
-                      {m.sizeLabel && (
-                        <span className="text-xs font-mono text-gray-400 w-20 text-right">{m.sizeLabel}</span>
-                      )}
+                        {isCurrentActive ? (
+                          <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/20 border border-emerald-500/50 text-emerald-300">
+                            Активна
+                          </span>
+                        ) : activeDef.consoleMode ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProviderMode(activeDef.consoleMode!);
+                              setSelectedModel(m.name);
+                            }}
+                            className="px-3 py-1 rounded-md text-xs font-semibold bg-gray-800 hover:bg-cyan-500/20 border border-gray-700 hover:border-cyan-500/50 text-gray-200"
+                          >
+                            Выбрать
+                          </button>
+                        ) : null}
+                        {m.sizeLabel && (
+                          <span className="text-xs font-mono text-gray-400 w-20 text-right">{m.sizeLabel}</span>
+                        )}
+                      </div>
                     </div>
+                    {isTuning && (
+                      <div className="px-3.5 py-3 rounded-lg bg-gray-900/90 border border-purple-500/30 grid grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="block text-gray-400 mb-1">Контекст (num_ctx)</label>
+                          <select
+                            value={ms.num_ctx}
+                            onChange={(e) => setM({ num_ctx: Number(e.target.value) })}
+                            className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-700 text-white font-mono"
+                          >
+                            <option value={2048}>2048</option>
+                            <option value={4096}>4096</option>
+                            <option value={8192}>8192</option>
+                            <option value={16384}>16384</option>
+                            <option value={32768}>32768</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-gray-400 mb-1">Макс. токенов</label>
+                          <input
+                            type="number"
+                            value={ms.num_predict}
+                            onChange={(e) => setM({ num_predict: Number(e.target.value) || 2048 })}
+                            className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-700 text-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-400 mb-1">Температура</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="2"
+                            value={ms.temperature}
+                            onChange={(e) => setM({ temperature: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-700 text-white font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })

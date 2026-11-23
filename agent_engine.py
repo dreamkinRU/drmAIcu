@@ -150,10 +150,46 @@ class AgentEngine:
         else:
             return {"provider": "ollama", "model": "qwen2.5-coder:14b", "name": "Ollama: Qwen 14B (judge)"}
 
+    def get_model_settings(self, model: str = "") -> Dict:
+        all_ms = self.config.get("model_settings") or {}
+        if not isinstance(all_ms, dict):
+            all_ms = {}
+        m_cfg = all_ms.get(model) if model and isinstance(all_ms.get(model), dict) else {}
+        default_ctx = int(self.config.get("default_num_ctx", 8192) or 8192)
+        num_ctx = int(m_cfg.get("num_ctx", default_ctx) or default_ctx)
+        num_predict = int(m_cfg.get("num_predict", 2048) or 2048)
+        temperature = float(m_cfg.get("temperature", 0.25) if m_cfg.get("temperature") is not None else 0.25)
+        return {
+            "num_ctx": max(512, min(131072, num_ctx)),
+            "num_predict": max(128, min(16384, num_predict)),
+            "temperature": max(0.0, min(2.0, temperature)),
+        }
+
+    def verify_code_draft(self, draft_text: str = "") -> List[str]:
+        issues = []
+        txt = draft_text or ""
+        low = txt.lower()
+        if ("http://" in low) or ("https://" in low) or ("cdnjs" in low) or ("unpkg" in low):
+            issues.append("обнаружены внешние ссылки или CDN")
+        if "todo" in low or "placeholder" in low or "notimplementederror" in low:
+            issues.append("обнаружены незавершённые заглушки/TODO")
+        open_braces = txt.count("{") - txt.count("}")
+        open_parens = txt.count("(") - txt.count(")")
+        if abs(open_braces) > 1:
+            issues.append(f"несбалансированные фигурные скобки ({txt.count('{')} / {txt.count('}')})")
+        if abs(open_parens) > 1:
+            issues.append(f"несбалансированные круглые скобки ({txt.count('(')} / {txt.count(')')})")
+        return issues
+
     async def _query_ollama(self, model: str, messages: List[Dict], timeout: float = 120.0) -> str:
+        m_cfg = self.get_model_settings(model)
         loop = asyncio.get_running_loop()
         def do_request():
-            return self._ollama.chat(model=model, messages=messages, options={"num_predict": 1000})
+            return self._ollama.chat(
+                model=model,
+                messages=messages,
+                options={"num_predict": m_cfg["num_predict"], "num_ctx": m_cfg["num_ctx"], "temperature": m_cfg["temperature"]},
+            )
         response = await asyncio.wait_for(loop.run_in_executor(None, do_request), timeout=timeout)
         return response['message']['content']
 
@@ -321,10 +357,11 @@ class AgentEngine:
             loop = asyncio.get_running_loop()
             stop_flag = {"stop": False}
 
-            def worker(provider_name, model_name):
+            m_cfg = self.get_model_settings(cmodel)
+            def worker(provider_name, model_name, cfg=m_cfg):
                 try:
                     if provider_name == "ollama":
-                        stream = self._ollama.chat(model=model_name, messages=messages, stream=True, options={"num_predict": 2048})
+                        stream = self._ollama.chat(model=model_name, messages=messages, stream=True, options={"num_predict": cfg["num_predict"], "num_ctx": cfg["num_ctx"], "temperature": cfg["temperature"]})
                         for part in stream:
                             if stop_flag["stop"]:
                                 break
@@ -569,9 +606,10 @@ ANSWER (code only):"""
                 loop = asyncio.get_running_loop()
                 stop_flag = {"stop": False}
 
-                def worker():
+                m_cfg = self.get_model_settings(target_model)
+                def worker(cfg=m_cfg):
                     try:
-                        stream = ollama.chat(model=target_model, messages=messages, stream=True, options={"num_predict": 2048})
+                        stream = self._ollama.chat(model=target_model, messages=messages, stream=True, options={"num_predict": cfg["num_predict"], "num_ctx": cfg["num_ctx"], "temperature": cfg["temperature"]})
                         for part in stream:
                             if stop_flag["stop"]:
                                 break
@@ -855,14 +893,29 @@ ANSWER (code only):"""
                 )
                 step_instr = (step.get("instruction") or "").strip()
 
+                if previous_output:
+                    compact_prev = previous_output[-8000:] if len(previous_output) > 8000 else previous_output
+                    prev_block = compact_prev
+                else:
+                    prev_block = "(предыдущий этап вернул пустой ответ)"
+
+                _v_issues = self.verify_code_draft(previous_output) if previous_output else []
+                _v_note = ("\n\nЗАМЕЧАНИЯ ПРОВЕРКИ ПРЕДЫДУЩЕГО ШАГА: " + "; ".join(_v_issues)) if _v_issues else ""
                 if idx == 0:
                     step_user_prompt = f"{prompt}\n\nИнструкция этапа: {step_instr}" if step_instr else prompt
                 else:
+                    self.log(f"[PIPELINE] Step {step_num} receives prev_output len={len(previous_output)}", "INFO")
                     extra = f"\n\nИнструкция текущего этапа ({name}): {step_instr}" if step_instr else ""
+                    is_last_step = (step_num == total_steps)
+                    final_rule = (
+                        "\n\nВАЖНО: Это финальный шаг цепочки. Не пересказывай предыдущие шаги и не оставляй черновиков. "
+                        "Выдай один готовый, полностью рабочий итоговый вариант, где все найденные проблемы реально исправлены."
+                        if is_last_step else
+                        "\n\nВАЖНО: Не пересказывай весь текст впустую — укажи конкретные ошибки/улучшения или дай точный доработанный результат."
+                    )
                     step_user_prompt = (
                         f"ИСХОДНАЯ ЗАДАЧА ПОЛЬЗОВАТЕЛЯ:\n{prompt}\n\n"
-                        f"РЕЗУЛЬТАТ ПРЕДЫДУЩЕГО ЭТАПА:\n{previous_output}{extra}\n\n"
-                        "Выполни свою часть работы на основе результата предыдущего этапа:"
+                        f"--- РЕЗУЛЬТАТ ШАГА {idx} ---\n{prev_block}\n--- КОНЕЦ РЕЗУЛЬТАТА ШАГА {idx} ---{extra}{_v_note}{final_rule}"
                     )
 
                 messages = [
@@ -881,18 +934,25 @@ ANSWER (code only):"""
                     "model": mdl
                 }
 
+                m_cfg = self.get_model_settings(mdl)
                 if prov == "ollama":
                     queue: asyncio.Queue = asyncio.Queue()
                     loop = asyncio.get_running_loop()
                     stop_flag = {"stop": False}
+                    ollama_client = getattr(self, "_ollama", None) or ollama
 
-                    def worker(m_name=mdl, msgs=messages, q=queue, sf=stop_flag):
+                    def worker(m_name=mdl, msgs=messages, q=queue, sf=stop_flag, cli=ollama_client, cfg=m_cfg):
                         try:
-                            stream = ollama.chat(model=m_name, messages=msgs, stream=True, options={"num_predict": 2048})
+                            stream = cli.chat(model=m_name, messages=msgs, stream=True, options={"num_predict": cfg["num_predict"], "num_ctx": cfg["num_ctx"], "temperature": cfg["temperature"]})
                             for part in stream:
                                 if sf["stop"]:
                                     break
-                                chunk = part.get("message", {}).get("content", "")
+                                if isinstance(part, dict):
+                                    msg = part.get("message") or {}
+                                    chunk = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+                                else:
+                                    msg = getattr(part, "message", None)
+                                    chunk = getattr(msg, "content", "") if msg is not None else ""
                                 if chunk:
                                     loop.call_soon_threadsafe(q.put_nowait, ("chunk", chunk))
                             loop.call_soon_threadsafe(q.put_nowait, ("done", None))
@@ -942,9 +1002,18 @@ ANSWER (code only):"""
                     step_chunks.append(res_text or "")
                     yield {"type": "step_chunk", "step": step_num, "content": res_text or ""}
 
-                previous_output = "".join(step_chunks).strip()
+                raw_step_out = "".join(step_chunks).strip()
+                clean_step_out = raw_step_out.replace("```html", "").replace("```javascript", "").replace("```js", "").replace("```", "").strip()
+                check_issues = self.verify_code_draft(clean_step_out)
+                if check_issues:
+                    self.log(f"[PIPELINE CHECK WARN] Step {step_num}: {', '.join(check_issues)}", "WARN")
+                    step_instr = (step_instr + "\n" if step_instr else "") + "ОБЯЗАТЕЛЬНО ИСПРАВЬ ЗАМЕЧАНИЯ ПРОВЕРКИ: " + "; ".join(check_issues) + ". Не используй внешние ссылки (http/https/cdn) и не оставляй заглушек."
+                previous_output = clean_step_out
                 step_elapsed = round(time.perf_counter() - step_t0, 2)
-                self.log(f"[PIPELINE STEP {step_num}/{total_steps} OK] {name} in {step_elapsed}s", "SUCCESS")
+                if previous_output:
+                    self.log(f"[PIPELINE STEP {step_num}/{total_steps} OK] {name} ({len(previous_output)} chars) in {step_elapsed}s", "SUCCESS")
+                else:
+                    self.log(f"[PIPELINE STEP {step_num}/{total_steps} EMPTY] {name} returned 0 chars in {step_elapsed}s", "WARN")
                 yield {"type": "step_done", "step": step_num, "total": total_steps, "name": name, "elapsed_sec": step_elapsed}
 
             total_elapsed = max(time.perf_counter() - start_time, 0.001)

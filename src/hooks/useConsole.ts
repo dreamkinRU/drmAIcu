@@ -28,7 +28,14 @@ export function useConsole(
   codeIssues: CodeIssue[] = [],
   recordAgentStats?: (id: number, stats: { tps?: number; patchCreated?: boolean }) => void
 ) {
-  const [consolePrompt, setConsolePrompt] = useState('');
+  const CONSOLE_HISTORY_KEY = 'drmaicu_console_history_v1';
+  const [consolePrompt, setConsolePrompt] = useState<string>(() => {
+    try {
+      return localStorage.getItem(CONSOLE_HISTORY_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [consoleLoading, setConsoleLoading] = useState(false);
   const [providerMode, setProviderMode] = useState<ConsoleProviderMode>(() => {
     try {
@@ -151,6 +158,22 @@ export function useConsole(
   const [consoleMetrics, setConsoleMetrics] = useState<StreamMetrics | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastEndRef = useRef<number>(0);
+
+  useEffect(() => {
+    try {
+      const savedLen = Number(localStorage.getItem(CONSOLE_HISTORY_KEY + '_end') || '0');
+      if (Number.isFinite(savedLen) && savedLen >= 0 && savedLen <= consolePrompt.length) {
+        lastEndRef.current = savedLen;
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONSOLE_HISTORY_KEY, consolePrompt);
+      localStorage.setItem(CONSOLE_HISTORY_KEY + '_end', String(lastEndRef.current));
+    } catch {}
+  }, [consolePrompt]);
 
   const enrichPromptWithContext = async (userPrompt: string): Promise<string> => {
     const openIssues = includeCodeIssues ? codeIssues.filter((i) => !i.fixed) : [];
@@ -405,7 +428,8 @@ export function useConsole(
       source: 'Console',
     });
 
-    const baseText = consolePrompt.trimEnd() + '\n> ';
+    const headerPrefix = consolePrompt.trim() ? consolePrompt.trimEnd() + '\n\n' : '';
+    const baseText = `${headerPrefix}━━━ 💬 ЗАПРОС (${promptToSend.slice(0, 60)}) ━━━\n${promptToSend}\n\n━━━ 🤖 ОТВЕТ [${providerMode}${selectedModel ? '/' + selectedModel : ''}] ━━━\n`;
     let rawStreamed = '';
     let latestTps = 0;
     setConsolePrompt(baseText);

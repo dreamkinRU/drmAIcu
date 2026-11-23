@@ -10,6 +10,15 @@ const ACTIVE_PIPELINE_STORAGE_KEY = 'drmaicu_active_pipeline_id';
 
 const DEFAULT_PIPELINES: AgentPipeline[] = [
   {
+    id: 'pipe-fast-code-check',
+    name: 'Быстрый код + проверка',
+    description: 'Быстрая генерация самодостаточного кода и проверка на ошибки/заглушки',
+    steps: [
+      { agentId: 1, instruction: 'Напиши готовый самодостаточный код без внешних ссылок и заглушек.' },
+      { agentId: 3, instruction: 'Проверь код на ошибки, незакрытые блоки и лишние зависимости; выдай исправленный итог.' },
+    ],
+  },
+  {
     id: 'pipe-code-audit',
     name: 'Код → Аудит → Фикс',
     description: 'Генерация решения, проверка на баги/типы и выпуск финальной версии',

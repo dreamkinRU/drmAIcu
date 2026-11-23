@@ -1,73 +1,6 @@
 {
   "applied": [
     {
-      "patch_id": "014",
-      "target_file": "main.py",
-      "patch_type": "full_replace",
-      "applied_at": "2026-11-15T18:37:49.109473",
-      "checksum": "436a28926503e21a9a638f6fd5dcf9c03a40749d330351cfb1173ddd5468eb88",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_183749.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_183749_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "008",
-      "target_file": "src/App.tsx",
-      "applied_at": "2026-11-15T18:38:58.501708",
-      "checksum": "1aec6e16028c5dd0e930eb5b772efb7b4aa6fb4fb7be9e2dfe4269ce8251de69",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_183858.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_183858_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "010",
-      "target_file": "src/App.tsx",
-      "applied_at": "2026-11-15T18:47:34.237041",
-      "checksum": "0abc70f53f0cdc486785e936db621402228dea7b44f8c37999182be002e96cb3",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_184734.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_184734_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "015",
-      "target_file": "main.py",
-      "applied_at": "2026-11-15T18:57:23.255080",
-      "checksum": "b38bc1250766252a282be7f9c7d4ed6b729fa579a4db0f31aa9a6ecb616e95f2",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_185723.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261115_185723_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "016",
-      "target_file": "launcher.bat",
-      "applied_at": "2026-11-15T18:57:46.862009",
-      "checksum": "9c2544e26c08112d444c6e21c406b3d2068fd93ca62ed2ac7f71695088b8bdef",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_185746.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_20261115_185746_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\launcher.bat_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "017",
-      "target_file": "src/App.tsx",
-      "applied_at": "2026-11-15T18:58:03.988342",
-      "checksum": "0883b8e87ffe92d6f9c960835e74f8f707bccaa8f9d71a2e423d85b551d59404",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_185803.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_185803_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
-      ]
-    },
-    {
       "patch_id": "018",
       "target_file": "src/App.tsx",
       "applied_at": "2026-11-15T19:04:55.549054",
@@ -3981,6 +3914,178 @@
         "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_20261123_184342_607951_verified.bak",
         "G:\\Mega\\git\\drmAIcu\\backups\\src__App.tsx_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "166",
+      "target_file": "agent_engine.py",
+      "operations": [
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "a3b113f71fd588f786d8f1642e7f2a5b32b6c95156ceb862d144583dce5031b4",
+          "backups": [
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_222602_487993.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_222602_487993_verified.bak",
+            "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "48c8e74a46cb311616e5539749cac389fd0cdf2246bf08e07f7a15e46bd617af"
+        }
+      ],
+      "applied_at": "2026-11-23T22:26:02.651766",
+      "checksum": "c26d4941cab199afc7adbcc8dd9e2c302d49cc7803789c199f77cadd193bc5ae",
+      "backups": [
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_222602_487993.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_20261123_222602_487993_verified.bak",
+        "G:\\Mega\\git\\drmAIcu\\backups\\agent_engine.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "167",
+      "target_file": "agent_engine.py",
+      "operations": [
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "9a91928a272ee722d875b03c80433aed1968ff46460c641858ab258a5f646802",
+          "backups": [
+            "backups/agent_engine.py_20261123_223112_528829.bak",
+            "backups/agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "a3b113f71fd588f786d8f1642e7f2a5b32b6c95156ceb862d144583dce5031b4"
+        }
+      ],
+      "applied_at": "2026-11-23T22:31:12.619922",
+      "checksum": "c10258c4990f4294073e42907a045e8d9374c4539f8b1c5f83cf7fcf0409334c",
+      "backups": [
+        "backups/agent_engine.py_20261123_223112_528829.bak",
+        "backups/agent_engine.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "168",
+      "target_file": "agent_engine.py+main.py+src/hooks/useAgents.ts+src/hooks/useConsole.ts",
+      "operations": [
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "c516d9399b58f83c1a54da0ebe4497f7fd465313124d3277d90fd20f338910eb",
+          "backups": [
+            "backups/agent_engine.py_20261123_223642_432158.bak",
+            "backups/agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "9a91928a272ee722d875b03c80433aed1968ff46460c641858ab258a5f646802"
+        },
+        {
+          "target_file": "main.py",
+          "checksum": "2dc3caca0e1d2e4e7c1cebe54f95c54a8f16b96f0fe623901b267e867425f8d2",
+          "backups": [
+            "backups/main.py_20261123_223642_435843.bak",
+            "backups/main.py_LATEST.bak"
+          ],
+          "backup_sha": "f7ab68ec13011a39d6b1127de4b81eda7d77c960d63f43a7cbc48e19ea2a0599"
+        },
+        {
+          "target_file": "src/hooks/useAgents.ts",
+          "checksum": "184887d95583458a828eda0344a37f1b3f589ce74a37ed4aaf6e1f6b683f9c0b",
+          "backups": [
+            "backups/src__hooks__useAgents.ts_20261123_223642_451814.bak",
+            "backups/src__hooks__useAgents.ts_LATEST.bak"
+          ],
+          "backup_sha": "25491a93a4a3ecf204f7d60591203cb28aa5d8adef8567514124a01a83da6401"
+        },
+        {
+          "target_file": "src/hooks/useConsole.ts",
+          "checksum": "84b30e203234edcddb9ab5c267ef688cc67e5ee5618626cbad17fbee597ad892",
+          "backups": [
+            "backups/src__hooks__useConsole.ts_20261123_223642_453334.bak",
+            "backups/src__hooks__useConsole.ts_LATEST.bak"
+          ],
+          "backup_sha": "5f7436fe0c03ae2486f1441924e0c62329372c0bc2a0babdce8d1685d55a5395"
+        }
+      ],
+      "applied_at": "2026-11-23T22:36:42.712681",
+      "checksum": "ebbd2ec07b235c264080ec875700743704fd83c389d3cbebd0d2aadbad22c755",
+      "backups": [
+        "backups/agent_engine.py_20261123_223642_432158.bak",
+        "backups/agent_engine.py_LATEST.bak",
+        "backups/main.py_20261123_223642_435843.bak",
+        "backups/main.py_LATEST.bak",
+        "backups/src__hooks__useAgents.ts_20261123_223642_451814.bak",
+        "backups/src__hooks__useAgents.ts_LATEST.bak",
+        "backups/src__hooks__useConsole.ts_20261123_223642_453334.bak",
+        "backups/src__hooks__useConsole.ts_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "168-2",
+      "target_file": "agent_engine.py+src/components/tabs/ProvidersTab.tsx",
+      "operations": [
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "203628b1edb941fc5498d2760859ef093ac2df1842354c4cd10d5813e9751f63",
+          "backups": [
+            "backups/agent_engine.py_20261123_225449_932481.bak",
+            "backups/agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "c516d9399b58f83c1a54da0ebe4497f7fd465313124d3277d90fd20f338910eb"
+        },
+        {
+          "target_file": "src/components/tabs/ProvidersTab.tsx",
+          "checksum": "d11eb9baf48788174e75c5fe3d8d8941ce50dabd5560fcf7752ad101e982ee7b",
+          "backups": [
+            "backups/src__components__tabs__ProvidersTab.tsx_20261123_225449_937125.bak",
+            "backups/src__components__tabs__ProvidersTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "fec6310b193d4cf91b7b763ceddecf698c1d0b83b8b08697ee48b1674483fd2a"
+        }
+      ],
+      "applied_at": "2026-11-23T22:54:50.064192",
+      "checksum": "fbd49dfa518b97ce7d5abb80c373a0de410546ef2c84a3b7affefc6be4347005",
+      "backups": [
+        "backups/agent_engine.py_20261123_225449_932481.bak",
+        "backups/agent_engine.py_LATEST.bak",
+        "backups/src__components__tabs__ProvidersTab.tsx_20261123_225449_937125.bak",
+        "backups/src__components__tabs__ProvidersTab.tsx_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "169",
+      "target_file": "agent_engine.py",
+      "operations": [
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "fbc02abdc0e88aa522d51077405609b8d8d059809176bdbf7a2200fbe9e5acd9",
+          "backups": [
+            "backups/agent_engine.py_20261123_230048_338127.bak",
+            "backups/agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "203628b1edb941fc5498d2760859ef093ac2df1842354c4cd10d5813e9751f63"
+        }
+      ],
+      "applied_at": "2026-11-23T23:00:48.470049",
+      "checksum": "afbd771826ba166cb07cf8a888c404b3dae228a44d423025bd1f42c99d78ac20",
+      "backups": [
+        "backups/agent_engine.py_20261123_230048_338127.bak",
+        "backups/agent_engine.py_LATEST.bak"
+      ]
+    },
+    {
+      "patch_id": "170",
+      "target_file": "agent_engine.py",
+      "operations": [
+        {
+          "target_file": "agent_engine.py",
+          "checksum": "393e70fdcdd4a44bf290364b63728ef691e5814c9cea5ab62d949ff150b99169",
+          "backups": [
+            "backups/agent_engine.py_20261123_231910_685501.bak",
+            "backups/agent_engine.py_LATEST.bak"
+          ],
+          "backup_sha": "fbc02abdc0e88aa522d51077405609b8d8d059809176bdbf7a2200fbe9e5acd9"
+        }
+      ],
+      "applied_at": "2026-11-23T23:19:10.833037",
+      "checksum": "60dcfea016e820176baae01fd6f4895dd3ef0d1e3897a398cd2fc92fa94dfb73",
+      "backups": [
+        "backups/agent_engine.py_20261123_231910_685501.bak",
+        "backups/agent_engine.py_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -5056,6 +5161,58 @@
         "src/App.tsx"
       ],
       "timestamp": "2026-11-23T18:43:42.638818"
+    },
+    {
+      "action": "apply",
+      "patch_id": "166",
+      "files": [
+        "agent_engine.py"
+      ],
+      "timestamp": "2026-11-23T22:26:02.651766"
+    },
+    {
+      "action": "apply",
+      "patch_id": "167",
+      "files": [
+        "agent_engine.py"
+      ],
+      "timestamp": "2026-11-23T22:31:12.619922"
+    },
+    {
+      "action": "apply",
+      "patch_id": "168",
+      "files": [
+        "agent_engine.py",
+        "main.py",
+        "src/hooks/useAgents.ts",
+        "src/hooks/useConsole.ts"
+      ],
+      "timestamp": "2026-11-23T22:36:42.712681"
+    },
+    {
+      "action": "apply",
+      "patch_id": "168-2",
+      "files": [
+        "agent_engine.py",
+        "src/components/tabs/ProvidersTab.tsx"
+      ],
+      "timestamp": "2026-11-23T22:54:50.064192"
+    },
+    {
+      "action": "apply",
+      "patch_id": "169",
+      "files": [
+        "agent_engine.py"
+      ],
+      "timestamp": "2026-11-23T23:00:48.470049"
+    },
+    {
+      "action": "apply",
+      "patch_id": "170",
+      "files": [
+        "agent_engine.py"
+      ],
+      "timestamp": "2026-11-23T23:19:10.833037"
     }
   ],
   "rollbacks": [
