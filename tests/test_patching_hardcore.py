@@ -1,5 +1,6 @@
 # tests/test_patching_hardcore.py
 # -*- coding: utf-8 -*-
+import builtins
 import os
 import sys
 import stat
@@ -435,3 +436,38 @@ class TestCrashHygiene:
             {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
         ]})["success"]
         assert self._tmps(box) == []
+
+
+class TestMidTransactionDefense:
+    """B41/B42: появление create-цели посреди транзакции и диск full во время записи."""
+
+    def test_B41_create_target_appeared_mid_transaction(self, box, monkeypatch):
+        payload = {"patch_id": "B41", "operations": [
+            {"type": "create", "target_file": "new.py", "full_file_content": "n = 1\n"}
+        ]}
+        ops = engine.compute_ops(payload)
+        assert all(not o["err"] for o in ops)
+        monkeypatch.setattr(engine, "compute_ops", lambda data: ops)
+        (box / "new.py").write_bytes(b"intruder\n")
+        res = main.apply_patch(payload)
+        assert res["success"] is False
+        assert "транзакции" in res["error"]
+        assert (box / "new.py").read_bytes() == b"intruder\n"
+        assert engine.load_manifest()["applied"] == []
+
+    def test_B42_disk_full_clean_rollback(self, box, monkeypatch):
+        real_open = builtins.open
+        def failing_open(file, mode="r", *a, **kw):
+            if mode == "wb" and str(file).endswith("c2.py.tmp"):
+                raise OSError(28, "No space left on device")
+            return real_open(file, mode, *a, **kw)
+        monkeypatch.setattr(builtins, "open", failing_open)
+        res = main.apply_patch({"patch_id": "B42", "operations": [
+            {"type": "create", "target_file": "c1.py", "full_file_content": "a = 1\n"},
+            {"type": "create", "target_file": "c2.py", "full_file_content": "b = 2\n"},
+        ]})
+        assert res["success"] is False
+        assert not (box / "c1.py").exists()
+        assert not (box / "c2.py").exists()
+        assert list(box.rglob("*.tmp")) == []
+        assert engine.load_manifest()["applied"] == []

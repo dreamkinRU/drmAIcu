@@ -186,6 +186,9 @@ def apply_diff(content, diff):
         else:
             i += 1
     ops = []
+    # B44 FIX: diff без единого валидного ханка — ошибка, а не молчаливый no-op
+    if not hunks:
+        raise ValueError('Не удалось распарсить unified diff: нет ни одного валидного ханка (кривые @@-заголовки или diff пуст)')
     for old_start, old_count, body in hunks:
         while body and body[-1] == '':
             body.pop()
@@ -206,6 +209,9 @@ def apply_diff(content, diff):
             elif s == '':
                 old_block.append('')
                 new_block.append('')
+        # B44 FIX: пустой ханк (ни -/+ действий) — ошибка, а не молчаливый no-op
+        if not old_block and not new_block:
+            raise ValueError('Пустой ханк в diff (нет строк -/+ у ханка, смещение ' + str(old_start) + ')')
         hint = old_start if old_count == 0 else old_start - 1
         pos = find_block(lines, old_block, hint)
         if isinstance(pos, list):
@@ -564,6 +570,10 @@ def apply_patch(raw):
 
 
 def _apply_patch_locked(data, pid):
+    # B43 FIX: повторное применение уже применённого патча запрещено (_LATEST после rollback — можно)
+    if str(pid) in {str(a.get('patch_id')) for a in load_manifest().get('applied', [])}:
+        log('Patch ' + pid + ' rejected: already applied', 'ERROR')
+        return {'success': False, 'error': 'Патч ' + str(pid) + ' уже применён (повторное применение запрещено)'}
     ops = compute_ops(data)
     errs = [o['err'] for o in ops if o['err']]
     if errs:
@@ -584,9 +594,12 @@ def _apply_patch_locked(data, pid):
         if os.path.exists(o['path']) and not backs:
             log('Patch ' + pid + ' aborted: backup failed for existing file ' + o['target_file'], 'ERROR')
             return {'success': False, 'error': 'Критическая ошибка: не удалось создать резервную копию ' + o['target_file'] + '. Операция прервана для предотвращения потери данных.'}
+        old_sha = None
         try:
-            with open(o['path'], 'rb') as f:
-                disk_sha = sha_bytes(f.read()) if os.path.exists(o['path']) else None
+            if os.path.exists(o['path']):
+                with open(o['path'], 'rb') as f:
+                    old_sha = sha_bytes(f.read())
+            disk_sha = old_sha
         except OSError:
             disk_sha = 'unreadable'
         if o.get('base') is not None and disk_sha != o['base']:
@@ -597,7 +610,8 @@ def _apply_patch_locked(data, pid):
             return {'success': False, 'error': 'Файл появился во время транзакции (create): ' + o['target_file']}
         data = to_bytes(o['new'], file_newline(o['path']))
         planned.append({'path': o['path'], 'new': o['new'], 'backs': backs, 'data': data,
-                        'tgt': o['target_file'], 'sha': sha_bytes(data), 'existed': os.path.exists(o['path'])})
+                        'tgt': o['target_file'], 'sha': sha_bytes(data), 'existed': os.path.exists(o['path']),
+                        'old_sha': old_sha})
     written = []
     try:
         for pl in planned:
@@ -610,7 +624,9 @@ def _apply_patch_locked(data, pid):
                 actual = sha_bytes(f.read())
             if actual != pl['sha']:
                 raise ValueError('Checksum mismatch: ' + pl['tgt'])
-        oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'], 'backups': pl['backs']} for pl in planned]
+        # B40 FIX: в манифест попадает sha контента ДО apply — верификация бэкапа при откате
+        oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'], 'backups': pl['backs'],
+                   'backup_sha': pl['old_sha']} for pl in planned]
         allb = [x for pl in planned for x in pl['backs']]
         combined = sha(json.dumps(oprecs, sort_keys=True))
         man = load_manifest()
@@ -667,6 +683,8 @@ def _rollback_locked():
     last = man['applied'][-1]
     ops = last.get('operations')
     if ops:
+        # B40 FIX: verify-first — ВСЯ целостность проверяется до первой записи на диск
+        restores = []
         for op in reversed(ops):
             path = safe_path(op['target_file'])
             if path is None:
@@ -682,13 +700,27 @@ def _rollback_locked():
                         break
                 if specific_backup is None:
                     specific_backup = b[-1]
-                if os.path.exists(specific_backup):
-                    shutil.copy2(specific_backup, path)
-                else:
+                if not os.path.exists(specific_backup):
                     return {'success': False, 'error': 'Бэкап ' + specific_backup + ' не найден. Откат невозможен.'}
+                expected = op.get('backup_sha')
+                if expected is not None:
+                    try:
+                        with open(specific_backup, 'rb') as f:
+                            actual = sha_bytes(f.read())
+                    except OSError:
+                        return {'success': False, 'error': 'Бэкап ' + specific_backup + ' нечитаем. Откат невозможен.'}
+                    if actual != expected:
+                        log('Rollback aborted: backup content does not match manifest checksum ' + specific_backup, 'ERROR')
+                        return {'success': False, 'error': 'Бэкап не совпадает с контрольной суммой манифеста (подменён или повреждён): ' + specific_backup}
+                restores.append((path, specific_backup))
             elif os.path.exists(path):
                 # Если это был созданный файл (нет бэкапа), удаляем его
-                os.remove(path)
+                restores.append((path, None))
+        for rpath, rbackup in restores:
+            if rbackup:
+                shutil.copy2(rbackup, rpath)
+            else:
+                os.remove(rpath)
         man['applied'].pop()
         man['rollbacks'].append(last)
         save_manifest(man)
