@@ -174,6 +174,58 @@ class AgentEngine:
         self.log(f"Total models: {len(candidates)}", "INFO")
         if status_callback:
             status_callback(f"Sending to {len(candidates)} models...")
+
+        def _all_failed():
+            if status_callback:
+                status_callback("All models failed")
+            self.log("All models failed", "ERROR")
+            return {
+                "success": False,
+                "result": "",
+                "error": "All models failed",
+                "providers": [c["provider"] for c in candidates],
+                "candidates": candidates
+            }
+
+        # B59 FIX (P2-12): режим Fast — возвращаем ПЕРВЫЙ УСПЕШНО готовый ответ,
+        # а не ждём самый медленный запрос: инкрементальный сбор, не прошедшие модели отменяются
+        if mode == "fast":
+            raw = [asyncio.ensure_future(self.get_code_response(c, prompt)) for c in candidates]
+            self.log(f"Fast race: {len(raw)} models, first success wins", "INFO")
+            winner = None
+            try:
+                for fut in asyncio.as_completed(raw):
+                    try:
+                        res = await fut
+                    except Exception as ext:
+                        res = ext
+                    if isinstance(res, Exception):
+                        self.log(f"[ERR] {res}", "ERROR")
+                    elif isinstance(res, dict) and res.get("code"):
+                        winner = res
+                        break
+                    else:
+                        self.log(f"[WARN] {res['candidate']['name']}: {res.get('error')}", "WARN")
+            finally:
+                for t in raw:
+                    if not t.done():
+                        t.cancel()
+                if raw:
+                    await asyncio.gather(*raw, return_exceptions=True)
+            if winner is None:
+                self.log("Fast: no model answered", "ERROR")
+                return _all_failed()
+            winner_name = winner['candidate']['name']
+            if status_callback:
+                status_callback(f"Fast: {winner_name}")
+            self.log(f"Fast: {winner_name}", "SUCCESS")
+            return {
+                "success": True,
+                "result": winner["code"],
+                "error": None,
+                "providers": [winner['candidate']['provider']]
+            }
+
         tasks = [self.get_code_response(c, prompt) for c in candidates]
         self.log("Parallel query...", "INFO")
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -190,16 +242,7 @@ class AgentEngine:
             answered = [r['candidate']['name'] for r in valid_responses]
             self.log(f"Answered: {', '.join(answered)}", "SUCCESS")
         if not valid_responses:
-            if status_callback:
-                status_callback("All models failed")
-            self.log("All models failed", "ERROR")
-            return {
-                "success": False,
-                "result": "",
-                "error": "All models failed",
-                "providers": [c["provider"] for c in candidates],
-                "candidates": candidates
-            }
+            return _all_failed()
         winning_providers = [r['candidate']['provider'] for r in valid_responses]
         if mode == "fast":
             winner = valid_responses[0]['candidate']['name']
