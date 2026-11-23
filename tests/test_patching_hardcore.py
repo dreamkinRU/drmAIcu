@@ -22,6 +22,7 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setattr(engine, "BACKUP_DIR", str(base / "backups"))
     monkeypatch.setattr(main, "PROJ_ARCHIVE", str(base / "project_archive"))
     monkeypatch.setattr(engine, "MANIFEST", str(base / "patch_manifest.json"))
+    monkeypatch.setattr(engine, "JOURNAL", str(base / "patch_journal.json"))
     monkeypatch.setattr(main, "IMPORTANT", str(base / ".project-important.json"))
     return base
 

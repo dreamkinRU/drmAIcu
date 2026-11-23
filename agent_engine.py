@@ -221,7 +221,8 @@ class AgentEngine:
         import aiohttp
 
         api_key = self.config.get('gemini_api_key', '')
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        headers = {"x-goog-api-key": api_key}
 
         contents = []
         for msg in messages:
@@ -240,7 +241,7 @@ class AgentEngine:
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
                 if response.status != 200:
                     error_text = await response.text()
                     raise Exception(f"Gemini API error {response.status}: {error_text[:100]}")

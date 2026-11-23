@@ -1,5 +1,5 @@
 # patch_engine.py
-# Patch engine v3.6.0 HARDENED: atomic two-phase commits, no UI dependencies
+# Patch engine v3.6.1 HARDENED: atomic two-phase commits, no UI dependencies
 import json, os, re, ast, shutil, hashlib, threading, subprocess
 from datetime import datetime
 
@@ -9,6 +9,8 @@ ARCHIVE_DIR = os.path.join(PATCH_DIR, 'archive')
 BACKUP_DIR = os.path.join(BASE, 'backups')
 DOWNLOADS_DIR = os.path.join(os.path.expanduser('~'), 'Downloads')
 MANIFEST = os.path.join(BASE, 'patch_manifest.json')
+JOURNAL = os.path.join(BASE, 'patch_journal.json')
+MANIFEST_LOCK = ''
 LOG = []
 
 for d in (PATCH_DIR, ARCHIVE_DIR, BACKUP_DIR):
@@ -90,12 +92,27 @@ def check_ts(name, code):
 
 
 def load_manifest():
+    global MANIFEST_LOCK
     if os.path.exists(MANIFEST):
         try:
             with open(MANIFEST, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            pass
+                m = json.load(f)
+            if not isinstance(m, dict) or not isinstance(m.get('applied'), list) or not isinstance(m.get('history'), list) or not isinstance(m.get('rollbacks'), list):
+                raise ValueError('wrong manifest shape')
+            MANIFEST_LOCK = ''
+            return m
+        except Exception as e:
+            # B52 FIX (P1-05): повреждённый манифест НЕ превращается в пустой — движок блокируется
+            cp = MANIFEST + '.corrupt'
+            try:
+                shutil.copy2(MANIFEST, cp)
+            except Exception:
+                pass
+            if not MANIFEST_LOCK:
+                MANIFEST_LOCK = 'манифест повреждён (' + str(e)[:80] + '), копия сохранена: ' + cp
+                log('MANIFEST CORRUPT: ' + str(e) + '. Изменения заблокированы, повреждённый файл сохранён: ' + cp, 'ERROR')
+            return {'applied': [], 'history': [], 'rollbacks': []}
+    MANIFEST_LOCK = ''
     return {'applied': [], 'history': [], 'rollbacks': []}
 
 
@@ -115,6 +132,40 @@ def save_manifest(m):
         except OSError:
             pass
         raise
+
+
+def _write_journal(j):
+    # B51 FIX: crash-журнал — tmp + fsync + атомарная замена
+    tmp = JOURNAL + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(j, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, JOURNAL)
+
+
+def load_journal():
+    try:
+        with open(JOURNAL, 'r', encoding='utf-8') as f:
+            j = json.load(f)
+        return j if isinstance(j, dict) else None
+    except Exception:
+        return None
+
+
+def _clear_journal():
+    try:
+        os.remove(JOURNAL)
+    except OSError:
+        pass
+
+
+def _pick_backup(backs):
+    # B32 FIX: timestamp-бэкап операции, _LATEST.bak — только фоллбэк
+    for cand in backs or []:
+        if not os.path.basename(str(cand)).endswith('_LATEST.bak'):
+            return cand
+    return (backs or [None])[-1]
 
 
 def backup(path):
@@ -613,8 +664,13 @@ def apply_patch(raw):
 
 def _apply_patch_locked(data, pid):
     patch_fname = data.get('filename', '') if isinstance(data, dict) else ''
+    # B52 FIX: повреждённый манифест → любые изменения движка запрещены
+    man0 = load_manifest()
+    if MANIFEST_LOCK:
+        log('Patch ' + pid + ' rejected: манифест заблокирован (повреждён)', 'ERROR')
+        return {'success': False, 'error': 'Движок заблокирован: ' + MANIFEST_LOCK}
     # B43 FIX: повторное применение уже применённого патча запрещено (_LATEST после rollback — можно)
-    if str(pid) in {str(a.get('patch_id')) for a in load_manifest().get('applied', [])}:
+    if str(pid) in {str(a.get('patch_id')) for a in man0.get('applied', [])}:
         log('Patch ' + pid + ' rejected: already applied', 'ERROR')
         return {'success': False, 'error': 'Патч ' + str(pid) + ' уже применён (повторное применение запрещено)'}
     ops = compute_ops(data)
@@ -656,13 +712,24 @@ def _apply_patch_locked(data, pid):
                         'tgt': o['target_file'], 'sha': sha_bytes(data), 'existed': os.path.exists(o['path']),
                         'old_sha': old_sha})
     written = []
+    # B51 FIX (P1-04): crash-журнал транзакции пишется до первой записи на диск,
+    # done-флаг — после каждого os.replace; по нему recover_journal(): после перезапуска
+    # восстанавливает старое состояние всех файлов (в том числе записанных до сбоя)
+    jrec = {'op': 'apply', 'patch_id': pid,
+            'steps': [{'path': pl['path'], 'tgt': pl['tgt'], 'existed': pl['existed'],
+                       'backs': pl['backs'], 'done': False} for pl in planned]}
     try:
+        _write_journal(jrec)
         for pl in planned:
             tmp = pl['path'] + '.tmp'
             with open(tmp, 'wb') as f:
                 f.write(pl['data'])
             os.replace(tmp, pl['path'])
             written.append(pl)
+            for st in jrec['steps']:
+                if st['path'] == pl['path']:
+                    st['done'] = True
+            _write_journal(jrec)
             with open(pl['path'], 'rb') as f:
                 actual = sha_bytes(f.read())
             if actual != pl['sha']:
@@ -683,6 +750,8 @@ def _apply_patch_locked(data, pid):
         if len(man['history']) > 500:
             man['history'] = man['history'][-500:]
         save_manifest(man)
+        # B51 FIX: транзакция зафиксирована в манифесте — журнал больше не нужен
+        _clear_journal()
         src_patch = find_patch_file(pid, patch_fname)
         if src_patch and os.path.isfile(src_patch):
             try:
@@ -708,7 +777,7 @@ def _apply_patch_locked(data, pid):
         for pl in written:
             if pl['backs']:
                 try:
-                    shutil.copy2(pl['backs'][-1], pl['path'])
+                    shutil.copy2(_pick_backup(pl['backs']), pl['path'])
                 except Exception as rb_err:
                     rollback_failed.append(pl['tgt'] + ': ' + str(rb_err))
             elif pl.get('existed') and not pl['backs']:
@@ -721,7 +790,14 @@ def _apply_patch_locked(data, pid):
                 except Exception as rb_err:
                     rollback_failed.append(pl['tgt'] + ': ' + str(rb_err))
         log('Patch ' + pid + ' ROLLED BACK (phase2): ' + str(e), 'ERROR')
-        return {'success': False, 'error': 'Транзакция отменена, выполнен откат: ' + str(e)}
+        # B50 FIX (P1-03): частичный откат НЕ выдаётся за удачный — явно перечисляем файлы
+        if rollback_failed:
+            log('Patch ' + pid + ' PARTIAL ROLLBACK, не восстановлены: ' + '; '.join(rollback_failed), 'ERROR')
+            return {'success': False,
+                    'error': 'Транзакция отменена, НО откат неполный! Не восстановлены: ' + '; '.join(rollback_failed) + ' | ' + str(e) + '. Журнал patch_journal.json сохранён для последующего восстановления.',
+                    'rollback_failed': rollback_failed, 'rollback_incomplete': True}
+        _clear_journal()
+        return {'success': False, 'error': 'Транзакция отменена, выполнен откат: ' + str(e), 'rollback_failed': []}
 
 
 def rollback():
@@ -729,55 +805,134 @@ def rollback():
         return _rollback_locked()
 
 
+def _verify_current_for_rollback(op, path):
+    # B48 FIX (P1-01): текущий файл обязан соответствовать checksum применённого патча,
+    # иначе rollback молча стёр бы пользовательские правки — операция запрещается
+    expected_new = op.get('checksum')
+    if expected_new is None:
+        return None
+    if not os.path.exists(path):
+        return 'Файл исчез после применения патча: ' + str(op['target_file']) + '. Откат запрещён.'
+    try:
+        with open(path, 'rb') as f:
+            cur = sha_bytes(f.read())
+    except OSError:
+        return 'Целевой файл нечитаем: ' + str(op['target_file']) + '. Откат запрещён.'
+    if cur != expected_new:
+        return 'Файл изменён после применения патча: ' + str(op['target_file']) + '. Откат запрещён, чтобы не потерять правки. Верните файл в ожидаемое состояние.'
+    return None
+
+
 def _rollback_locked():
     man = load_manifest()
+    if MANIFEST_LOCK:
+        return {'success': False, 'error': 'Движок заблокирован: ' + MANIFEST_LOCK}
     if not man.get('applied'):
         return {'success': False, 'error': 'Нет патчей для отката'}
     last = man['applied'][-1]
     ops = last.get('operations')
     if ops:
         # B40 FIX: verify-first — ВСЯ целостность проверяется до первой записи на диск
+        # B51 FIX: resume — если журнал принадлежит этому rollback, шаги с done=True уже восстановлены
+        done_paths = set()
+        j = load_journal()
+        if j and j.get('op') == 'rollback' and str(j.get('patch_id')) == str(last.get('patch_id')):
+            done_paths = {str(st['path']) for st in j.get('steps', []) if st.get('done')}
+            log('CRASH-RECOVERY: возобновляю прерванный rollback патча ' + str(last.get('patch_id')) + ' (восстановлено ранее: ' + str(len(done_paths)) + ')', 'WARNING')
         restores = []
         for op in reversed(ops):
             path = safe_path(op['target_file'])
             if path is None:
                 return {'success': False, 'error': 'Подозрительный target_file в манифесте (path traversal): ' + str(op['target_file'])}
+            if str(path) in done_paths:
+                continue
             b = op.get('backups') or []
-            # A-02 FIX: Используем timestamp-бэкап этой операции; _LATEST.bak перетирается каждым apply, поэтому
-            # (B32 FIX) избегаем его: восстанавливаем по первому timestamp-бэкапу, _LATEST — только фоллбек
-            if b and len(b) > 0:
-                specific_backup = None
-                for cand in b:
-                    if not os.path.basename(cand).endswith('_LATEST.bak'):
-                        specific_backup = cand
-                        break
-                if specific_backup is None:
-                    specific_backup = b[-1]
+            # A-02/B32 FIX: timestamp-бэкап этой операции, _LATEST — только фоллбэк
+            if b:
+                specific_backup = _pick_backup(b)
                 if not os.path.exists(specific_backup):
-                    return {'success': False, 'error': 'Бэкап ' + specific_backup + ' не найден. Откат невозможен.'}
+                    return {'success': False, 'error': 'Бэкап ' + str(specific_backup) + ' не найден. Откат невозможен.'}
                 expected = op.get('backup_sha')
                 if expected is not None:
                     try:
                         with open(specific_backup, 'rb') as f:
                             actual = sha_bytes(f.read())
                     except OSError:
-                        return {'success': False, 'error': 'Бэкап ' + specific_backup + ' нечитаем. Откат невозможен.'}
+                        return {'success': False, 'error': 'Бэкап ' + str(specific_backup) + ' нечитаем. Откат невозможен.'}
                     if actual != expected:
-                        log('Rollback aborted: backup content does not match manifest checksum ' + specific_backup, 'ERROR')
-                        return {'success': False, 'error': 'Бэкап не совпадает с контрольной суммой манифеста (подменён или повреждён): ' + specific_backup}
-                restores.append((path, specific_backup))
+                        log('Rollback aborted: backup content does not match manifest checksum ' + str(specific_backup), 'ERROR')
+                        return {'success': False, 'error': 'Бэкап не совпадает с контрольной суммой манифеста (подменён или повреждён): ' + str(specific_backup)}
+                err = _verify_current_for_rollback(op, path)
+                if err:
+                    return {'success': False, 'error': err}
+                restores.append({'path': path, 'tgt': op['target_file'],
+                                 'backup': specific_backup, 'backup_sha': expected})
             elif os.path.exists(path):
-                # Если это был созданный файл (нет бэкапа), удаляем его
-                restores.append((path, None))
-        for rpath, rbackup in restores:
-            if rbackup:
-                shutil.copy2(rbackup, rpath)
-            else:
-                os.remove(rpath)
-        man['applied'].pop()
-        man['rollbacks'].append(last)
-        save_manifest(man)
-        return {'success': True, 'message': 'Откат ' + str(last['patch_id']) + ' (' + str(len(ops)) + ' файл(ов))'}
+                # созданный патчем файл (нет бэкапа) — перед удалением та же B48-проверка
+                err = _verify_current_for_rollback(op, path)
+                if err:
+                    return {'success': False, 'error': err}
+                restores.append({'path': path, 'tgt': op['target_file'],
+                                 'backup': None, 'backup_sha': None})
+        if not restores:
+            man['applied'].pop()
+            man['rollbacks'].append(last)
+            save_manifest(man)
+            _clear_journal()
+            return {'success': True, 'message': 'Откат ' + str(last['patch_id']) + ' завершён (все файлы уже были восстановлены)'}
+        # B49 FIX (P1-02): two-phase rollback — сначала staging ВСЕХ файлов во временные
+        # копии с проверкой контрольных сумм, только потом контролируемая замена;
+        # сбой оставляет crash-журнал для resume
+        jrec = {'op': 'rollback', 'patch_id': last.get('patch_id'),
+                'steps': [{'path': st['path'], 'tgt': st['tgt'], 'backup': st['backup'],
+                           'backup_sha': st['backup_sha'], 'done': st['path'] in done_paths} for st in restores],
+                'entry': last}
+        staged = []
+        try:
+            _write_journal(jrec)
+            for st in restores:
+                if st['backup']:
+                    tmp = st['path'] + '.rbk.tmp'
+                    shutil.copy2(st['backup'], tmp)
+                    if st['backup_sha'] is not None:
+                        with open(tmp, 'rb') as f:
+                            actual = sha_bytes(f.read())
+                        if actual != st['backup_sha']:
+                            raise ValueError('Staging: контрольная сумма не совпала: ' + st['tgt'])
+                    staged.append((st, tmp))
+                else:
+                    staged.append((st, None))
+            for st, tmp in staged:
+                if tmp:
+                    os.replace(tmp, st['path'])
+                elif os.path.exists(st['path']):
+                    os.remove(st['path'])
+                for step in jrec['steps']:
+                    if step['path'] == st['path']:
+                        step['done'] = True
+                _write_journal(jrec)
+            man['applied'].pop()
+            man['rollbacks'].append(last)
+            save_manifest(man)
+            _clear_journal()
+            return {'success': True, 'message': 'Откат ' + str(last['patch_id']) + ' (' + str(len(ops)) + ' файл(ов))'}
+        except Exception as e:
+            for st, tmp in staged:
+                if tmp and os.path.exists(tmp):
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+            for st in restores:
+                t = st['path'] + '.rbk.tmp'
+                if os.path.exists(t):
+                    try:
+                        os.remove(t)
+                    except OSError:
+                        pass
+            log('Rollback interrupted: ' + str(e) + '. Журнал сохранён для resume', 'ERROR')
+            return {'success': False, 'error': 'Откат прерван (' + str(e) + '). Журнал patch_journal.json сохранён — повторный откат завершит восстановление.', 'interrupted': True}
+
     tgt = last['target_file']
     dst = safe_path(tgt)
     if dst is None:
@@ -792,6 +947,91 @@ def _rollback_locked():
     return {'success': True, 'message': 'Откат ' + str(last['patch_id'])}
 
 
+def _recover_apply(j):
+    # B51 FIX (P1-04): восстановление старого состояния всех файлов журнальной записи apply
+    steps = j.get('steps') or []
+    recovered = []
+    failed = []
+    for st in steps:
+        tgt = st.get('tgt', '')
+        sp = safe_path(tgt)
+        if sp is None:
+            failed.append(str(tgt) + ': bad path')
+            continue
+        for suffix in ('.tmp', '.rbk.tmp'):
+            t = sp + suffix
+            if os.path.exists(t):
+                try:
+                    os.remove(t)
+                except OSError:
+                    pass
+        try:
+            src = _pick_backup(st.get('backs') or [])
+            if st.get('existed') and src and os.path.exists(src):
+                shutil.copy2(src, sp)
+                recovered.append(str(tgt))
+            elif not st.get('existed') and os.path.exists(sp):
+                os.remove(sp)
+                recovered.append(str(tgt))
+        except Exception as e2:
+            failed.append(str(tgt) + ': ' + str(e2))
+    if failed:
+        log('CRASH RECOVERY (apply): неполное восстановление — ' + '; '.join(failed), 'ERROR')
+        return {'action': 'apply-revert-incomplete', 'patch_id': j.get('patch_id'),
+                'recovered': recovered, 'failed': failed}
+    _clear_journal()
+    log('CRASH RECOVERY (apply): состояние до патча ' + str(j.get('patch_id')) + ' восстановлено (' + str(len(recovered)) + ' файл(ов))', 'WARNING')
+    return {'action': 'apply-reverted', 'patch_id': j.get('patch_id'), 'files': recovered}
+
+
+def recover_journal():
+    # B51 FIX (P1-04): вызывается на старте процесса (main.py __main__) —
+    # завершает незавершённую транзакцию, оставленную аварийным завершением предыдущего процесса
+    j = load_journal()
+    if j is None:
+        return None
+    with TX_LOCK:
+        j = load_journal()
+        if j is None:
+            return None
+        op = j.get('op')
+        pid = str(j.get('patch_id'))
+        man = load_manifest()
+        if MANIFEST_LOCK:
+            return {'action': 'blocked', 'patch_id': pid, 'error': MANIFEST_LOCK}
+        if op == 'apply':
+            if pid in {str(a.get('patch_id')) for a in man.get('applied', [])}:
+                _clear_journal()
+                return {'action': 'apply-committed', 'patch_id': pid}
+            log('CRASH RECOVERY: незавершённый apply патча ' + pid + ' — возвращаю файлы к состоянию до патча', 'WARNING')
+            return _recover_apply(j)
+        if op == 'rollback':
+            last = man['applied'][-1] if man.get('applied') else None
+            if last is None or str(last.get('patch_id')) != pid:
+                _clear_journal()
+                return {'action': 'rollback-stale', 'patch_id': pid}
+            log('CRASH RECOVERY: незавершённый rollback патча ' + pid + ' — завершаю восстановление', 'WARNING')
+            return _rollback_locked()
+        _clear_journal()
+        log('CRASH RECOVERY: неизвестный тип журнала (' + str(op) + ') — журнал удалён', 'WARNING')
+        return None
+
+
+def force_unlock_manifest():
+    # B52 FIX (P1-05): управляемая процедура восстановления после повреждения манифеста
+    global MANIFEST_LOCK
+    with TX_LOCK:
+        fresh = {'applied': [], 'history': [], 'rollbacks': []}
+        try:
+            save_manifest(fresh)
+        except Exception as e:
+            log('MANIFEST RESET failed: ' + str(e), 'ERROR')
+            return {'success': False, 'error': 'Не удалось сбросить манифест: ' + str(e)}
+        MANIFEST_LOCK = ''
+        log('MANIFEST RESET: история патчей начата заново, повреждённая копия сохранена рядом', 'WARNING')
+        return {'success': True, 'message': 'Манифест сброшен до пустого; повреждённая копия сохранена рядом (patch_manifest.json.corrupt). История патчей начата заново.'}
+
+
 def stats():
     ps = list_patches()
     man = load_manifest()
@@ -801,4 +1041,5 @@ def stats():
             'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),
             'rollbacks_count': len(man.get('rollbacks', [])),
-            'backups_count': len(os.listdir(BACKUP_DIR))}
+            'backups_count': len(os.listdir(BACKUP_DIR)),
+            'locked': bool(MANIFEST_LOCK)}
