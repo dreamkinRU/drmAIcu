@@ -34,10 +34,20 @@ if %errorlevel% neq 0 (
 
 :: 2.5. Отчёт по PR: видно, с чем синхронизировались
 echo === Последний merged PR ===
-gh pr list --state merged --limit 1
-if %errorlevel% neq 0 (
-    echo [?] gh CLI недоступен - смотри PR на сайте репозитория.
+where gh >nul 2>nul
+if errorlevel 1 (
+    echo [?] gh CLI недоступен - описание последнего мержа:
+    git log -1 --grep="Merge pull request #" --format="%%s" -1
+    goto pr_done
 )
+gh pr list --state merged --limit 1 --json number,title --template "{{range .}}#{{.number}} - {{.title}}{{end}}"
+if errorlevel 1 (
+    echo [?] Не удалось получить PR - описание последнего мержа:
+    git log -1 --grep="Merge pull request #" --format="%%s" -1
+    goto pr_done
+)
+echo.
+:pr_done
 echo Текущий HEAD:
 git log -1 --oneline
 
