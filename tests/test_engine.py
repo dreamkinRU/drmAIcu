@@ -278,3 +278,93 @@ def test_engine_module_is_ui_free():
     r = subprocess.run([_sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert "LEAKS:" in r.stdout and r.stdout.strip().split("LEAKS:")[1] == "", r.stdout
+
+
+# ---------- B25-B29: волна 1 — оборона производства патчей ----------
+
+def test_B25_patch_filename_traversal_rejected(box):
+    outside = box.parent
+    payload = {"patch_id": "EVIL25", "operations": [
+        {"type": "create", "target_file": "pwned.py", "full_file_content": "p = 1\n"}
+    ]}
+    (outside / "evil.json").write_text(__import__("json").dumps(payload), encoding="utf-8")
+    res = main.apply_patch({"patch_id": "EVIL25", "filename": "../../evil.json"})
+    assert res.get("success") is False
+    assert not (box / "pwned.py").exists()
+    assert (outside / "evil.json").read_text(encoding="utf-8") == __import__("json").dumps(payload)
+
+
+def test_B25b_patch_body_from_disk_still_works(box):
+    import json as _json
+    put(box, "a.py", "x = 1\n")
+    (box / "patch" / "B25BODY.json").write_text(_json.dumps({
+        "patch_id": "B25BODY",
+        "operations": [{"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}]
+    }), encoding="utf-8")
+    res = main.apply_patch({"patch_id": "B25BODY"})
+    assert res["success"]
+    assert read(box / "a.py") == "x = 2\n"
+
+
+def test_B26_manifest_write_crash_keeps_old_state(box, monkeypatch):
+    import json as _json
+    put(box, "a.py", "x = 1\n")
+    assert main.apply_patch({"patch_id": "B26-SETUP", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]})["success"]
+    before = (box / "patch_manifest.json").read_text(encoding="utf-8")
+    real_dump = _json.dump
+    def exploding_dump(obj, fp, *a, **kw):
+        real_dump(obj, fp, indent=2, ensure_ascii=False)
+        fp.flush()
+        fp.write("GARBAGE")
+        raise OSError("disk full during manifest write")
+    monkeypatch.setattr(engine.json, "dump", exploding_dump)
+    with pytest.raises(OSError):
+        engine.save_manifest({"applied": [], "history": [], "rollbacks": []})
+    after = (box / "patch_manifest.json").read_text(encoding="utf-8")
+    assert after == before
+    assert not (box / "patch_manifest.json.tmp").exists()
+
+
+def test_B27_partial_backup_aborts_apply(box, monkeypatch):
+    real_copy2 = __import__("shutil").copy2
+    counter = {"i": 0}
+    def failing_copy2(src, dst, *a, **kw):
+        counter["i"] += 1
+        if counter["i"] == 2:
+            raise OSError("3rd-party interference")
+        return real_copy2(src, dst, *a, **kw)
+    monkeypatch.setattr(engine.shutil, "copy2", failing_copy2)
+    put(box, "a.py", "x = 1\n")
+    res = main.apply_patch({"patch_id": "B27", "operations": [
+        {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
+    ]})
+    assert res["success"] is False
+    assert read(box / "a.py") == "x = 1\n"
+
+
+def test_B28_safe_path_rejects_windows_seps_drive_and_empty():
+    assert engine.safe_path("..\\..\\evil.py") is None
+    assert engine.safe_path("sub\\evil.py") is None
+    assert engine.safe_path("C:/evil.py") is None
+    assert engine.safe_path("C:\\evil.py") is None
+    assert engine.safe_path("") is None
+    assert engine.safe_path(None) is None
+    assert engine.safe_path("normal.py") == __import__("os").path.normpath(__import__("os").path.join(engine.BASE, "normal.py"))
+    assert engine.safe_path("src/App.tsx") is not None
+
+
+def test_B29_safe_path_symlink_escape(box, tmp_path):
+    outside = box.parent / "outside29"
+    outside.mkdir(exist_ok=True)
+    link = box / "leak"
+    try:
+        os = __import__("os")
+        os.symlink(str(outside), str(link))
+    except (OSError, AttributeError):
+        pytest.skip("symlink unavailable")
+    assert engine.safe_path("leak/pwned.py") is None
+    _, _, _, err = main.compute_new({"type": "create", "target_file": "leak/pwned.py", "full_file_content": "p = 1\n"})
+    assert err is not None
+    assert not (outside / "pwned.py").exists()
