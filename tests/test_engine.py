@@ -1179,9 +1179,9 @@ def test_B72_apply_nonpy_sets_no_restart_flag(box, monkeypatch):
 
 def test_B68_version_single_source():
     version = importlib.import_module("version")
-    assert version.VERSION == "3.6.3"
+    assert version.VERSION == "3.6.4"
     pkg = json.load(open(os.path.join(os.path.dirname(__file__), "..", "package.json"), encoding="utf-8"))
-    assert pkg["version"] == "3.6.3"
+    assert pkg["version"] == "3.6.4"
     assert engine.stats()["version"] == version.VERSION
 
 
@@ -1259,3 +1259,122 @@ def test_B59_fast_mode_does_not_wait_slow_models(box):
     dt = time.monotonic() - t0
     assert res["success"] is True and res["result"] == "QUICK"
     assert dt < 5
+
+
+# ========================= Волна 4: C1–C3 — периметр, CSRF, SSRF =========================
+
+_MAIN_PATH = os.path.join(os.path.dirname(__file__), "..", "main.py")
+
+
+def test_C1_ui_run_binds_loopback_only():
+    src = open(_MAIN_PATH, encoding="utf-8").read()
+    idx = src.find("ui.run(")
+    assert idx != -1, "ui.run() не найден в main.py"
+    end = src.find(")", idx)
+    call = src[idx:end + 1]
+    assert "host='127.0.0.1'" in call, "ui.run обязан быть на loopback (R-01)"
+    assert "reload=False" in call
+    assert "show=False" in call
+
+
+def _c2_client():
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    return TestClient(main.app)
+
+
+def test_C2_forbidden_host_rejected():
+    client = _c2_client()
+    r = client.post("/api/patches/save-from-console", json={}, headers={"Host": "evil.example"})
+    assert r.status_code == 403
+    assert r.json()["error"] == "forbidden host"
+
+
+def test_C2_dns_rebinding_host_rejected_on_get():
+    client = _c2_client()
+    r = client.get("/api/status", headers={"Host": "attacker.rebind.example"})
+    assert r.status_code == 403
+    assert r.json()["error"] == "forbidden host"
+
+
+def test_C2_cross_site_origin_rejected():
+    client = _c2_client()
+    r = client.post(
+        "/api/patches/save-from-console",
+        json={},
+        headers={"Host": "127.0.0.1:8080", "Origin": "http://evil.example"},
+    )
+    assert r.status_code == 403
+    assert r.json()["error"] == "forbidden origin"
+
+
+def test_C2_cross_site_sec_fetch_rejected():
+    client = _c2_client()
+    r = client.post(
+        "/api/patches/save-from-console",
+        json={},
+        headers={"Host": "127.0.0.1:8080", "Sec-Fetch-Site": "cross-site"},
+    )
+    assert r.status_code == 403
+    assert r.json()["error"] == "forbidden cross-site request"
+
+
+def test_C2_same_origin_post_passes_guard():
+    client = _c2_client()
+    r = client.post(
+        "/api/patches/save-from-console",
+        json={},
+        headers={"Host": "127.0.0.1:8080", "Origin": "http://127.0.0.1:8080"},
+    )
+    assert r.status_code == 200
+    assert r.json()["success"] is False
+
+
+def test_C3_bionic_models_blocks_link_local():
+    res = main.s_bionic_models(url="http://169.254.169.254/latest")
+    body = json.loads(res.body)
+    assert body["success"] is False
+    assert "отклонён" in body["error"]
+    assert body["models"] == []
+
+
+def test_C3_bionic_models_allows_loopback(monkeypatch):
+    pytest.importorskip("requests")
+    import requests as _rq
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"id": "bionic-m1"}, {"id": "text-embed-1"}]}
+
+    monkeypatch.setattr(_rq, "get", lambda u, **kw: FakeResp())
+    res = main.s_bionic_models(url="http://localhost:1235/v1")
+    body = json.loads(res.body)
+    assert body["success"] is True
+    assert body["models"] == [{"name": "bionic-m1", "size_gb": 0}]
+
+
+def test_C3_guarded_get_disables_redirects(monkeypatch):
+    pytest.importorskip("requests")
+    import requests as _rq
+
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"models": [{"name": "llama3"}]}
+
+    def fake_get(u, **kw):
+        captured["url"] = u
+        captured["kw"] = kw
+        return FakeResp()
+
+    monkeypatch.setattr(main, "validate_url", lambda u, allowed_hosts=None: (True, ""))
+    monkeypatch.setattr(_rq, "get", fake_get)
+    res = main.s_providers_ping({"providers": [{"id": "ollama", "url": "http://localhost:11434"}]})
+    body = json.loads(res.body)
+    assert body["statuses"]["ollama"]["online"] is True
+    assert captured["kw"].get("allow_redirects") is False

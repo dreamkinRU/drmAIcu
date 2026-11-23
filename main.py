@@ -10,6 +10,33 @@ try:
     app.add_middleware(CORSMiddleware, allow_origins=['http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://localhost:8080'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 except RuntimeError:
     pass
+
+# C2 FIX (R-02/R-03): периметр-гейт — Host только loopback (блок DNS-rebinding),
+# для изменяющих запросов — проверка Origin/Sec-Fetch-Site (блок CSRF из браузера).
+# curl без заголовков проходит: периметр обеспечивает C1-bind на 127.0.0.1.
+C2_ALLOWED_ORIGINS = {'http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:8080', 'http://localhost:8080', 'http://[::1]:5173', 'http://[::1]:8080'}
+C2_ALLOWED_HOSTS = {'127.0.0.1', 'localhost', '::1'}
+
+
+@app.middleware('http')
+async def c2_perimeter_guard(request, call_next):
+    raw_host = (request.headers.get('host') or '').strip().lower()
+    try:
+        from urllib.parse import urlsplit
+        host_name = urlsplit('http://' + raw_host if raw_host else '').hostname
+    except ValueError:
+        host_name = None
+    if host_name not in C2_ALLOWED_HOSTS:
+        return JSONResponse({'success': False, 'error': 'forbidden host'}, status_code=403)
+    if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
+        origin = (request.headers.get('origin') or '').strip().lower().rstrip('/')
+        sec_fetch = (request.headers.get('sec-fetch-site') or '').strip().lower()
+        if origin:
+            if origin not in C2_ALLOWED_ORIGINS:
+                return JSONResponse({'success': False, 'error': 'forbidden origin'}, status_code=403)
+        elif sec_fetch and sec_fetch not in ('same-origin', 'none'):
+            return JSONResponse({'success': False, 'error': 'forbidden cross-site request'}, status_code=403)
+    return await call_next(request)
 import patch_engine as _pe
 from patch_engine import (
     TX_LOCK, apply_diff, apply_patch, apply_search_replace, backup, check_ts,
@@ -360,7 +387,7 @@ def s_status():
     ok = False
     try:
         import requests
-        r = requests.get(cfg.get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=2)
+        r = requests.get(cfg.get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=2, allow_redirects=False)
         ok = r.status_code == 200
     except Exception:
         pass
@@ -755,7 +782,10 @@ def s_bionic_models(url: str = ''):
     try:
         import requests
         base = (url or load_cfg().get('bionic_url', 'http://localhost:1235/v1')).rstrip('/')
-        r = requests.get(base + '/models', timeout=4)
+        ok, why = validate_url(base)
+        if not ok:
+            return JSONResponse({'success': False, 'error': 'URL отклонён: ' + why, 'models': []})
+        r = requests.get(base + '/models', timeout=4, allow_redirects=False)
         if r.status_code != 200:
             return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
         ms = r.json().get('data', [])
@@ -773,7 +803,7 @@ def s_lmstudio_models(url: str = ''):
         ok, why = validate_url(base)
         if not ok:
             return JSONResponse({'success': False, 'error': 'URL отклонён: ' + why, 'models': []})
-        r = requests.get(base + '/models', timeout=4)
+        r = requests.get(base + '/models', timeout=4, allow_redirects=False)
         if r.status_code != 200:
             return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
         ms = r.json().get('data', [])
@@ -791,7 +821,7 @@ def s_strata_models(url: str = ''):
         ok, why = validate_url(base)
         if not ok:
             return JSONResponse({'success': False, 'error': 'URL отклонён: ' + why, 'models': []})
-        r = requests.get(base + '/models', timeout=4)
+        r = requests.get(base + '/models', timeout=4, allow_redirects=False)
         if r.status_code != 200:
             return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
         ms = r.json().get('data', [])
@@ -818,6 +848,7 @@ def s_providers_ping(payload: dict):
         ok, why = validate_url(u)
         if not ok:
             raise ValueError('URL отклонён: ' + why)
+        kw['allow_redirects'] = False
         return requests.get(u, **kw)
 
     def check_one(item):
@@ -837,7 +868,7 @@ def s_providers_ping(payload: dict):
             elif pid == 'gemini':
                 if not api_key:
                     return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет ключа'}
-                r = requests.get('https://generativelanguage.googleapis.com/v1beta/models', headers={'x-goog-api-key': api_key}, timeout=3.0)
+                r = requests.get('https://generativelanguage.googleapis.com/v1beta/models', headers={'x-goog-api-key': api_key}, timeout=3.0, allow_redirects=False)
                 ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
                     return pid, {'online': True, 'latency': ms, 'models': ['gemini-1.5-flash', 'gemini-2.0-flash']}
@@ -845,7 +876,7 @@ def s_providers_ping(payload: dict):
             elif pid == 'huggingface':
                 if not api_key:
                     return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет ключа'}
-                r = requests.get('https://huggingface.co/api/whoami-v2', headers={'Authorization': f'Bearer {api_key}'}, timeout=3.0)
+                r = requests.get('https://huggingface.co/api/whoami-v2', headers={'Authorization': f'Bearer {api_key}'}, timeout=3.0, allow_redirects=False)
                 ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
                     return pid, {'online': True, 'latency': ms, 'models': ['meta-llama/Llama-3.1-8B-Instruct', 'Qwen/Qwen2.5-Coder-32B-Instruct']}
@@ -912,7 +943,7 @@ def s_providers_config(payload: dict):
 def s_models():
     try:
         import requests
-        r = requests.get(load_cfg().get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=5)
+        r = requests.get(load_cfg().get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=5, allow_redirects=False)
         ms = r.json().get('models', [])
         out = [{'name': m['name'], 'size_gb': round(m.get('size', 0) / 1073741824, 2)} for m in ms]
         return JSONResponse({'success': True, 'models': out})
@@ -1264,7 +1295,7 @@ def create_ui():
                 try:
                     import requests
                     cfg = load_cfg()
-                    r = requests.get(cfg.get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=5)
+                    r = requests.get(cfg.get('ollama_url', 'http://localhost:11434') + '/api/tags', timeout=5, allow_redirects=False)
                     if r.status_code == 200:
                         models_data = r.json().get('models', [])
                         model_names = [m['name'] for m in models_data]
@@ -1544,4 +1575,5 @@ if __name__ in {'__main__', '__mp_main__'}:
             pass
     get_engine()
     create_ui()
-    ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)
+    # C1 FIX (R-01): ЯВНЫЙ bind только на loopback; NiceGUI 4.x по умолчанию слушает 0.0.0.0
+    ui.run(title='drmAIcu Core', port=8080, host='127.0.0.1', reload=False, show=False)

@@ -1,5 +1,21 @@
 # drmAIcu — История изменений
 
+## v.3.6.4 Model (Текущая) — 26.11.2026
+
+### Периметр и SSRF: R-01–R-04 (C1–C3)
+
+- **C1 (R-01, P0)** — `ui.run()` теперь явно привязан к `host='127.0.0.1'`: NiceGUI 4.x
+  по умолчанию слушал `0.0.0.0`, и панель без авторизации была доступна из LAN.
+- **C2 (R-02/R-03, P1)** — периметр-мидлварь `c2_perimeter_guard`: Host только loopback
+  (блок DNS-rebinding), для POST/PUT/DELETE/PATCH — проверка Origin/Sec-Fetch-Site
+  (блок CSRF из браузера). Curl без заголовков проходит — периметр обеспечивает C1.
+- **C3 (R-03, P1)** — `allow_redirects=False` во всех исходящих `requests.get`:
+  guarded_get ping, gemini, huggingface, ollama (status/models/UI), bionic, lmstudio, strata.
+  Redirect-ссылка больше не может вывести запрос за границы SSRF-гейта.
+- **R-04 (P2)** — `/api/bionic/models` закрыт тем же `validate_url`-гейтом,
+  что и lmstudio/strata: «URL отклонён: …», ссылка на metadata/154.169.254 отклонена.
+- Версия 3.6.4; +9 тестов C1–C3 (периметр, CSRF, SSRF) — всего 148.
+
 ## v.3.6.3 Model (Текущая) — 26.11.2026
 
 ### Agent Engine: P2-12 — настоящий Fast-режим (B59)
