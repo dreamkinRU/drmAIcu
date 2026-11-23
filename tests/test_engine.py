@@ -180,7 +180,7 @@ def test_BUG18_multi_ops_same_file(box):
     assert res["success"]
     assert read(box / "a.py") == "x = 2\ny = 2\n"
 
-# ---------- B20-B24: движок 3.5.3 (fix PATCHES) ----------
+# ---------- B20-B24: движок 3.6.0 (fix PATCHES) ----------
 
 def test_BUG20_expected_sha_mismatch_rejected(box):
     """B20: expected_sha не совпал с содержимым на диске -> патч отвергнут целиком."""

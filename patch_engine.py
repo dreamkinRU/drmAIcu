@@ -1,5 +1,5 @@
 # patch_engine.py
-# Patch engine v3.5.3 HARDENED: atomic two-phase commits, no UI dependencies
+# Patch engine v3.6.0 HARDENED: atomic two-phase commits, no UI dependencies
 import json, os, re, ast, shutil, hashlib, threading, subprocess
 from datetime import datetime
 
