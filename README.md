@@ -1,6 +1,6 @@
 # drmAIcu - Universal AI-Guardian
 
-**Версия 3.5.3 HARDENED**
+**Версия 3.6.0 HARDENED**
 
 ## Описание
 

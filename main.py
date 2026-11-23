@@ -1,4 +1,4 @@
-# main.py v3.5.3 MULTI-ATOMIC HARDENED (UI + API; engine lives in patch_engine.py)
+# main.py v3.6.0 MULTI-ATOMIC HARDENED (UI + API; engine lives in patch_engine.py)
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
@@ -352,7 +352,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': '3.5.3 MULTI-ATOMIC HARDENED',
+                         'version': '3.6.0 MULTI-ATOMIC HARDENED',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
@@ -666,7 +666,7 @@ def create_ui():
     
     # Шапка
     with ui.header().classes('bg-gray-900 text-white p-4'):
-        ui.label('drmAIcu Core v3.5.3 MULTI-ATOMIC HARDENED').classes('text-xl font-bold')
+        ui.label('drmAIcu Core v3.6.0 MULTI-ATOMIC HARDENED').classes('text-xl font-bold')
     
     # Вкладки
     with ui.tabs().classes('w-full') as tabs:
@@ -870,7 +870,7 @@ def s_project_archive_list():
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    log('Starting drmAIcu Core v3.5.3 MULTI-ATOMIC HARDENED...')
+    log('Starting drmAIcu Core v3.6.0 MULTI-ATOMIC HARDENED...')
     get_engine()
     create_ui()
     ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)
