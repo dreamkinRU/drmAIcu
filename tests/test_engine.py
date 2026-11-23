@@ -1,5 +1,6 @@
 # tests/test_engine.py
 import asyncio
+import time
 import importlib
 import json
 import os
@@ -1178,7 +1179,83 @@ def test_B72_apply_nonpy_sets_no_restart_flag(box, monkeypatch):
 
 def test_B68_version_single_source():
     version = importlib.import_module("version")
-    assert version.VERSION == "3.6.2"
+    assert version.VERSION == "3.6.3"
     pkg = json.load(open(os.path.join(os.path.dirname(__file__), "..", "package.json"), encoding="utf-8"))
-    assert pkg["version"] == "3.6.2"
+    assert pkg["version"] == "3.6.3"
     assert engine.stats()["version"] == version.VERSION
+
+
+# ========================= B59: Fast возвращает первое готовое ответ =========================
+
+def test_B59_fast_returns_first_ready(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    slow_c = {"provider": "ollama", "model": "slow", "name": "ollama: slow"}
+    fast_c = {"provider": "ollama", "model": "fast", "name": "ollama: fast"}
+    e._get_candidates = lambda: [slow_c, fast_c]
+
+    async def fake(c, prompt):
+        if c["model"] == "slow":
+            await asyncio.sleep(0.5)
+            return {"code": "SLOW", "candidate": c}
+        return {"code": "FAST", "candidate": c}
+
+    e.get_code_response = fake
+    res = asyncio.run(e.run_task("hi", mode="fast"))
+    assert res["success"] is True
+    assert res["result"] == "FAST"
+    assert res["providers"] == ["ollama"]
+    assert res["error"] is None
+
+
+def test_B59_fast_all_fail_structured(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    c1 = {"provider": "ollama", "model": "m1", "name": "ollama: m1"}
+    c2 = {"provider": "ollama", "model": "m2", "name": "ollama: m2"}
+    e._get_candidates = lambda: [c1, c2]
+
+    async def fake(c, prompt):
+        raise ConnectionError("down")
+
+    e.get_code_response = fake
+    res = asyncio.run(e.run_task("hi", mode="fast"))
+    assert res["success"] is False
+    assert res["result"] == ""
+    assert res["providers"] == ["ollama", "ollama"]
+
+
+def test_B59_fast_skips_failed_and_takes_next_success(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    bad_c = {"provider": "ollama", "model": "bad", "name": "ollama: bad"}
+    good_c = {"provider": "ollama", "model": "good", "name": "ollama: good"}
+    e._get_candidates = lambda: [bad_c, good_c]
+
+    async def fake(c, prompt):
+        if c["model"] == "bad":
+            return {"candidate": c, "error": "empty"}
+        return {"code": "SECOND", "candidate": c}
+
+    e.get_code_response = fake
+    res = asyncio.run(e.run_task("hi", mode="fast"))
+    assert res["success"] is True
+    assert res["result"] == "SECOND"
+
+
+def test_B59_fast_mode_does_not_wait_slow_models(box):
+    e = agent_engine.AgentEngine({}, log_callback=lambda *a, **kw: None)
+    slow_c = {"provider": "ollama", "model": "slow", "name": "ollama: slow"}
+    fast_c = {"provider": "ollama", "model": "fast", "name": "ollama: fast"}
+    e._get_candidates = lambda: [slow_c, fast_c]
+
+    async def fake(c, prompt):
+        if c["model"] == "slow":
+            await asyncio.sleep(10)
+            return {"code": "SLOW", "candidate": c}
+        await asyncio.sleep(0.05)
+        return {"code": "QUICK", "candidate": c}
+
+    e.get_code_response = fake
+    t0 = time.monotonic()
+    res = asyncio.run(e.run_task("hi", mode="fast"))
+    dt = time.monotonic() - t0
+    assert res["success"] is True and res["result"] == "QUICK"
+    assert dt < 5
