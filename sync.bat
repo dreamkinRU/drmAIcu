@@ -32,6 +32,15 @@ if %errorlevel% neq 0 (
     pause & exit /b 1
 )
 
+:: 2.5. Отчёт по PR: видно, с чем синхронизировались
+echo === Последний merged PR ===
+gh pr list --state merged --limit 1
+if %errorlevel% neq 0 (
+    echo [?] gh CLI недоступен - смотри PR на сайте репозитория.
+)
+echo Текущий HEAD:
+git log -1 --oneline
+
 :: 3. Отправляем
 echo === Отправляем изменения на GitHub ===
 git push origin main
