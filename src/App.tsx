@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TabId } from './types';
 import { agentStore, POLL_INTERVALS } from './utils/constants';
 import { storage, STORAGE_KEYS } from './utils/storage';
@@ -19,7 +19,6 @@ import PanelTab from './components/tabs/PanelTab';
 import ProjectTab from './components/tabs/ProjectTab';
 import AgentsTab from './components/tabs/AgentsTab';
 import ProvidersTab from './components/tabs/ProvidersTab';
-import ModelsTab from './components/tabs/ModelsTab';
 import MDTab from './components/tabs/MDTab';
 import CodeTab from './components/tabs/CodeTab';
 import LogsTab from './components/tabs/LogsTab';
@@ -44,7 +43,11 @@ export default function App() {
   } = useAgents();
   const {
     consolePrompt, setConsolePrompt, consoleLoading,
-    providerMode, setProviderMode, selectedModel, setSelectedModel, runAiTask,
+    providerMode, setProviderMode, selectedModel, setSelectedModel,
+    bionicUrl, setBionicUrl, bionicModels,
+    lmstudioUrl, setLmstudioUrl, lmstudioModels,
+    strataUrl, setStrataUrl, strataModels,
+    lastPrompt, consoleMetrics, runAiTask, stopAiTask, retryLastTask,
   } = useConsole(addLog);
   const {
     selectedMDFile, mdContent, setMdContent, mdFileExists,
@@ -83,16 +86,31 @@ export default function App() {
   // === Локальное состояние ===
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const saved = storage.get(STORAGE_KEYS.ACTIVE_TAB) as TabId | null;
-    return saved || 'console';
+    if (!saved || saved === 'models') return 'console';
+    return saved;
   });
   const [currentTime, setCurrentTime] = useState(new Date());
   const [restarting, setRestarting] = useState(false);
   const [providerFilter, setProviderFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [newPatchPopup, setNewPatchPopup] = useState<any | null>(null);
+  const seenPatchFilesRef = useRef<Set<string>>(new Set());
+  const returnTabRef = useRef<TabId | null>(null);
 
   // === Эффекты ===
   useEffect(() => {
     storage.set(STORAGE_KEYS.ACTIVE_TAB, activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!patches || patches.length === 0) return;
+    const unseenPending = patches.find(
+      (p: any) => !p.is_applied && !p.error && !seenPatchFilesRef.current.has(p.filename)
+    );
+    if (unseenPending && !newPatchPopup) {
+      seenPatchFilesRef.current.add(unseenPending.filename);
+      setNewPatchPopup(unseenPending);
+    }
+  }, [patches, newPatchPopup]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -124,32 +142,49 @@ export default function App() {
     setProviders(prev => prev.map(p => (p.name === name ? { ...p, enabled: !p.enabled } : p)));
   };
 
-  const handleRestart = async () => {
-    if (!confirm('Перезапустить всю систему?\n\nPython и React будут перезапущены автоматически.')) return;
+  const triggerSilentRestart = async () => {
     setRestarting(true);
     try {
-      const data = await restartSystemApi();
-      if (data.success) {
-        alert(data.message);
-        setTimeout(() => window.location.reload(), 8000);
-      } else {
-        alert('Ошибка: ' + data.error);
-      }
+      await restartSystemApi();
     } catch {
-      alert('Ошибка сети. Система, возможно, перезапускается...');
-      setTimeout(() => window.location.reload(), 8000);
-    } finally {
-      setRestarting(false);
+      // сервер уже перезапускается
     }
+    const waitAndReload = () => {
+      setTimeout(async () => {
+        try {
+          const r = await fetch('/api/status');
+          if (r.ok) {
+            window.location.reload();
+            return;
+          }
+        } catch {}
+        waitAndReload();
+      }, 2000);
+    };
+    setTimeout(waitAndReload, 4000);
+  };
+
+  const applyPatchWithAutoRestart = async (patch: any) => {
+    await Promise.resolve(applyPatch(patch));
+    const needsRestart =
+      (typeof patch?.target_file === 'string' && patch.target_file.includes('.py')) ||
+      (Array.isArray(patch?.operations) && patch.operations.some((o: any) => String(o?.target_file || '').endsWith('.py')));
+    if (needsRestart) {
+      triggerSilentRestart();
+    }
+  };
+
+  const handleRestart = async () => {
+    triggerSilentRestart();
   };
 
   // === Рендер ===
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col text-base">
       <Header
+        activeTab={activeTab}
         agents={agents}
         providers={providers}
-        installedModels={installedModels}
         patchStats={patchStats}
         codeIssues={codeIssues}
         completedTasks={completedTasks}
@@ -157,9 +192,6 @@ export default function App() {
         projectStats={projectStats}
         ollamaStatus={ollamaStatus}
         ollamaModels={ollamaModels}
-        ollamaProcesses={ollamaProcesses}
-        restarting={restarting}
-        onRestart={handleRestart}
         setActiveTab={setActiveTab}
       />
 
@@ -174,9 +206,14 @@ export default function App() {
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             installedModels={installedModels}
-            ollamaUrl={ollamaUrl}
-            setOllamaUrl={setOllamaUrl}
+            bionicModels={bionicModels}
+            lmstudioModels={lmstudioModels}
+            strataModels={strataModels}
+            lastPrompt={lastPrompt}
+            consoleMetrics={consoleMetrics}
             runAiTask={runAiTask}
+            stopAiTask={stopAiTask}
+            retryLastTask={retryLastTask}
           />
         )}
 
@@ -247,6 +284,20 @@ export default function App() {
             providers={providers}
             providerFilter={providerFilter}
             setProviderFilter={setProviderFilter}
+            providerMode={providerMode}
+            setProviderMode={setProviderMode}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            installedModels={installedModels}
+            bionicUrl={bionicUrl}
+            setBionicUrl={setBionicUrl}
+            bionicModels={bionicModels}
+            lmstudioUrl={lmstudioUrl}
+            setLmstudioUrl={setLmstudioUrl}
+            lmstudioModels={lmstudioModels}
+            strataUrl={strataUrl}
+            setStrataUrl={setStrataUrl}
+            strataModels={strataModels}
             ollamaStatus={ollamaStatus}
             ollamaUrl={ollamaUrl}
             setOllamaUrl={setOllamaUrl}
@@ -254,19 +305,10 @@ export default function App() {
             toggleProvider={toggleProvider}
             setActiveTab={setActiveTab}
             installedModelsCount={installedModels.length}
-          />
-        )}
-
-        {activeTab === 'models' && (
-          <ModelsTab
-            ollamaStatus={ollamaStatus}
             newModelName={newModelName}
             setNewModelName={setNewModelName}
             isPulling={isPulling}
             pullModel={pullModel}
-            installedModels={installedModels}
-            setConsolePrompt={setConsolePrompt}
-            setActiveTab={setActiveTab}
           />
         )}
 
@@ -319,7 +361,7 @@ export default function App() {
             setPatchFilter={setPatchFilter}
             patchLog={patchLog}
             previewPatch={previewPatch}
-            applyPatch={applyPatch}
+            applyPatch={applyPatchWithAutoRestart}
             rollbackLastPatch={rollbackLastPatch}
             archivePatch={archivePatch}
             deletePatch={deletePatch}
@@ -330,7 +372,71 @@ export default function App() {
         )}
       </TabLayout>
 
-      <Footer setActiveTab={setActiveTab} />
+      {newPatchPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-emerald-500/40 bg-gray-900 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+                🔄 Обнаружен новый патч #{newPatchPopup.patch_id}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setNewPatchPopup(null)}
+                className="text-gray-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-1 text-sm">
+              <div className="font-bold text-white truncate">{newPatchPopup.target_file}</div>
+              {newPatchPopup.description && (
+                <p className="text-gray-400 text-xs">{newPatchPopup.description}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setNewPatchPopup(null)}
+                disabled={applyingPatch}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-gray-700 hover:bg-gray-600 text-gray-300 disabled:opacity-50"
+              >
+                Позже
+              </button>
+              <button
+                type="button"
+                disabled={applyingPatch}
+                onClick={async () => {
+                  const targetPatch = newPatchPopup;
+                  returnTabRef.current = activeTab;
+                  setNewPatchPopup(null);
+                  await applyPatchWithAutoRestart(targetPatch);
+                  if (returnTabRef.current) {
+                    setActiveTab(returnTabRef.current);
+                    returnTabRef.current = null;
+                  }
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white disabled:opacity-50"
+              >
+                {applyingPatch ? '⏳ Применение...' : '✅ Применить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restarting && (
+        <div className="fixed bottom-16 right-5 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-300 text-sm font-bold shadow-2xl backdrop-blur-md animate-pulse">
+          <span>🔄</span>
+          <span>Выполняется перезагрузка панели...</span>
+        </div>
+      )}
+
+      <Footer
+        setActiveTab={setActiveTab}
+        ollamaProcesses={ollamaProcesses}
+        restarting={restarting}
+        onRestart={handleRestart}
+      />
     </div>
   );
 }

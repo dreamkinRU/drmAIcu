@@ -2,7 +2,7 @@
 from nicegui import ui, app
 import json, os, sys, re, ast, shutil, hashlib, threading, importlib, traceback, asyncio, time, subprocess
 from datetime import datetime, timedelta
-from fastapi.responses import FileResponse,  JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
@@ -363,6 +363,98 @@ def s_logs():
     return JSONResponse({'logs': LOG[-100:]})
 
 
+_RES_CACHE = {'ts': 0.0, 'data': None}
+_RES_LOCK = threading.Lock()
+
+
+def _get_ram_gb():
+    try:
+        if sys.platform == 'win32':
+            import ctypes
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ('dwLength', ctypes.c_ulong),
+                    ('dwMemoryLoad', ctypes.c_ulong),
+                    ('ullTotalPhys', ctypes.c_ulonglong),
+                    ('ullAvailPhys', ctypes.c_ulonglong),
+                    ('ullTotalPageFile', ctypes.c_ulonglong),
+                    ('ullAvailPageFile', ctypes.c_ulonglong),
+                    ('ullTotalVirtual', ctypes.c_ulonglong),
+                    ('ullAvailVirtual', ctypes.c_ulonglong),
+                    ('ullAvailExtendedVirtual', ctypes.c_ulonglong),
+                ]
+            st = MEMORYSTATUSEX()
+            st.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))
+            total = st.ullTotalPhys / (1024 ** 3)
+            used = (st.ullTotalPhys - st.ullAvailPhys) / (1024 ** 3)
+            return round(used, 1), round(total, 1)
+    except Exception:
+        pass
+    return 0.0, 0.0
+
+
+def _get_vram_total_gb():
+    if sys.platform != 'win32':
+        return 0.0
+    max_bytes = 0
+    try:
+        import winreg
+        base_key = r'SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        for i in range(16):
+            sub = f'{base_key}\{i:04d}'
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub) as k:
+                    val, _ = winreg.QueryValueEx(k, 'HardwareInformation.qwMemorySize')
+                    if isinstance(val, bytes):
+                        val = int.from_bytes(val, 'little')
+                    if isinstance(val, int) and val > max_bytes:
+                        max_bytes = val
+            except OSError:
+                continue
+    except Exception:
+        pass
+    return round(max_bytes / (1024 ** 3), 1) if max_bytes > 0 else 0.0
+
+
+def _get_vram_used_gb():
+    if sys.platform != 'win32':
+        return 0.0
+    try:
+        cmd = [
+            'powershell', '-NoProfile', '-Command',
+            '(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory | Measure-Object -Property DedicatedUsage -Sum).Sum'
+        ]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=4, creationflags=0x08000000)
+        out = (r.stdout or '').strip().replace(',', '.')
+        if out:
+            val = float(out)
+            return round(val / (1024 ** 3), 1)
+    except Exception:
+        pass
+    return 0.0
+
+
+@app.get('/api/system/resources')
+def s_sys_resources():
+    now = time.time()
+    with _RES_LOCK:
+        if _RES_CACHE['data'] is not None and (now - _RES_CACHE['ts']) < 2.5:
+            return JSONResponse(_RES_CACHE['data'])
+        ram_used, ram_total = _get_ram_gb()
+        vram_total = _get_vram_total_gb()
+        vram_used = _get_vram_used_gb()
+        data = {
+            'ram_used_gb': ram_used,
+            'ram_total_gb': ram_total,
+            'vram_used_gb': vram_used,
+            'vram_total_gb': vram_total,
+        }
+        _RES_CACHE['data'] = data
+        _RES_CACHE['ts'] = now
+        return JSONResponse(data)
+
+
 @app.get('/api/md/{name:path}')
 def s_md_get(name):
     p = safe_path(name)
@@ -400,6 +492,155 @@ async def s_task(payload: dict):
         return JSONResponse({'success': True, 'result': r})
     except Exception as ex:
         return JSONResponse({'success': False, 'error': str(ex)})
+
+
+@app.post('/api/task/stream')
+async def s_task_stream(payload: dict):
+    e = get_engine()
+    if not e:
+        return JSONResponse({'success': False, 'error': 'Engine not loaded'}, status_code=503)
+    prompt = payload.get('prompt', '')
+    mode = payload.get('mode', 'fast')
+    model = payload.get('model', '')
+    provider = payload.get('provider', 'ollama')
+
+    async def event_gen():
+        try:
+            async for ev in e.stream_task(prompt, mode=mode, model=model, provider=provider):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            return
+        except Exception as ex:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(ex)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_gen(), media_type='text/event-stream')
+@app.get('/api/bionic/models')
+def s_bionic_models(url: str = ''):
+    try:
+        import requests
+        base = (url or load_cfg().get('bionic_url', 'http://localhost:1235/v1')).rstrip('/')
+        r = requests.get(base + '/models', timeout=4)
+        if r.status_code != 200:
+            return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
+        ms = r.json().get('data', [])
+        out = [{'name': m.get('id', ''), 'size_gb': 0} for m in ms if m.get('id') and 'embed' not in m.get('id', '').lower()]
+        return JSONResponse({'success': True, 'models': out})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e), 'models': []})
+
+
+@app.get('/api/lmstudio/models')
+def s_lmstudio_models(url: str = ''):
+    try:
+        import requests
+        base = (url or load_cfg().get('lmstudio_url', 'http://localhost:1234/v1')).rstrip('/')
+        r = requests.get(base + '/models', timeout=4)
+        if r.status_code != 200:
+            return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
+        ms = r.json().get('data', [])
+        out = [{'name': m.get('id', ''), 'size_gb': 0} for m in ms if m.get('id') and 'embed' not in m.get('id', '').lower()]
+        return JSONResponse({'success': True, 'models': out})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e), 'models': []})
+
+
+@app.get('/api/strata/models')
+def s_strata_models(url: str = ''):
+    try:
+        import requests
+        base = (url or load_cfg().get('strata_url', 'http://127.0.0.1:47831/v1')).rstrip('/')
+        r = requests.get(base + '/models', timeout=4)
+        if r.status_code != 200:
+            return JSONResponse({'success': False, 'error': f'HTTP {r.status_code}', 'models': []})
+        ms = r.json().get('data', [])
+        out = [{'name': m.get('id', ''), 'size_gb': 0} for m in ms if m.get('id') and 'embed' not in m.get('id', '').lower()]
+        return JSONResponse({'success': True, 'models': out})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e), 'models': []})
+
+
+@app.post('/api/providers/ping')
+def s_providers_ping(payload: dict):
+    import requests
+    from concurrent.futures import ThreadPoolExecutor
+
+    items = payload.get('providers') or []
+
+    def check_one(item):
+        pid = str(item.get('id', ''))
+        url = str(item.get('url', '')).strip().rstrip('/')
+        api_key = str(item.get('api_key', '')).strip()
+        t0 = time.perf_counter()
+        try:
+            if pid == 'ollama':
+                base = url or 'http://localhost:11434'
+                r = requests.get(base + '/api/tags', timeout=2.5)
+                ms = int((time.perf_counter() - t0) * 1000)
+                if r.status_code == 200:
+                    models = [m.get('name', '') for m in r.json().get('models', []) if m.get('name')]
+                    return pid, {'online': True, 'latency': ms, 'models': models}
+                return pid, {'online': False, 'latency': 0, 'models': [], 'error': f'HTTP {r.status_code}'}
+            elif pid == 'gemini':
+                if not api_key:
+                    return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет ключа'}
+                r = requests.get(f'https://generativelanguage.googleapis.com/v1beta/models?key={api_key}', timeout=3.0)
+                ms = int((time.perf_counter() - t0) * 1000)
+                if r.status_code == 200:
+                    return pid, {'online': True, 'latency': ms, 'models': ['gemini-1.5-flash', 'gemini-2.0-flash']}
+                return pid, {'online': False, 'latency': 0, 'models': [], 'error': f'HTTP {r.status_code}'}
+            elif pid == 'huggingface':
+                if not api_key:
+                    return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет ключа'}
+                r = requests.get('https://huggingface.co/api/whoami-v2', headers={'Authorization': f'Bearer {api_key}'}, timeout=3.0)
+                ms = int((time.perf_counter() - t0) * 1000)
+                if r.status_code == 200:
+                    return pid, {'online': True, 'latency': ms, 'models': ['meta-llama/Llama-3.1-8B-Instruct', 'Qwen/Qwen2.5-Coder-32B-Instruct']}
+                return pid, {'online': False, 'latency': 0, 'models': [], 'error': f'HTTP {r.status_code}'}
+            else:
+                if not url:
+                    return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет URL'}
+                if pid in ('groq', 'openrouter', 'together') and not api_key:
+                    return pid, {'online': False, 'latency': 0, 'models': [], 'error': 'Нет API-ключа'}
+                headers = {'Authorization': f'Bearer {api_key}'} if api_key else {}
+                r = requests.get(url + '/models', headers=headers, timeout=2.5)
+                ms = int((time.perf_counter() - t0) * 1000)
+                if r.status_code == 200:
+                    data = r.json().get('data', [])
+                    models = [m.get('id', '') for m in data if m.get('id') and 'embed' not in m.get('id', '').lower()]
+                    return pid, {'online': True, 'latency': ms, 'models': models}
+                return pid, {'online': False, 'latency': 0, 'models': [], 'error': f'HTTP {r.status_code}'}
+        except Exception as e:
+            return pid, {'online': False, 'latency': 0, 'models': [], 'error': str(e)[:80]}
+
+    statuses = {}
+    if items:
+        with ThreadPoolExecutor(max_workers=min(8, len(items))) as ex:
+            for pid, st in ex.map(check_one, items):
+                statuses[pid] = st
+    return JSONResponse({'success': True, 'statuses': statuses})
+
+
+@app.post('/api/providers/config')
+def s_providers_config(payload: dict):
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+        cfg = load_cfg() if 'load_cfg' in globals() else {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        updates = payload.get('config') or {}
+        if isinstance(updates, dict):
+            for k, v in updates.items():
+                if isinstance(k, str) and isinstance(v, (str, int, float, bool)):
+                    cfg[k] = v
+        tmp = cfg_path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, cfg_path)
+        return JSONResponse({'success': True})
+    except Exception as e:
+        return JSONResponse({'success': False, 'error': str(e)})
+
+
 @app.get('/api/ollama/models')
 def s_models():
     try:
@@ -495,6 +736,13 @@ def s_ptest(payload: dict):
 @app.post('/api/patches/apply')
 def s_papply(payload: dict):
     log('API apply: ' + str(payload.get('patch_id', 'unknown')), 'INFO')
+    if payload.get('filename') and not payload.get('operations'):
+        fp = os.path.join(PATCH_DIR, os.path.basename(str(payload['filename'])))
+        if os.path.exists(fp):
+            try:
+                payload = json.loads(read_text(fp))
+            except Exception:
+                pass
     return JSONResponse(apply_patch(payload))
 
 
@@ -532,9 +780,9 @@ def s_parch(payload: dict):
     f = os.path.basename(str(payload.get('filename', '')))
     if not f or not f.endswith('.json'):
         return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
-    src = os.path.join(PATCH_DIR, f)
+    src = find_patch_file('', f)
     dst = os.path.join(ARCHIVE_DIR, f)
-    if not os.path.exists(src):
+    if not src or not os.path.exists(src):
         return JSONResponse({'success': False, 'error': 'Файл не найден'})
     if os.path.exists(dst):
         os.remove(dst)
@@ -550,13 +798,14 @@ def s_pdel(payload: dict):
     f = os.path.basename(str(payload.get('filename', '')))
     if not f or not f.endswith('.json'):
         return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
-    p = os.path.join(PATCH_DIR, f)
-    if os.path.realpath(os.path.dirname(p)) != os.path.realpath(PATCH_DIR):
+    p = find_patch_file('', f)
+    if not p or not os.path.exists(p):
+        return JSONResponse({'success': False, 'error': 'not found'})
+    allowed = {os.path.realpath(d) for d in (PATCH_DIR, getattr(_pe, 'DOWNLOADS_DIR', '')) if d and os.path.isdir(d)}
+    if os.path.realpath(os.path.dirname(p)) not in allowed:
         return JSONResponse({'success': False, 'error': 'forbidden'})
-    if os.path.exists(p):
-        os.remove(p)
-        return JSONResponse({'success': True, 'message': 'deleted'})
-    return JSONResponse({'success': False, 'error': 'not found'})
+    os.remove(p)
+    return JSONResponse({'success': True, 'message': 'deleted'})
 
 
 @app.post('/api/patches/apply-all')

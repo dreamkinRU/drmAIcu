@@ -40,7 +40,7 @@ export default function PatchesTab({
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold">🔄 Система автопатчей</h2>
-          <p className="text-sm text-gray-400 mt-1">Сканирование patch/ каждые 5 сек</p>
+          <p className="text-sm text-gray-400 mt-1">Сканирование patch/ и Загрузок каждые 5 сек</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -154,13 +154,13 @@ export default function PatchesTab({
                   onClick={() => archivePatch(patch.filename)}
                   className="px-3 py-1.5 rounded bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-xs font-bold"
                 >
-                  📦
+                  📦 В архив
                 </button>
                 <button
                   onClick={() => deletePatch(patch.filename)}
                   className="px-3 py-1.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold"
                 >
-                  🗑
+                  🗑 Удалить
                 </button>
               </div>
             </div>
@@ -168,7 +168,7 @@ export default function PatchesTab({
         ))}
         {patches.length === 0 && (
           <div className="text-center py-12 text-gray-500 border-2 border-dashed border-gray-700 rounded-xl">
-            <p className="text-lg mb-2">📂 Папка patch/ пуста</p>
+            <p className="text-lg mb-2">📂 Нет патчей в patch/ и Загрузках</p>
           </div>
         )}
       </div>

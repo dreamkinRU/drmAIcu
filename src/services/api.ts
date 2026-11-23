@@ -43,6 +43,39 @@ export async function checkOllama(ollamaUrl: string): Promise<OllamaStatus> {
   }
 }
 
+export async function loadBionicModels(bionicUrl?: string): Promise<OllamaModel[]> {
+  try {
+    const q = bionicUrl ? `?url=${encodeURIComponent(bionicUrl)}` : '';
+    const res = await fetch(`/api/bionic/models${q}`);
+    const data = await res.json();
+    return data.success ? data.models : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function loadLmStudioModels(lmstudioUrl?: string): Promise<OllamaModel[]> {
+  try {
+    const q = lmstudioUrl ? `?url=${encodeURIComponent(lmstudioUrl)}` : '';
+    const res = await fetch(`/api/lmstudio/models${q}`);
+    const data = await res.json();
+    return data.success ? data.models : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function loadStrataModels(strataUrl?: string): Promise<OllamaModel[]> {
+  try {
+    const q = strataUrl ? `?url=${encodeURIComponent(strataUrl)}` : '';
+    const res = await fetch(`/api/strata/models${q}`);
+    const data = await res.json();
+    return data.success ? data.models : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function loadInstalledModels(): Promise<OllamaModel[]> {
   try {
     const res = await fetch('/api/ollama/models');
@@ -70,6 +103,15 @@ export async function pullModel(name: string): Promise<{ success: boolean; messa
 // Задачи ИИ и логи
 // ============================================================================
 
+export interface StreamMetrics {
+  provider: string;
+  model: string;
+  elapsed_sec: number;
+  ttft_sec: number;
+  tokens: number;
+  tps: number;
+}
+
 export async function runAiTask(prompt: string, mode: string, model?: string): Promise<{ success: boolean; result?: string; error?: string }> {
   try {
     const res = await fetch('/api/task', {
@@ -79,6 +121,65 @@ export async function runAiTask(prompt: string, mode: string, model?: string): P
     });
     return await res.json();
   } catch {
+    return { success: false, error: 'Ошибка сети' };
+  }
+}
+
+export async function runAiTaskStream(
+  prompt: string,
+  provider: string,
+  model: string,
+  handlers: {
+    onChunk: (chunk: string) => void;
+    onMeta?: (meta: StreamMetrics) => void;
+    signal?: AbortSignal;
+  }
+): Promise<{ success: boolean; error?: string; aborted?: boolean }> {
+  try {
+    const res = await fetch('/api/task/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, mode: 'fast', provider, model: model || '' }),
+      signal: handlers.signal,
+    });
+    if (!res.ok || !res.body) {
+      return { success: false, error: `HTTP ${res.status}` };
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const rawEvent of events) {
+        const line = rawEvent.trim();
+        if (!line.startsWith('data:')) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+        try {
+          const ev = JSON.parse(jsonStr);
+          if (ev.type === 'chunk' && ev.content) {
+            handlers.onChunk(ev.content);
+          } else if (ev.type === 'meta' && handlers.onMeta) {
+            handlers.onMeta(ev as StreamMetrics);
+          } else if (ev.type === 'error') {
+            return { success: false, error: ev.error || 'Ошибка генерации' };
+          }
+        } catch {
+          // игнорируем неполный JSON-фрагмент
+        }
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return { success: false, aborted: true };
+    }
     return { success: false, error: 'Ошибка сети' };
   }
 }
@@ -186,18 +287,27 @@ export async function previewPatch(patch: PatchInfo): Promise<any> {
 
 export async function applyPatchApi(patch: PatchInfo): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    // F-01 FIX: Приводим payload к единому контракту {patch_id, operations: [...]}
-    const payload = {
-      patch_id: patch.patch_id,
-      operations: [{
-        type: patch.patch_type || (patch.diff ? 'unified_diff' : 'full_replace'),
-        target_file: patch.target_file,
-        full_file_content: patch.full_file_content || '',
-        diff: patch.diff || '',
-        find: (patch as any).find || '',
-        replace: (patch as any).replace || ''
-      }]
-    };
+    const rawOps = (patch as any).operations;
+    const isMulti = patch.patch_type === 'multi' || (Array.isArray(rawOps) && rawOps.length > 0);
+    const payload = isMulti
+      ? {
+          patch_id: patch.patch_id,
+          filename: patch.filename,
+          type: 'multi',
+          ...(Array.isArray(rawOps) && rawOps.length > 0 ? { operations: rawOps } : {}),
+        }
+      : {
+          patch_id: patch.patch_id,
+          filename: patch.filename,
+          operations: [{
+            type: patch.patch_type || (patch.diff ? 'unified_diff' : 'full_replace'),
+            target_file: patch.target_file,
+            full_file_content: patch.full_file_content || '',
+            diff: patch.diff || '',
+            find: (patch as any).find || '',
+            replace: (patch as any).replace || ''
+          }]
+        };
     const res = await fetch('/api/patches/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -256,6 +366,23 @@ export async function applyAllPendingApi(): Promise<{ success: boolean; results:
 // ============================================================================
 // Система
 // ============================================================================
+
+export interface SystemResources {
+  ram_used_gb: number;
+  ram_total_gb: number;
+  vram_used_gb: number;
+  vram_total_gb: number;
+}
+
+export async function fetchSystemResources(): Promise<SystemResources | null> {
+  try {
+    const res = await fetch('/api/system/resources');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 export async function restartSystem(): Promise<{ success: boolean; message?: string; error?: string }> {
   try {

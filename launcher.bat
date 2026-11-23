@@ -30,6 +30,7 @@ if not exist "patch" mkdir "patch"
 if not exist "logs" mkdir "logs"
 echo [OK] Systems ready.
 echo.
+set BROWSER_OPENED=0
 
 :main_loop
 :: === УБИВАЕМ СТАРЫЕ ОКНА ПО ЗАГОЛОВКУ (решение проблемы пустых окон) ===
@@ -49,8 +50,11 @@ echo [%time%] Starting React UI...
 start "drmAIcu UI" /MIN cmd /c "npm run dev -- --port 5173 --strictPort"
 timeout /t 4 /nobreak >nul
 
-echo [%time%] Opening browser...
-start http://127.0.0.1:5173
+if "%BROWSER_OPENED%"=="0" (
+    echo [%time%] Opening browser...
+    start http://127.0.0.1:5173
+    set BROWSER_OPENED=1
+)
 echo.
 echo ========================================
 echo   SYSTEM RUNNING (watchdog active)

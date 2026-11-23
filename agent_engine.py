@@ -2,8 +2,9 @@
 # Version 2.3 (FIXED)
 
 import asyncio
+import time
 import ollama
-from typing import List, Dict
+from typing import List, Dict, AsyncGenerator
 import traceback
 
 
@@ -14,6 +15,9 @@ class AgentEngine:
 
         self.providers = {
             'ollama': True,
+            'bionic': True,
+            'lmstudio': True,
+            'strata': True,
             'groq': bool(config.get('groq_api_key', '').strip()),
             'huggingface': bool(config.get('hf_api_key', '').strip()),
             'openrouter': bool(config.get('openrouter_api_key', '').strip()),
@@ -34,6 +38,27 @@ class AgentEngine:
 
     def _init_clients(self):
         from openai import AsyncOpenAI
+
+        if self.providers.get('bionic'):
+            self._clients['bionic'] = AsyncOpenAI(
+                base_url=self.config.get('bionic_url', 'http://localhost:1235/v1'),
+                api_key=self.config.get('bionic_api_key', 'lm-studio'),
+                timeout=120.0
+            )
+
+        if self.providers.get('lmstudio'):
+            self._clients['lmstudio'] = AsyncOpenAI(
+                base_url=self.config.get('lmstudio_url', 'http://localhost:1234/v1'),
+                api_key=self.config.get('lmstudio_api_key', 'lm-studio'),
+                timeout=120.0
+            )
+
+        if self.providers.get('strata'):
+            self._clients['strata'] = AsyncOpenAI(
+                base_url=self.config.get('strata_url', 'http://127.0.0.1:47831/v1'),
+                api_key=self.config.get('strata_api_key', 'strata'),
+                timeout=120.0
+            )
 
         if self.providers['groq']:
             self._clients['groq'] = AsyncOpenAI(
@@ -242,7 +267,7 @@ class AgentEngine:
 
         if provider == 'ollama':
             return await self._query_ollama(model, messages, timeout)
-        elif provider in ['groq', 'openrouter', 'together']:
+        elif provider in ['groq', 'openrouter', 'together', 'bionic', 'lmstudio', 'strata']:
             return await self._query_openai_style(provider, model, messages, timeout)
         elif provider == 'gemini':
             return await self._query_gemini(model, messages, timeout)
@@ -311,3 +336,124 @@ ANSWER (code only):"""
         except Exception as e:
             self.log(f"[ERR] [{provider}] Judge error: {str(e)[:60]}", "ERROR")
             return {"code": None, "error": str(e), "judge": judge}
+
+    async def stream_task(self, prompt: str, mode: str = "fast", model: str = None, provider: str = None) -> AsyncGenerator[Dict, None]:
+        start_time = time.perf_counter()
+        first_token_time = None
+        total_chars = 0
+
+        target_provider = (provider or "ollama").lower()
+        target_model = (model or "").strip()
+
+        if target_provider == "all" and not target_model:
+            candidates = self._get_candidates()
+            if candidates:
+                target_provider = candidates[0]["provider"]
+                target_model = candidates[0]["model"]
+            else:
+                target_provider = "ollama"
+                target_model = "qwen2.5-coder:1.5b"
+        elif not target_model:
+            if target_provider in ("bionic", "lmstudio", "strata"):
+                try:
+                    client = self._clients.get(target_provider)
+                    if client:
+                        models_resp = await client.models.list()
+                        chat_models = [m.id for m in (models_resp.data or []) if 'embed' not in m.id.lower()]
+                        if chat_models:
+                            target_model = chat_models[0]
+                        elif models_resp.data:
+                            target_model = models_resp.data[0].id
+                except Exception:
+                    pass
+                if not target_model:
+                    target_model = "default"
+            else:
+                candidates = [c for c in self._get_candidates() if c["provider"] == target_provider]
+                target_model = candidates[0]["model"] if candidates else "qwen2.5-coder:1.5b"
+
+        messages = [
+            {"role": "system", "content": "You are a helpful AI assistant and expert programmer. Answer clearly and concisely in the user's language. When writing code, return clean code without markdown code fences."},
+            {"role": "user", "content": prompt}
+        ]
+
+        self.log(f"[STREAM] {target_provider} / {target_model}", "INFO")
+
+        try:
+            if target_provider == "ollama":
+                queue: asyncio.Queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+                stop_flag = {"stop": False}
+
+                def worker():
+                    try:
+                        stream = ollama.chat(model=target_model, messages=messages, stream=True, options={"num_predict": 2048})
+                        for part in stream:
+                            if stop_flag["stop"]:
+                                break
+                            chunk = part.get("message", {}).get("content", "")
+                            if chunk:
+                                loop.call_soon_threadsafe(queue.put_nowait, ("chunk", chunk))
+                        loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
+                    except Exception as err:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("error", str(err)))
+
+                fut = loop.run_in_executor(None, worker)
+                try:
+                    while True:
+                        kind, val = await queue.get()
+                        if kind == "chunk":
+                            if first_token_time is None:
+                                first_token_time = time.perf_counter() - start_time
+                            total_chars += len(val)
+                            yield {"type": "chunk", "content": val}
+                        elif kind == "error":
+                            raise Exception(val)
+                        elif kind == "done":
+                            break
+                finally:
+                    stop_flag["stop"] = True
+                    if not fut.done():
+                        fut.cancel()
+
+            elif target_provider in ("groq", "openrouter", "together", "bionic", "lmstudio", "strata"):
+                client = self._clients.get(target_provider)
+                if not client:
+                    raise Exception(f"Client {target_provider} not initialized")
+                stream = await client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    temperature=0.3,
+                    stream=True
+                )
+                async for part in stream:
+                    delta = part.choices[0].delta.content if part.choices else None
+                    if delta:
+                        if first_token_time is None:
+                            first_token_time = time.perf_counter() - start_time
+                        total_chars += len(delta)
+                        yield {"type": "chunk", "content": delta}
+            else:
+                res = await self.run_task(prompt, mode=mode, model=target_model, provider=target_provider)
+                first_token_time = time.perf_counter() - start_time
+                total_chars = len(res or "")
+                yield {"type": "chunk", "content": res or ""}
+
+            elapsed = max(time.perf_counter() - start_time, 0.001)
+            est_tokens = max(1, total_chars // 4)
+            yield {
+                "type": "meta",
+                "provider": target_provider,
+                "model": target_model,
+                "elapsed_sec": round(elapsed, 2),
+                "ttft_sec": round(first_token_time or elapsed, 2),
+                "tokens": est_tokens,
+                "tps": round(est_tokens / elapsed, 1)
+            }
+            yield {"type": "done"}
+        except asyncio.CancelledError:
+            self.log(f"[STREAM] Cancelled: {target_provider}/{target_model}", "WARN")
+            raise
+        except Exception as e:
+            self.log(f"[STREAM ERR] {str(e)[:120]}", "ERROR")
+            yield {"type": "error", "error": str(e)}

@@ -7,6 +7,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 PATCH_DIR = os.path.join(BASE, 'patch')
 ARCHIVE_DIR = os.path.join(PATCH_DIR, 'archive')
 BACKUP_DIR = os.path.join(BASE, 'backups')
+DOWNLOADS_DIR = os.path.join(os.path.expanduser('~'), 'Downloads')
 MANIFEST = os.path.join(BASE, 'patch_manifest.json')
 LOG = []
 
@@ -319,33 +320,46 @@ def apply_search_replace(content, find, replace):
     return None
 
 
+def _patch_source_dirs():
+    dirs = [PATCH_DIR]
+    if DOWNLOADS_DIR and os.path.isdir(DOWNLOADS_DIR) and os.path.normcase(os.path.realpath(DOWNLOADS_DIR)) != os.path.normcase(os.path.realpath(PATCH_DIR)):
+        dirs.append(DOWNLOADS_DIR)
+    return dirs
+
+
 def find_patch_file(pid, fname=''):
-    # B25 FIX: fname из payload не может совершить traversal — только basename + '.json' внутри PATCH_DIR
+    # B25 FIX: fname из payload не может совершить traversal — только basename + '.json' внутри разрешённых папок
+    dirs = _patch_source_dirs()
     if fname:
         f = os.path.basename(str(fname))
         if f and f.endswith('.json'):
-            p = os.path.join(PATCH_DIR, f)
-            if os.path.exists(p):
-                return p
+            for d_dir in dirs:
+                p = os.path.join(d_dir, f)
+                if os.path.isfile(p):
+                    return p
     if not pid:
         return None
-    for c in (pid + '.json', 'patch_' + pid + '.json'):
-        p = os.path.join(PATCH_DIR, c)
-        if os.path.exists(p):
-            return p
-    try:
-        for f in os.listdir(PATCH_DIR):
-            if not f.endswith('.json'):
-                continue
-            p = os.path.join(PATCH_DIR, f)
-            try:
-                d = json.loads(read_text(p))
-                if str(d.get('patch_id', '')) == str(pid):
-                    return p
-            except Exception:
-                continue
-    except Exception:
-        pass
+    for d_dir in dirs:
+        for c in (pid + '.json', 'patch_' + pid + '.json'):
+            p = os.path.join(d_dir, c)
+            if os.path.isfile(p):
+                return p
+    for d_dir in dirs:
+        try:
+            for f in os.listdir(d_dir):
+                if not f.endswith('.json'):
+                    continue
+                p = os.path.join(d_dir, f)
+                if not os.path.isfile(p):
+                    continue
+                try:
+                    d = json.loads(read_text(p))
+                    if isinstance(d, dict) and str(d.get('patch_id', '')) == str(pid):
+                        return p
+                except Exception:
+                    continue
+        except Exception:
+            pass
     return None
 
 
@@ -372,47 +386,75 @@ def normalize_ops(data):
     return [{k: data.get(k) for k in ('type', 'target_file', 'diff', 'full_file_content', 'find', 'replace', 'expected_sha') if data.get(k) is not None}]
 
 
+def _is_valid_patch_dict(d):
+    if not isinstance(d, dict):
+        return False
+    if isinstance(d.get('operations'), list) and len(d.get('operations')) > 0:
+        return True
+    if d.get('patch_id') and d.get('target_file'):
+        return True
+    return False
+
+
 def list_patches():
     out = []
+    seen_files = set()
     man = load_manifest()
     done = set()
     for a in man.get('applied', []):
         done.add(str(a.get('patch_id')))
-    if not os.path.exists(PATCH_DIR):
-        return out
-    for f in sorted(os.listdir(PATCH_DIR)):
-        if not f.endswith('.json') or f.startswith('.'):
-            continue
-        p = os.path.join(PATCH_DIR, f)
-        if not os.path.isfile(p):
+    for src_dir in _patch_source_dirs():
+        is_downloads = (src_dir == DOWNLOADS_DIR)
+        if not os.path.isdir(src_dir):
             continue
         try:
-            d = json.loads(read_text(p))
-            pid = str(d.get('patch_id', f[:-5]))
-            ops = normalize_ops(d)
-            multi = isinstance(d.get('operations'), list) and len(d.get('operations')) > 1
-            pt = 'multi' if multi else (d.get('type', '') or ('search_and_replace' if d.get('find') else ('unified_diff' if d.get('diff') else 'full_replace')))
-            targets = [str(o.get('target_file', 'unknown')) for o in ops]
-            if multi:
-                tgt = targets[0] + ' +' + str(len(targets) - 1) + ' (' + str(len(targets)) + ' файлов)'
-            else:
-                tgt = targets[0]
-            body = d.get('full_file_content', '') if pt in ('full_replace', 'create') else d.get('diff', '')
-            clen = len(body) if not multi else sum(len(str(o.get('full_file_content', '') or o.get('diff', ''))) for o in ops)
-            out.append({'filename': f, 'filepath': p, 'patch_id': pid, 'patch_type': pt,
-                        'target_file': tgt, 'description': d.get('description', ''),
-                        'author': d.get('author', '?'), 'created_at': d.get('created_at', ''),
-                        'is_applied': pid in done, 'multi': multi, 'op_count': len(targets),
-                        'file_exists': os.path.exists(os.path.join(BASE, targets[0])),
-                        'content_length': clen, 'has_content': bool(ops),
-                        'full_file_content': d.get('full_file_content', ''), 'diff': d.get('diff', ''),
-                        'operations': ops})
-        except Exception as e:
-            out.append({'filename': f, 'filepath': p, 'patch_id': f[:-5], 'patch_type': 'error',
-                        'target_file': 'error', 'description': 'Bad JSON: ' + str(e)[:80],
-                        'author': 'ERR', 'created_at': '', 'is_applied': False, 'multi': False, 'op_count': 0,
-                        'file_exists': False, 'content_length': 0, 'has_content': False, 'error': str(e),
-                        'full_file_content': '', 'diff': '', 'operations': []})
+            names = sorted(os.listdir(src_dir))
+        except OSError:
+            continue
+        for f in names:
+            if not f.endswith('.json') or f.startswith('.'):
+                continue
+            if f in seen_files:
+                continue
+            p = os.path.join(src_dir, f)
+            if not os.path.isfile(p):
+                continue
+            try:
+                d = json.loads(read_text(p))
+                if is_downloads and not _is_valid_patch_dict(d):
+                    continue
+                seen_files.add(f)
+                pid = str(d.get('patch_id', f[:-5]))
+                ops = normalize_ops(d)
+                multi = isinstance(d.get('operations'), list) and len(d.get('operations')) > 1
+                pt = 'multi' if multi else (d.get('type', '') or ('search_and_replace' if d.get('find') else ('unified_diff' if d.get('diff') else 'full_replace')))
+                targets = [str(o.get('target_file', 'unknown')) for o in ops]
+                if multi:
+                    tgt = targets[0] + ' +' + str(len(targets) - 1) + ' (' + str(len(targets)) + ' файлов)'
+                else:
+                    tgt = targets[0]
+                body = d.get('full_file_content', '') if pt in ('full_replace', 'create') else d.get('diff', '')
+                clen = len(body) if not multi else sum(len(str(o.get('full_file_content', '') or o.get('diff', ''))) for o in ops)
+                desc = d.get('description', '')
+                if is_downloads:
+                    desc = '[Загрузки] ' + desc
+                out.append({'filename': f, 'filepath': p, 'patch_id': pid, 'patch_type': pt,
+                            'target_file': tgt, 'description': desc,
+                            'author': d.get('author', '?'), 'created_at': d.get('created_at', ''),
+                            'is_applied': pid in done, 'multi': multi, 'op_count': len(targets),
+                            'file_exists': os.path.exists(os.path.join(BASE, targets[0])),
+                            'content_length': clen, 'has_content': bool(ops),
+                            'full_file_content': d.get('full_file_content', ''), 'diff': d.get('diff', ''),
+                            'operations': ops})
+            except Exception as e:
+                if is_downloads:
+                    continue
+                seen_files.add(f)
+                out.append({'filename': f, 'filepath': p, 'patch_id': f[:-5], 'patch_type': 'error',
+                            'target_file': 'error', 'description': 'Bad JSON: ' + str(e)[:80],
+                            'author': 'ERR', 'created_at': '', 'is_applied': False, 'multi': False, 'op_count': 0,
+                            'file_exists': False, 'content_length': 0, 'has_content': False, 'error': str(e),
+                            'full_file_content': '', 'diff': '', 'operations': []})
     return out
 
 
@@ -570,6 +612,7 @@ def apply_patch(raw):
 
 
 def _apply_patch_locked(data, pid):
+    patch_fname = data.get('filename', '') if isinstance(data, dict) else ''
     # B43 FIX: повторное применение уже применённого патча запрещено (_LATEST после rollback — можно)
     if str(pid) in {str(a.get('patch_id')) for a in load_manifest().get('applied', [])}:
         log('Patch ' + pid + ' rejected: already applied', 'ERROR')
@@ -640,8 +683,18 @@ def _apply_patch_locked(data, pid):
         if len(man['history']) > 500:
             man['history'] = man['history'][-500:]
         save_manifest(man)
+        src_patch = find_patch_file(pid, patch_fname)
+        if src_patch and os.path.isfile(src_patch):
+            try:
+                dst_patch = os.path.join(ARCHIVE_DIR, os.path.basename(src_patch))
+                if os.path.exists(dst_patch):
+                    os.remove(dst_patch)
+                shutil.move(src_patch, dst_patch)
+                log('Patch ' + pid + ' auto-archived to ' + os.path.basename(dst_patch), 'INFO')
+            except Exception as arch_err:
+                log('Auto-archive failed for ' + pid + ': ' + str(arch_err), 'WARN')
         log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
-        return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам)', 'backups': allb}
+        return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам) и перемещён в архив', 'backups': allb}
     except Exception as e:
         rollback_failed = []
         for pl in planned:
