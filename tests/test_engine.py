@@ -1179,9 +1179,8 @@ def test_B72_apply_nonpy_sets_no_restart_flag(box, monkeypatch):
 
 def test_B68_version_single_source():
     version = importlib.import_module("version")
-    assert version.VERSION == "3.6.3"
     pkg = json.load(open(os.path.join(os.path.dirname(__file__), "..", "package.json"), encoding="utf-8"))
-    assert pkg["version"] == "3.6.3"
+    assert pkg["version"] == version.VERSION
     assert engine.stats()["version"] == version.VERSION
 
 

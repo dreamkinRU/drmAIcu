@@ -51,3 +51,6 @@ public/context.html
 patch_manifest.json
 patch_journal.json
 restart.flag
+
+# === Plugin System runtime (secrets, registry, journal) ===
+data/plugins/

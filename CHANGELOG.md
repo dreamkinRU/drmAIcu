@@ -1,6 +1,22 @@
 # drmAIcu — История изменений
 
-## v.3.6.3 Model (Текущая) — 26.11.2026
+## v.3.7.0 Model (Текущая) — 26.11.2026
+
+### Plugin System v1.0 + GitHub Plugin v1.0 (Этапы 0–1)
+
+- **Plugin Manager** (`core/plugins/`) — реестр, лоадер (импорт как пакет `_plugin_<id>`, без записи в каталог плагина), жизненный цикл DISCOVER→…→UNINSTALL, изоляция ошибок (падение плагина не роняет ядро); реестр персистентен в `data/plugins/registry.json` и переживает рестарт.
+- **Permission Manager** — уровни READ/WRITE/CRITICAL; выдача только заявленных в манифесте разрешений; при установке автоматически выдаются только READ; отзыв блокирует вызовы немедленно.
+- **Capability Gateway + подтверждения** — операции плагинов выполняются только через `POST /api/plugins/{id}/exec`; auto-READ выполняется сразу, WRITE/CRITICAL создают одноразовое подтверждение (TTL 15 мин, повторное использование отклоняется, mismatch параметров отклоняется).
+- **Secret Manager** — секреты per-plugin в `data/plugins/secrets/` (0600 best-effort), никогда не возвращаются API; журнал активности redact'ит известные значения секретов (`***REDACTED***`).
+- **REST `/api/plugins/*`** — единый формат `{success, error, code}`; монтирование в `main.py` — 2 строки.
+- **GitHub Plugin v1.0** — манифест (15 разрешений), GitHub App: JWT RS256 → Installation Access Token с кэшем и refresh по 401, диагностика подключения; capabilities: test_connection, repositories, tree/file, branches, compare, create_branch (WRITE → подтверждение); Git CLI через allowlist (`git_service.py`, shell=False, таймауты).
+- **Frontend** — вкладка «Плагины»: Установленные / Каталог / Разрешения / Активность + панель ожидающих подтверждений (approve/reject).
+- **Безопасность** — `guards.CRIT_DIRS` расширена (`core/`, `plugins/`, `data/plugins/`): cleanup не может удалять код плагинов и секреты; `data/plugins/` добавлен в `.gitignore`.
+- **Контракты** — `docs/PLUGIN_SYSTEM.md`, `docs/PLUGIN_API_CONTRACT.md` (манифест, жизненный цикл, политики подтверждений, границы доверия v1.0).
+
+Тесты: +48 (`tests/test_plugins.py`, `tests/test_github_plugin.py`, `tests/test_plugins_api.py`: жизненный цикл, права/отзыв, одноразовые подтверждения, redact секретов, изоляция ошибок, путь-траверсал архивов, REST-контракт) — всего 187, все зелёные; `tsc --noEmit` и `vite build` — зелёные.
+
+## v.3.6.3 Model — 26.11.2026
 
 ### Agent Engine: P2-12 — настоящий Fast-режим (B59)
 
