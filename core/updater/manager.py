@@ -586,6 +586,10 @@ class UpdateManager:
                 journal["backup_oid"] = found
                 _save_journal(journal)
             _ensure_backup_ref(journal)
+            if not journal.get("backup_bundle"):
+                journal["backup_bundle"] = _create_backup_bundle(
+                    journal["id"], backup_ref, journal["backup_oid"]
+                )
             journal["backup_verified"] = True
             _save_journal(journal)
             if manual_confirmation:
