@@ -87,6 +87,16 @@ class PluginAPI:
     def subscribe(self, fn):
         self._manager.events.subscribe(fn)
 
+    # --- состояние плагина (state.json, §9.1) ---
+
+    def load_state(self):
+        """Произвольные персистентные данные плагина: data/plugins/state/<id>/state.json."""
+        return self._manager.settings.load_state(self._plugin_id)
+
+    def save_state(self, data):
+        """Атомарно сохранить произвольное состояние плагина (словарь)."""
+        self._manager.settings.save_state(self._plugin_id, data if isinstance(data, dict) else {})
+
     # --- capabilities ---
 
     def register_capability(self, name, permission, handler, confirmation='auto', description=''):

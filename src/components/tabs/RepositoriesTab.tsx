@@ -22,6 +22,7 @@ import {
   reposCommit,
   reposDiff,
   reposFetch,
+  reposLastSync,
   reposLog,
   reposPull,
   reposPush,
@@ -293,6 +294,7 @@ function OverviewSection({
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ label: string; cid: string; run: (token: string) => void } | null>(null);
   const [syncResult, setSyncResult] = useState<RepoSyncResult | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [syncPreview, setSyncPreview] = useState<RepoSyncPreview | null>(null);
   const [previewAcknowledged, setPreviewAcknowledged] = useState(false);
   const [rebaseState, setRebaseState] = useState<{ ok: boolean; active: boolean; conflicts: string[] } | null>(null);
@@ -308,6 +310,20 @@ function OverviewSection({
   }, [repoPath]);
 
   useEffect(() => { void refreshRebaseState(); }, [refreshRebaseState]);
+
+  // Последний результат Sync загружается с бэкенда (state плагина repos) —
+  // панель переживает периодические обновления страницы и перезапуск панели.
+  const refreshLastSync = useCallback(async () => {
+    const r = await reposLastSync(repoPath);
+    if (r.status === 'done' && r.result?.found && r.result.result) {
+      setSyncResult(r.result.result);
+      setLastSyncAt(r.result.finished_at || null);
+    } else {
+      setLastSyncAt(null);
+    }
+  }, [repoPath]);
+
+  useEffect(() => { void refreshLastSync(); }, [refreshLastSync]);
 
   const prepareSync = async () => {
     setBusy(true);
@@ -345,6 +361,7 @@ function OverviewSection({
     }
     if (r.status === 'done') {
       setSyncResult(r.result);
+      setLastSyncAt(new Date().toISOString());
       setSyncPreview(null);
       setPreviewAcknowledged(false);
       if (r.result.ok) {
@@ -549,6 +566,11 @@ function OverviewSection({
                 ? (syncResult.committed ? '✅ Синхронизация выполнена: создан commit и выполнен push' : '✅ Синхронизация выполнена без нового коммита (pull --rebase → push)')
                 : '❌ Синхронизация не завершена — см. упавший шаг ниже'}
             </div>
+            {lastSyncAt && (
+              <div className="text-gray-500 font-sans">
+                последняя попытка: {lastSyncAt.slice(0, 10)} · {timeUtc3(lastSyncAt)} (UTC+3)
+              </div>
+            )}
             {syncResult.steps.map((s, i) => (
               <div key={i}>
                 <span className={s.ok === false ? 'text-red-400' : 'text-emerald-400'}>{s.ok === false ? '✗' : '✓'}</span>{' '}

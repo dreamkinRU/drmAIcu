@@ -6,6 +6,8 @@ checkout/sync) — WRITE с подтверждением пользовател�
 Авторизация в удалённых репозиториях — как в локальном git (Credential Manager /
 SSH): плагин не хранит и не запросает токены. CRITICAL-операций нет.
 """
+from datetime import datetime
+
 from . import git_service, repos_service
 
 _STATE = {'ctx': None}
@@ -65,8 +67,42 @@ def initialize(ctx):
     def _sync_preview(params):
         return repos_service.repo_sync_preview(_sc(params, 'path'))
 
+    def _remember_sync(path, res):
+        # Последний результат Sync сохраняется персистентно в state плагина
+        # (data/plugins/state/repos/state.json, §9.1), чтобы UI показывал его
+        # даже после обновления страницы или перезапуска панели.
+        try:
+            state = ctx.load_state()
+            by_path = state.get('last_sync_by_path')
+            if not isinstance(by_path, dict):
+                by_path = {}
+            by_path[str(path)] = {
+                'path': str(path),
+                'finished_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+                'result': res,
+            }
+            if len(by_path) > 20:  # ограничение роста: последние 20 репозиториев
+                for k in sorted(by_path)[:-20]:
+                    by_path.pop(k, None)
+            state['last_sync_by_path'] = by_path
+            ctx.save_state(state)
+        except Exception as e:  # сбой хранения не отменяет уже выполненный Sync
+            ctx.log('warn', 'last_sync_store_failed', error=str(e))
+
     def _sync(params):
-        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False), _sc(params, 'snapshot'))
+        path = _sc(params, 'path')
+        res = repos_service.repo_sync(path, _sc(params, 'message', required=False), _sc(params, 'snapshot'))
+        _remember_sync(path, res)
+        return res
+
+    def _last_sync(params):
+        path = _sc(params, 'path')
+        repos_service.validate(path)
+        rec = (ctx.load_state().get('last_sync_by_path') or {}).get(str(path))
+        if not isinstance(rec, dict):
+            return {'found': False}
+        return {'found': True, 'path': rec.get('path'),
+                'finished_at': rec.get('finished_at'), 'result': rec.get('result')}
 
     def _rebase_state(params):
         return repos_service.repo_rebase_state(_sc(params, 'path'))
@@ -114,6 +150,8 @@ def initialize(ctx):
         'git rebase --continue после разрешения конфликтов (WRITE, подтверждение)')
     reg('repos.rebase_abort', 'repos.write', _rebase_abort, 'confirm',
         'git rebase --abort — отмена незавершённого rebase (WRITE, подтверждение)')
+    reg('repos.last_sync', 'repos.read', _last_sync, 'auto',
+        'Последний результат Sync для репозитория (персистентно в state плагина — переживает обновление страницы)')
     return True
 
 

@@ -75,6 +75,7 @@ def uninstall():         # перед удалением данных
 | `ctx.remove_secret(key)` / `ctx.delete_secrets()` | Удаление секретов |
 | `ctx.publish(event, **payload)` | Событие в Event System |
 | `ctx.subscribe(fn)` | Подписка на события ядра и плагинов |
+| `ctx.load_state()` / `ctx.save_state(dict)` | Персистентное состояние плагина: `data/plugins/state/<id>/state.json` (§9.1, атомарная запись). Доступно с API 1.0 (ядро 3.12.6) |
 | `ctx.register_capability(name, permission, handler, confirmation='auto', description='')` | Регистрация операции Capability Gateway |
 
 Правило: плагин не обращается к внутренним объектам ядра напрямую — только через `ctx`.
@@ -94,7 +95,7 @@ def uninstall():         # перед удалением данных
 | `confirm` | Создаётся pending-подтверждение; результат возвращается только после явного подтверждения пользователя (Repos: add/commit/pull/push/fetch/checkout/sync/rebase --continue|--abort) |
 | `critical` | CRITICAL-подтверждение для наиболее опасных операций |
 
-Минимальная политика задаётся ядром и не может быть ослаблена плагином: READ → `auto`, WRITE → не ниже `confirm`, CRITICAL → только `critical`. Repos Plugin предоставляет `repos.sync_preview` как READ/AUTO capability: она возвращает diff и snapshot без изменения рабочего дерева; само выполнение Sync остаётся WRITE/CONFIRM. Восстановление после конфликта rebase: `repos.rebase_state` (READ/AUTO — активен ли rebase, список конфликтных файлов), `repos.rebase_continue` / `repos.rebase_abort` (WRITE/CONFIRM; continue отклоняется, пока конфликты не разрешены). Плагин вправе запросить более строгую политику. Подтверждения одноразовые (single-use token), привязаны к plugin ID, capability, permission, policy и точным параметрам операции. TTL — 15 минут; повторное использование отклоняется.
+Минимальная политика задаётся ядром и не может быть ослаблена плагином: READ → `auto`, WRITE → не ниже `confirm`, CRITICAL → только `critical`. Repos Plugin предоставляет `repos.sync_preview` как READ/AUTO capability: она возвращает diff и snapshot без изменения рабочего дерева; само выполнение Sync остаётся WRITE/CONFIRM. Восстановление после конфликта rebase: `repos.rebase_state` (READ/AUTO — активен ли rebase, список конфликтных файлов), `repos.rebase_continue` / `repos.rebase_abort` (WRITE/CONFIRM; continue отклоняется, пока конфликты не разрешены). Последний результат Sync хранится персистентно в state плагина: `repos.last_sync` (READ/AUTO — возвращает результат последней попытки с меткой времени, переживает обновление страницы). Плагин вправе запросить более строгую политику. Подтверждения одноразовые (single-use token), привязаны к plugin ID, capability, permission, policy и точным параметрам операции. TTL — 15 минут; повторное использование отклоняется.
 Валидация при `register_capability` (с 3.12.5): имя capability уникально (дубликат отклоняется); permission должен быть объявлен в манифесте плагина (иначе регистрация отклоняется); эффективная политика подтверждения вычисляется на момент каждого вызова как максимум объявленной политики и минимальной политики уровня разрешения (READ→`auto`, WRITE→`confirm`, CRITICAL→`critical`); передача confirmation_token в AUTO-capability отклоняется (`unexpected_confirmation`).
 
 ## 7. Разрешения

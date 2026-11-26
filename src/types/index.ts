@@ -348,6 +348,14 @@ export interface RepoSyncResult {
   push_rejected?: boolean;
 }
 
+/** Последний результат Sync для репозитория (персистентно в state плагина repos). */
+export interface RepoLastSyncInfo {
+  found: boolean;
+  path?: string;
+  finished_at?: string;
+  result?: RepoSyncResult;
+}
+
 export interface SimpleGitResult {
   ok: boolean;
   error?: string;
