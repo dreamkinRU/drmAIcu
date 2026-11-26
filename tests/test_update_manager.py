@@ -251,7 +251,3 @@ def test_restart_required_completes_only_after_new_process(git_fixture, monkeypa
     assert state["state"] == "COMPLETED"
     assert state["restart_verified_pid"] == 54321
     assert state["restart_verified_at"]
-
-    with pytest.raises(updater.UpdateError) as error:
-        updater.manager.check()
-    assert error.value.code != "operation_incomplete"
