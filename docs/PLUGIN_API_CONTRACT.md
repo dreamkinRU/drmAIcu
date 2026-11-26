@@ -159,6 +159,9 @@ RUNNING → STOP / DISABLE / ERROR / UNINSTALL
 | PUT | `/api/plugins/{id}/permissions` | Изменение разрешений |
 | GET | `/api/plugins/{id}/settings` | Настройки |
 | PUT | `/api/plugins/{id}/settings` | Сохранение настроек |
+| GET | `/api/plugins/{id}/secrets` | Только имена секретов (значения не возвращаются) |
+| PUT | `/api/plugins/{id}/secrets` | Запись секретов (write-only, `{"secrets": {key: value}}`) |
+| DELETE | `/api/plugins/{id}/secrets/{key}` | Удаление секрета |
 | GET | `/api/plugins/{id}/capabilities` | Список операций плагина |
 | POST | `/api/plugins/{id}/exec` | Выполнение (политики §6) |
 | GET | `/api/plugins/confirmations` | Ожидающие подтверждения |
@@ -173,3 +176,10 @@ RUNNING → STOP / DISABLE / ERROR / UNINSTALL
 
 GitHub-специфичные маршруты (`/api/plugins/github/repositories/*` и т.д.)
 реализуются поверх `exec`-механизма на этапах 4–8.
+
+## 10.1. Секреты через REST (Этап 4)
+
+Секреты плагина записываются с frontend только через `PUT /api/plugins/{id}/secrets`.
+Контракт write-only: GET возвращает **только имена ключей**, значения недоступны через
+REST в принципе; журнал активности фиксирует только имена (`secret_set`, `secret_deleted`).
+Формат ключа: `[A-Za-z0-9_.-]{1,64}`; пустые значения отвергаются (HTTP 422).

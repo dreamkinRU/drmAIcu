@@ -155,7 +155,8 @@ export type TabId =
   | 'tasks'
   | 'patches'
   | 'project'
-  | 'plugins';
+  | 'plugins'
+  | 'github';
 
 export type PluginStatus = 'installed' | 'disabled' | 'loading' | 'running' | 'error' | 'update_available' | 'incompatible';
 
@@ -222,3 +223,77 @@ export interface PluginCatalogEntry {
   compatible?: boolean;
   permissions?: PluginPermission[];
 }
+
+// === GitHub Plugin (Этап 4) ===
+
+export interface GitHubRepository {
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  html_url: string | null;
+  description: string | null;
+  updated_at: string | null;
+  permissions?: Record<string, boolean>;
+}
+
+export interface GitHubRepoList {
+  page: number;
+  total_count: number;
+  repositories: GitHubRepository[];
+}
+
+export interface GitHubBranch {
+  name: string;
+  sha: string | null;
+  protected: boolean;
+}
+
+export interface GitHubBranchList {
+  page: number;
+  branches: GitHubBranch[];
+}
+
+export interface GitHubTreeEntry {
+  path: string;
+  type: 'blob' | 'tree' | string;
+  size?: number;
+}
+
+export interface GitHubTree {
+  sha: string;
+  truncated: boolean;
+  tree: GitHubTreeEntry[];
+}
+
+export interface GitHubDirListing {
+  type: 'dir';
+  entries: { name: string; path: string; type: string; size?: number }[];
+}
+
+export interface GitHubFileContent {
+  type: 'file';
+  path: string;
+  size: number;
+  encoding: string;
+  content: string;
+  sha: string;
+}
+
+export interface GitHubConnection {
+  ok: boolean;
+  configured: boolean;
+  app_id_set?: boolean;
+  installation_id_set?: boolean;
+  repositories_total?: number;
+  error?: string;
+}
+
+export interface PluginSecretKeys {
+  plugin: string;
+  secrets: string[];
+}
+
+export type ExecOutcome<T> =
+  | { status: 'done'; result: T }
+  | { status: 'confirmation_required'; confirmation: PluginConfirmation }
+  | { status: 'error'; error: string; code: string };
