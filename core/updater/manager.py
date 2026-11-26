@@ -420,7 +420,18 @@ class UpdateManager:
                 raise UpdateError("Нет операции, требующей восстановления.", "invalid_state")
             backup_ref = journal.get("backup_ref")
             if not backup_ref:
-                raise UpdateError("Резервная копия для восстановления не найдена.", "backup_missing")
+                current_head = _git_ok(["rev-parse", "HEAD"])
+                if current_head == journal.get("remote_head"):
+                    journal["new_head"] = current_head
+                    journal["change_summary"] = journal.get("change_summary") or _read_update_diff(journal["old_head"], current_head)
+                    journal["state"] = "CODE_UPDATED"
+                elif current_head == journal.get("old_head"):
+                    journal["state"] = "FAILED"
+                else:
+                    raise UpdateError("HEAD не совпадает ни с исходной, ни с целевой версией. Нужна ручная диагностика.", "head_unknown", 423)
+                journal.pop("error", None)
+                _save_journal(journal)
+                return {"success": True, "journal": journal}
             if not journal.get("backup_oid"):
                 # Восстановление после аварии между stash push и записью backup_oid в журнал.
                 latest = _git_ok(["rev-parse", "--verify", "refs/stash"])
@@ -432,10 +443,12 @@ class UpdateManager:
                     )
                 journal["backup_oid"] = latest
                 _save_journal(journal)
-                _git_ok(["update-ref", backup_ref, latest])
-                _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
-                journal["backup_verified"] = True
-                _save_journal(journal)
+            backup_exists = _run_git(["cat-file", "-e", backup_ref + "^{commit}"])
+            if not backup_exists["ok"]:
+                _git_ok(["update-ref", backup_ref, journal["backup_oid"]])
+            _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
+            journal["backup_verified"] = True
+            _save_journal(journal)
             if manual_confirmation:
                 journal["local_changes_restored"] = True
                 journal["manual_recovery_ack"] = True
