@@ -116,9 +116,11 @@ def _status_fingerprint():
     """Отпечаток содержимого, а не только списка изменённых путей."""
     digest = hashlib.sha256()
     status = _worktree_status()
-    diff = _git_ok(["diff", "--binary", "HEAD"])
+    staged_diff = _git_ok(["diff", "--cached", "--binary", "HEAD"])
+    unstaged_diff = _git_ok(["diff", "--binary"])
     digest.update(status.encode("utf-8", errors="surrogatepass"))
-    digest.update(diff.encode("utf-8", errors="surrogatepass"))
+    digest.update(staged_diff.encode("utf-8", errors="surrogatepass"))
+    digest.update(unstaged_diff.encode("utf-8", errors="surrogatepass"))
     raw_paths = _git_ok(["ls-files", "--others", "--exclude-standard", "-z"])
     files = [item for item in raw_paths.split("\\0") if item]
     root = os.path.realpath(BASE)
