@@ -14,7 +14,6 @@ import sys
 import threading
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import urlparse
 
 from api.shared import BASE
@@ -267,6 +266,8 @@ class UpdateManager:
                 "incoming_commits": incoming,
                 "blockers": [],
             }
+            if branch != "main" or remote_branch != "main":
+                plan["blockers"].append("Автообновление поддерживается только для main, отслеживающей официальный origin/main.")
             if ahead:
                 plan["blockers"].append("Локальная ветка содержит собственные коммиты (ahead=%s)." % ahead)
             if not behind:
