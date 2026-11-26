@@ -91,10 +91,11 @@ def uninstall():         # перед удалением данных
 | Режим | Поведение |
 |---|---|
 | `auto` | Выполняется немедленно (READ-операции) |
-| `confirm` | Создаётся pending-подтверждение; результат возвращается только после явного подтверждения пользователя (Repos: add/commit/pull/push/fetch/checkout/sync) |
+| `confirm` | Создаётся pending-подтверждение; результат возвращается только после явного подтверждения пользователя (Repos: add/commit/pull/push/fetch/checkout/sync/rebase --continue|--abort) |
 | `critical` | CRITICAL-подтверждение для наиболее опасных операций |
 
-Минимальная политика задаётся ядром и не может быть ослаблена плагином: READ → `auto`, WRITE → не ниже `confirm`, CRITICAL → только `critical`. Repos Plugin предоставляет `repos.sync_preview` как READ/AUTO capability: она возвращает diff и snapshot без изменения рабочего дерева; само выполнение Sync остаётся WRITE/CONFIRM. Плагин вправе запросить более строгую политику. Подтверждения одноразовые (single-use token), привязаны к plugin ID, capability, permission, policy и точным параметрам операции. TTL — 15 минут; повторное использование отклоняется.
+Минимальная политика задаётся ядром и не может быть ослаблена плагином: READ → `auto`, WRITE → не ниже `confirm`, CRITICAL → только `critical`. Repos Plugin предоставляет `repos.sync_preview` как READ/AUTO capability: она возвращает diff и snapshot без изменения рабочего дерева; само выполнение Sync остаётся WRITE/CONFIRM. Восстановление после конфликта rebase: `repos.rebase_state` (READ/AUTO — активен ли rebase, список конфликтных файлов), `repos.rebase_continue` / `repos.rebase_abort` (WRITE/CONFIRM; continue отклоняется, пока конфликты не разрешены). Плагин вправе запросить более строгую политику. Подтверждения одноразовые (single-use token), привязаны к plugin ID, capability, permission, policy и точным параметрам операции. TTL — 15 минут; повторное использование отклоняется.
+Валидация при `register_capability` (с 3.12.5): имя capability уникально (дубликат отклоняется); permission должен быть объявлен в манифесте плагина (иначе регистрация отклоняется); эффективная политика подтверждения вычисляется на момент каждого вызова как максимум объявленной политики и минимальной политики уровня разрешения (READ→`auto`, WRITE→`confirm`, CRITICAL→`critical`); передача confirmation_token в AUTO-capability отклоняется (`unexpected_confirmation`).
 
 ## 7. Разрешения
 

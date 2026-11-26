@@ -16,14 +16,14 @@ from contextlib import contextmanager
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
     'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base',
-    'add', 'commit', 'switch', 'check-ref-format',
+    'add', 'commit', 'switch', 'check-ref-format', 'rebase',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}
 
 DEFAULT_TIMEOUT = 30
 PUSH_TIMEOUT = 120
 REPO_LOCK_TIMEOUT = 30
-MUTATING_GIT_COMMANDS = {'add', 'branch', 'checkout', 'commit', 'fetch', 'pull', 'push', 'remote', 'switch'}
+MUTATING_GIT_COMMANDS = {'add', 'branch', 'checkout', 'commit', 'fetch', 'pull', 'push', 'remote', 'rebase', 'switch'}
 _REPO_LOCKS = {}
 _REPO_LOCKS_GUARD = threading.Lock()
 _REPO_LOCK_LOCAL = threading.local()
@@ -174,8 +174,22 @@ def repo_operation_lock(path, timeout=REPO_LOCK_TIMEOUT):
 
 
 
+def _effective_head(args):
+    """Команда с учётом единственного разрешённого префикса `-c core.editor=:` (rebase --continue)."""
+    if not args:
+        return ''
+    head = str(args[0])
+    if head == '-c':
+        # Единственный разрешённый префикс: `git -c core.editor=: rebase --continue` —
+        # неинтерактивное продолжение rebase без запуска редактора.
+        if len(args) < 3 or str(args[1]) != 'core.editor=:' or str(args[2]) != 'rebase':
+            raise GitCommandRejected('git global option is not allowed')
+        return 'rebase'
+    return head
+
+
 def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):
-    if cwd is not None and args and str(args[0]) in MUTATING_GIT_COMMANDS:
+    if cwd is not None and _effective_head(args) in MUTATING_GIT_COMMANDS:
         with repo_operation_lock(cwd):
             return _run_git_unlocked(args, cwd=cwd, timeout=timeout)
     return _run_git_unlocked(args, cwd=cwd, timeout=timeout)
@@ -187,7 +201,7 @@ def _run_git_unlocked(args, cwd=None, timeout=DEFAULT_TIMEOUT):
         raise GitUnavailable('Git CLI не установлен. Установите git — локальные операции с репозиториями недоступны.')
     if not args:
         raise GitCommandRejected('empty git command')
-    head = str(args[0])
+    head = _effective_head(args)
     if head not in GIT_COMMANDS and head not in GIT_GLOBAL_FLAGS:
         raise GitCommandRejected('git command not allowed: %r' % head)
     if cwd is not None:

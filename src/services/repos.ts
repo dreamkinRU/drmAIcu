@@ -120,6 +120,18 @@ export const reposSyncPreview = (path: string) =>
 export const reposSync = (path: string, message: string, snapshot: string, token?: string) =>
   execCapability<RepoSyncResult>('repos.sync', { path, message, snapshot }, token);
 
+/** Состояние незавершённого rebase и конфликтующие файлы (READ). */
+export const reposRebaseState = (path: string) =>
+  execCapability<{ ok: boolean; active: boolean; conflicts: string[] }>('repos.rebase_state', { path });
+
+/** Продолжить rebase после ручного разрешения конфликтов (WRITE, с подтверждением). */
+export const reposRebaseContinue = (path: string, token?: string) =>
+  execCapability<SimpleGitResult>('repos.rebase_continue', { path }, token);
+
+/** Отменить незавершённый rebase (WRITE, с подтверждением). */
+export const reposRebaseAbort = (path: string, token?: string) =>
+  execCapability<SimpleGitResult>('repos.rebase_abort', { path }, token);
+
 /** PUT настроек плагина (путь репозитория по умолчанию). */
 export async function putRepoSettings(
   settings: Record<string, string | number | boolean>,

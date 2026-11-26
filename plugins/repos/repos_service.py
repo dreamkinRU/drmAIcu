@@ -569,6 +569,53 @@ def _sanitize_remote_url(value):
         return '[remote URL скрыт]'
 
 
+def repo_rebase_state(path):
+    """Диагностика активного rebase и конфликтующих файлов."""
+    validate(path)
+    merge = _r(['rev-parse', '--git-path', 'rebase-merge'], path)
+    apply = _r(['rev-parse', '--git-path', 'rebase-apply'], path)
+    candidates = []
+    for result in (merge, apply):
+        if result.get('ok') and result.get('stdout', '').strip():
+            candidate = result['stdout'].strip()
+            if not os.path.isabs(candidate):
+                candidate = os.path.join(path, candidate)
+            candidates.append(candidate)
+    active = any(os.path.isdir(p) for p in candidates)
+    if not active:
+        return {'ok': True, 'active': False, 'conflicts': []}
+    unmerged = _r(['diff', '--name-only', '--diff-filter=U'], path)
+    return {'ok': True, 'active': True,
+            'conflicts': unmerged.get('stdout', '').splitlines() if unmerged.get('ok') else []}
+
+
+def repo_rebase_continue(path):
+    """Продолжить rebase после ручного разрешения конфликтов (WRITE, с подтверждением)."""
+    validate(path)
+    state = repo_rebase_state(path)
+    if not state.get('active'):
+        return {'ok': False, 'error': 'активный rebase не найден. Путь исправления: проверьте репозиторий — операция нужна только после конфликта при pull --rebase.'}
+    if state.get('conflicts'):
+        return {'ok': False, 'error': 'остались неразрешённые конфликты. Путь исправления: исправьте конфликты в перечисленных файлах, затем выполните git add -A (кнопка add -A) и повторите «rebase --continue».', 'conflicts': state['conflicts']}
+    result = _r(['-c', 'core.editor=:', 'rebase', '--continue'], path,
+                timeout=git_service.PUSH_TIMEOUT)
+    if not result['ok']:
+        return {'ok': False, 'error': (result['stderr'] or result['stdout'] or 'rebase --continue failed')[-1500:]}
+    return {'ok': True, 'output': (result['stdout'] or result['stderr'])[-1500:]}
+
+
+def repo_rebase_abort(path):
+    """Отменить незавершённый rebase и вернуть репозиторий в состояние до pull (WRITE, с подтверждением)."""
+    validate(path)
+    state = repo_rebase_state(path)
+    if not state.get('active'):
+        return {'ok': False, 'error': 'активный rebase не найден. Путь исправления: отмена не требуется — репозиторий не в состоянии rebase.'}
+    result = _r(['rebase', '--abort'], path, timeout=git_service.PUSH_TIMEOUT)
+    if not result['ok']:
+        return {'ok': False, 'error': (result['stderr'] or result['stdout'] or 'rebase --abort failed')[-1500:]}
+    return {'ok': True, 'output': (result['stdout'] or result['stderr'])[-1500:]}
+
+
 def validate(path):
     git_service.validate_repo_path(path)
 
