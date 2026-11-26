@@ -136,12 +136,12 @@ def test_check_fingerprint_detects_index_only_change(git_fixture):
     # Меняем только blob в индексе, сохраняя то же содержимое рабочего файла.
     app.write_text("index version B\n", encoding="utf-8")
     _git(work, "add", "app.txt")
-    app.write_text("working tree version\\n", encoding="utf-8")
+    app.write_text("working tree version\n", encoding="utf-8")
 
     with pytest.raises(updater.UpdateError) as error:
         updater.manager.apply(plan["id"])
     assert error.value.code == "working_tree_changed"
-    assert app.read_text(encoding="utf-8") == "working tree version\\n"
+    assert app.read_text(encoding="utf-8") == "working tree version\n"
 
 
 def test_recovery_journal_rejects_orphan_temp_file(git_fixture):
@@ -154,7 +154,7 @@ def test_recovery_journal_rejects_orphan_temp_file(git_fixture):
 
 def test_new_check_cannot_overwrite_pending_restore(git_fixture):
     work = git_fixture
-    (work / "local.txt").write_text("keep me\\n", encoding="utf-8")
+    (work / "local.txt").write_text("keep me\n", encoding="utf-8")
     plan = updater.manager.check()["plan"]
     applied = updater.manager.apply(plan["id"])["journal"]
     backup_ref = applied["backup_ref"]
