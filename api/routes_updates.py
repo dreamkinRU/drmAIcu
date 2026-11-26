@@ -25,9 +25,12 @@ def _check_local_browser_request(request: Request, require_origin=True):
         try:
             parsed = urlparse(origin)
             host = parsed.hostname
-            origin_ip = ipaddress.ip_address(host) if host else None
         except (ValueError, TypeError):
             raise UpdateError("Некорректный Origin.", "origin_rejected", 403)
+        try:
+            origin_ip = ipaddress.ip_address(host) if host else None
+        except ValueError:
+            origin_ip = None
         allowed_name = host in ("localhost", "127.0.0.1", "::1")
         allowed_ip = bool(origin_ip and origin_ip.is_loopback)
         if parsed.scheme != "http" or not (allowed_name or allowed_ip):
