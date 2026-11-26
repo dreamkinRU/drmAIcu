@@ -106,16 +106,19 @@ def test_path_shown_after_heading_no_pathbar():
     assert '{repoPath}' in src, 'путь не отображается под заголовком'
 
 
-# ==== 4. Диалог подтверждения перед sync при локальных изменениях ====
+# ==== 4. Диалог перед sync при локальных изменениях ====
+# С PR #44 это «Sync diff preview»: перед sync показывается полный diff изменённых
+# файлов и подтверждение WRITE (этапы: Предпросмотр → Перейти к подтверждению → approve).
+# Остаточная модалка syncConfirm из 3.12.4 удалена как дублирующая (приводила к TS2304 в CI).
 
 def test_sync_confirm_dialog_contract():
     src = _read(REPOS_TAB)
-    assert 'syncConfirm' in src, 'нет состояния диалога подтверждения синхронизации'
-    assert "status.entries.length > 0 ? setSyncConfirm(true) : runSync()" in src, \
-        'кнопка «Синхронизировать» должна открывать диалог только при наличии изменений'
-    assert 'Продолжить' in src and 'Отмена' in src, 'в диалоге должны быть кнопки Продолжить/Отмена'
-    assert 'git add -A' in src, 'в диалоге должен быть показан план операций'
-    assert '!commitMsg.trim()' in src, 'Продолжить должно быть заблокировано при пустом сообщении'
+    assert 'syncConfirm' not in src, 'остаточная модалка syncConfirm должна быть удалена (функцию выполняет Sync diff preview)'
+    assert 'prepareSync' in src and 'reposSyncPreview' in src, 'перед sync должен показываться preview diff'
+    assert 'requestSyncConfirmation' in src, 'после preview нужно явное подтверждение WRITE'
+    assert 'syncPreview.changed && !commitMsg.trim()' in src, \
+        'при наличии изменений пустое сообщение коммита должно блокировать sync (как в sync.bat)'
+    assert 'executeSync(syncPreview.snapshot' in src, 'sync выполняется по snapshot, снятому на этапе preview'
 
 
 # ==== 5. Блок ошибки синхронизации с путём исправления ====

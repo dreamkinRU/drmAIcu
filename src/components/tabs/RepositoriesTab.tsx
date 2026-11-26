@@ -396,47 +396,6 @@ function OverviewSection({
     <div className="space-y-4">
       {pending && <ConfirmationBar pending={pending} busy={busy} clear={() => setPending(null)} />}
 
-      {/* Диалог перед синхронизацией, если есть незакоммиченные изменения:
-          sync закоммитит и запушит их — пользователь должен подтвердить это до начала. */}
-      {syncConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setSyncConfirm(false)}>
-          <div
-            className="w-full max-w-lg rounded-xl border border-amber-500/40 bg-gray-900 shadow-2xl p-5 space-y-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-amber-300">⚠ Синхронизация с локальными изменениями</h3>
-            <p className="text-sm text-gray-300">
-              В репозитории{' '}
-              <span className="font-mono text-xs text-gray-400 break-all">{repoPath}</span>{' '}
-              есть <span className="text-amber-300 font-semibold">{status.entries.length}</span> незакоммиченных файлов. Будет выполнено:
-            </p>
-            <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-3 text-xs font-mono text-gray-300 space-y-1">
-              <div>1. git add -A</div>
-              <div>2. git commit «{commitMsg.trim() || <span className="text-red-400">(пустое сообщение — sync будет отклонён)</span>}»</div>
-              <div>3. git pull --rebase</div>
-              <div>4. git push</div>
-            </div>
-            <p className="text-xs text-gray-500">
-              Изменения будут закоммичены и отправлены в удалённый репозиторий. Пустое сообщение коммита отклоняется (как в sync.bat).
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setSyncConfirm(false)}
-                className="px-4 py-2 rounded-lg text-sm border border-gray-700 text-gray-300 hover:border-gray-500"
-              >
-                Отмена
-              </button>
-              <button
-                disabled={busy || !commitMsg.trim()}
-                onClick={() => { setSyncConfirm(false); runSync(); }}
-                className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/70 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
-              >
-                Продолжить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">🔄 Синхронизация (замена sync.bat)</h3>
