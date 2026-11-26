@@ -1,5 +1,6 @@
 import {
   ExecOutcome,
+  RepoPatchStatus,
   PluginConfirmation,
   ReposDiagnostics,
   RepoBranches,
@@ -120,6 +121,10 @@ export const reposSyncPreview = (path: string) =>
 
 export const reposSync = (path: string, message: string, snapshot: string, token?: string) =>
   execCapability<RepoSyncResult>('repos.sync', { path, message, snapshot }, token);
+
+/** PATCHMASTER-мост (только чтение): патчи, crash-журнал, несинхронизированные файлы патчей. */
+export const reposPatchStatus = (path: string) =>
+  execCapability<RepoPatchStatus>('repos.patch_status', { path });
 
 /** Последний результат Sync (персистентно в state плагина — переживает обновление страницы). */
 export const reposLastSync = (path: string) =>
