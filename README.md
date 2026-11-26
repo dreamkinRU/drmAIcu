@@ -68,6 +68,7 @@ python -m pytest tests -v
 - Формат патчей — см. раздел PATCHMASTER в [docs/USER_GUIDE.md](docs/USER_GUIDE.md) и живой пример `patch/143.json`
 - [docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md) — описание системы плагинов
 - [docs/PLUGIN_API_CONTRACT.md](docs/PLUGIN_API_CONTRACT.md) — контракт Plugin API для разработчиков
+- [docs/UPDATE_MANAGER.md](docs/UPDATE_MANAGER.md) — трёхэтапное безопасное обновление приложения
 
 Вся документация собрана в `docs/`, в корне — только этот README.md.
 
