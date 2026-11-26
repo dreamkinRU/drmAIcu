@@ -340,7 +340,18 @@ class UpdateManager:
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
             except Exception as exc:
-                journal["state"] = "RECOVERY_REQUIRED" if journal.get("backup_ref") else "FAILED"
+                backup_created = bool(journal.get("backup_oid"))
+                if journal.get("backup_ref") and not backup_created:
+                    latest = _run_git(["rev-parse", "--verify", "refs/stash"])
+                    if latest.get("ok"):
+                        subject = _run_git(["log", "-1", "--format=%s", latest["stdout"].strip()])
+                        backup_created = subject.get("ok") and subject["stdout"].rstrip("\\r\\n") == journal.get("backup_message")
+                if not backup_created:
+                    journal.pop("backup_ref", None)
+                    journal.pop("backup_message", None)
+                    journal["state"] = "FAILED"
+                else:
+                    journal["state"] = "RECOVERY_REQUIRED"
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise
