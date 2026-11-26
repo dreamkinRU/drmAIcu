@@ -1,5 +1,6 @@
 import os
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -149,3 +150,39 @@ def test_recovery_journal_rejects_orphan_temp_file(git_fixture):
     with pytest.raises(updater.UpdateError) as error:
         updater.manager.state()
     assert error.value.code == "journal_temp_orphan"
+
+
+def test_new_check_cannot_overwrite_pending_restore(git_fixture):
+    work = git_fixture
+    (work / "local.txt").write_text("keep me\\n", encoding="utf-8")
+    plan = updater.manager.check()["plan"]
+    applied = updater.manager.apply(plan["id"])["journal"]
+    backup_ref = applied["backup_ref"]
+
+    with pytest.raises(updater.UpdateError) as error:
+        updater.manager.check()
+    assert error.value.code == "operation_incomplete"
+    assert updater.manager.state()["journal"]["backup_ref"] == backup_ref
+
+
+def test_git_command_uses_fixed_protocol_allowlist_and_shell_false(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(updater, "BASE", "/tmp/drmaicu-test-repo")
+
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+        captured["kwargs"] = kwargs
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(updater.subprocess, "run", fake_run)
+    result = updater._run_git(["status"])
+
+    assert result["ok"] is True
+    assert captured["argv"] == [
+        "git", "-C", "/tmp/drmaicu-test-repo",
+        "-c", "protocol.ext.allow=never",
+        "-c", "protocol.file.allow=never",
+        "status",
+    ]
+    assert captured["kwargs"]["shell"] is False
+    assert captured["kwargs"]["env"]["GIT_ALLOW_PROTOCOL"] == "https"
