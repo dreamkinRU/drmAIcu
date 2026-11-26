@@ -252,7 +252,9 @@ def _repo_patch_status_locked(path):
                                  if isinstance(st, dict) and st.get('tgt')]}
 
     journal_lock_reason = str(getattr(pe, 'JOURNAL_LOCK', '') or '')
-    engine_blocked = bool(getattr(pe, 'MANIFEST_LOCK', '') or journal_lock_reason)
+    if journal is not None and not journal_lock_reason:
+        journal_lock_reason = 'незавершённая транзакция требует recover_journal()'
+    engine_blocked = bool(getattr(pe, 'MANIFEST_LOCK', '') or journal_lock_reason or journal is not None)
 
     # Файлы патчей, ещё не закоммиченные в ЭТОМ репозитории (только если
     # path — корень drmAIcu: патчи применяются к самому проекту).
