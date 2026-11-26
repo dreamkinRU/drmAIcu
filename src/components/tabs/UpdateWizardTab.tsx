@@ -191,9 +191,14 @@ export default function UpdateWizardTab() {
             }} className="px-4 py-2 rounded-lg text-sm border border-amber-400/50 text-amber-200 hover:bg-amber-500/10 disabled:opacity-40">Я вручную восстановил и проверил локальные изменения</button>
           </div>
         )}
-        {journal?.restart_required && state === 'COMPLETED' && (
+        {journal?.restart_required && state === 'RESTART_REQUIRED' && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
             Изменён Python-код. Для загрузки новой версии требуется перезапустить drmAIcu. Перезапуск не выполняется автоматически, чтобы не прервать показ результата мастера.
+          </div>
+        )}
+        {journal?.restart_verified_at && (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-200">
+            Перезапуск подтверждён: новый процесс drmAIcu запущен, API отвечает. {journal.restart_verified_at}
           </div>
         )}
         {journal?.environment_steps?.map((item: any) => (
