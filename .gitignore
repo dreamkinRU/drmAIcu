@@ -14,32 +14,32 @@ venv/
 .venv/
 env/
 
-# === IDE и ОС ===
+# === IDE ГЁ ГЋГ‘ ===
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# === Чувствительные данные и конфиги ===
+# === Г—ГіГўГ±ГІГўГЁГІГҐГ«ГјГ­Г»ГҐ Г¤Г Г­Г­Г»ГҐ ГЁ ГЄГ®Г­ГґГЁГЈГЁ ===
 settings.json
 config.json
 .env
 *.pem
 *.key
 
-# === Временные файлы и логи ===
+# === Г‚Г°ГҐГ¬ГҐГ­Г­Г»ГҐ ГґГ Г©Г«Г» ГЁ Г«Г®ГЈГЁ ===
 *.log
 report.txt
 diag.bat
 !patch_system.txt
 
-# === Локальные бэкапы и архивы (не нужны в Git) ===
+# === Г‹Г®ГЄГ Г«ГјГ­Г»ГҐ ГЎГЅГЄГ ГЇГ» ГЁ Г Г°ГµГЁГўГ» (Г­ГҐ Г­ГіГ¦Г­Г» Гў Git) ===
 backups/
 project_archive/
 patch/archive/
 
-# === Устаревшие файлы-дубликаты (из твоего списка) ===
+# === Г“Г±ГІГ Г°ГҐГўГёГЁГҐ ГґГ Г©Г«Г»-Г¤ГіГЎГ«ГЁГЄГ ГІГ» (ГЁГ§ ГІГўГ®ГҐГЈГ® Г±ГЇГЁГ±ГЄГ ) ===
 main_v*.py
 public/main*.py
 public/*.html
@@ -54,4 +54,5 @@ restart.flag
 
 # === Plugin System runtime (secrets, registry, journal) ===
 data/plugins/
+data/updater/
 .pytest_atomicio_tmp/
