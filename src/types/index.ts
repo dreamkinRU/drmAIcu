@@ -306,6 +306,22 @@ export interface ReposDiagnostics {
   version: string | null;
 }
 
+export interface RepoSyncPreview {
+  ok: boolean;
+  path: string;
+  branch: string;
+  upstream: string;
+  snapshot: string;
+  snapshot_files: string[];
+  changed: boolean;
+  stat: string;
+  diff: string;
+  truncated: boolean;
+  omitted_files: Array<{ path: string; reason: string }>;
+  complete: boolean;
+  error?: string;
+}
+
 export interface RepoSyncStep {
   step: string;
   ok?: boolean;

@@ -12,11 +12,13 @@ import os
 import stat
 import hashlib
 import ntpath
+import difflib
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from . import git_service
 
 READ_FILE_MAX_BYTES = 512_000
+SYNC_PREVIEW_MAX_CHARS = 1_000_000
 LOG_LIMIT_MAX = 200
 
 
@@ -204,6 +206,120 @@ def repo_remote(path):
             seen.add(parts[0])
             remotes.append({'name': parts[0], 'url': _sanitize_remote_url(parts[1])})
     return {'ok': True, 'remotes': remotes}
+
+
+def repo_sync_preview(path):
+    """Возвращает полный review diff и snapshot, не изменяя Git index/worktree."""
+    with git_service.repo_operation_lock(path):
+        return _repo_sync_preview_locked(path)
+
+
+def _repo_sync_preview_locked(path):
+    status = _repo_status_locked(path)
+    if not status.get('ok'):
+        return status
+
+    tracked = _r([
+        'diff', '--no-ext-diff', '--no-textconv', '--no-color',
+        '--binary', '--full-index', 'HEAD', '--',
+    ], path)
+    if not tracked.get('ok'):
+        return {'ok': False, 'error': tracked.get('stderr', '').strip() or 'cannot build tracked diff'}
+
+    untracked_result = _r(['ls-files', '--others', '--exclude-standard', '-z'], path)
+    if not untracked_result.get('ok'):
+        return {'ok': False, 'error': untracked_result.get('stderr', '').strip() or 'cannot list untracked files'}
+
+    diff_text = tracked.get('stdout', '')
+    truncated = len(diff_text) > SYNC_PREVIEW_MAX_CHARS
+    if truncated:
+        diff_text = diff_text[:SYNC_PREVIEW_MAX_CHARS]
+    omitted = []
+    root = os.path.realpath(path)
+
+    def append_chunk(chunk):
+        nonlocal diff_text, truncated
+        remaining = SYNC_PREVIEW_MAX_CHARS - len(diff_text)
+        if remaining <= 0:
+            truncated = True
+            return False
+        if len(chunk) > remaining:
+            diff_text += chunk[:remaining]
+            truncated = True
+            return False
+        diff_text += chunk
+        return True
+
+    for rel in sorted(item for item in untracked_result['stdout'].split('\0') if item):
+        if truncated:
+            break
+        if (rel.startswith('/') or '\\' in rel or ntpath.splitdrive(rel)[0]
+                or any(part in ('', '.', '..') for part in rel.split('/'))):
+            return {'ok': False, 'error': 'unsafe untracked path returned by Git'}
+        full = os.path.join(root, *rel.split('/'))
+        try:
+            info = os.lstat(full)
+            reparse = bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400))
+            if stat.S_ISLNK(info.st_mode) or reparse:
+                target = os.readlink(full)
+                if not append_chunk(
+                    'diff --git a/%s b/%s\nnew file mode 120000\n--- /dev/null\n+++ b/%s\n+%s\n'
+                    % (rel, rel, rel, target)
+                ):
+                    break
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                omitted.append({'path': rel, 'reason': 'тип файла не поддерживается для текстового preview'})
+                continue
+        except FileNotFoundError:
+            omitted.append({'path': rel, 'reason': 'файл исчез во время построения preview'})
+            continue
+        except OSError as e:
+            omitted.append({'path': rel, 'reason': 'не удалось проверить файл: %s' % e})
+            continue
+
+        content = read_file(path, rel)
+        if not content.get('ok'):
+            omitted.append({'path': rel, 'reason': content.get('error', 'файл не прочитан')})
+            continue
+        text = content.get('content', '')
+        if '\0' in text:
+            if not append_chunk(
+                'diff --git a/%s b/%s\nnew file mode 100644\nBinary file omitted from text preview\n'
+                % (rel, rel)
+            ):
+                break
+            omitted.append({'path': rel, 'reason': 'binary file'})
+            continue
+        lines = text.splitlines(keepends=True)
+        patch = ''.join(difflib.unified_diff(
+            [], lines, fromfile='/dev/null', tofile='b/' + rel,
+        ))
+        if not append_chunk('diff --git a/%s b/%s\nnew file mode 100644\n%s' % (rel, rel, patch)):
+            break
+
+    stat_result = _r(['diff', '--stat', 'HEAD', '--'], path)
+    final_snapshot = repo_sync_snapshot(path)
+    if not final_snapshot.get('ok') or final_snapshot.get('snapshot') != status.get('snapshot'):
+        return {
+            'ok': False,
+            'error': 'репозиторий изменился во время построения diff preview. Обновите preview и повторите.',
+            'snapshot_changed': True,
+        }
+    return {
+        'ok': True,
+        'path': path,
+        'branch': status.get('branch', ''),
+        'upstream': status.get('upstream', ''),
+        'snapshot': status['snapshot'],
+        'snapshot_files': status['snapshot_files'],
+        'changed': status.get('changed', False),
+        'stat': stat_result.get('stdout', '').strip() if stat_result.get('ok') else '',
+        'diff': diff_text,
+        'truncated': truncated,
+        'omitted_files': omitted,
+        'complete': not truncated and not omitted,
+    }
 
 
 def repo_diff(path, staged=False):

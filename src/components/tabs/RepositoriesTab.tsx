@@ -8,6 +8,7 @@ import type { LogEntry, PluginInfo,
   RepoLog,
   RepoStatus,
   RepoSyncResult,
+  RepoSyncPreview,
   SimpleGitResult,
 } from '../../types';
 import { nowStr, withFixHint } from '../../utils/logHelpers';
@@ -27,6 +28,7 @@ import {
   reposRemote,
   reposStatus,
   reposSync,
+  reposSyncPreview,
   REPOS_PLUGIN_ID,
 } from '../../services/repos';
 
@@ -299,28 +301,53 @@ function OverviewSection({
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ label: string; cid: string; run: (token: string) => void } | null>(null);
   const [syncResult, setSyncResult] = useState<RepoSyncResult | null>(null);
+  const [syncPreview, setSyncPreview] = useState<RepoSyncPreview | null>(null);
+  const [previewAcknowledged, setPreviewAcknowledged] = useState(false);
   const [fileRel, setFileRel] = useState('');
   const [fileView, setFileView] = useState<RepoFileContent | null>(null);
 
-  const runSync = async (token?: string) => {
+  const prepareSync = async () => {
     setBusy(true);
-    const r = await reposSync(repoPath, commitMsg, status.snapshot, token);
+    setSyncPreview(null);
+    setPreviewAcknowledged(false);
+    setPending(null);
+    const r = await reposSyncPreview(repoPath);
+    setBusy(false);
+    if (r.status === 'done' && r.result.ok) {
+      setSyncPreview(r.result);
+      setPreviewAcknowledged(r.result.complete);
+      setSyncResult(null);
+      return;
+    }
+    setNotice({
+      kind: 'err',
+      text: r.status === 'error' ? r.error : (r.status === 'done' ? (r.result.error || 'не удалось построить diff') : 'не удалось построить preview Sync'),
+    });
+  };
+
+  const executeSync = async (snapshot: string, message: string, token?: string) => {
+    setBusy(true);
+    const r = await reposSync(repoPath, message, snapshot, token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      const cid = r.confirmation.id;
+      const files = syncPreview?.snapshot_files ?? [];
       setPending({
-        label: `Sync ${repoPath}: ${status.branch} → ${status.upstream || `origin/${status.branch}`}; ${status.snapshot_files.length} файл(ов) — ${status.snapshot_files.slice(0, 8).join(', ')}${status.snapshot_files.length > 8 ? ` и ещё ${status.snapshot_files.length - 8}` : ''}. add -A → commit → pull --rebase → push`,
-        cid,
-        run: t => runSync(t),
+        label: 'Sync ' + repoPath + ': ' + (syncPreview?.branch || status.branch) + ' → ' +
+          (syncPreview?.upstream || status.upstream || ('origin/' + status.branch)) +
+          '; ' + files.length + ' файл(ов). Commit: ' + (message || 'без нового коммита') + '. Diff просмотрен; add -A → commit → pull --rebase → push',
+        cid: r.confirmation.id,
+        run: t => { void executeSync(snapshot, message, t); },
       });
       return;
     }
     if (r.status === 'done') {
       setSyncResult(r.result);
+      setSyncPreview(null);
+      setPreviewAcknowledged(false);
       if (r.result.ok) {
         setNotice({ kind: 'ok', text: r.result.committed
-          ? `синхронизировано: commit ${r.result.commit_sha || ''} доведён до ${r.result.head}`
-          : `синхронизировано без нового коммита, HEAD: ${r.result.head}` });
+          ? 'синхронизировано: commit ' + (r.result.commit_sha || '') + ' доведён до ' + r.result.head
+          : 'синхронизировано без нового коммита, HEAD: ' + r.result.head });
       } else {
         setNotice({ kind: 'err', text: r.result.error || 'синхронизация не завершена' });
       }
@@ -332,13 +359,23 @@ function OverviewSection({
     }
   };
 
+  const requestSyncConfirmation = () => {
+    if (!syncPreview) return;
+    if (syncPreview.changed && !commitMsg.trim()) {
+      setNotice({ kind: 'err', text: 'есть изменения — перед Sync укажите сообщение коммита' });
+      return;
+    }
+    if (!syncPreview.complete && !previewAcknowledged) return;
+    void executeSync(syncPreview.snapshot, commitMsg);
+  };
+
   const runWrite = async (label: string, call: (token?: string) => ReturnType<typeof reposFetch>, token?: string) => {
     setBusy(true);
     const r = await call(token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
       setPending({
-        label: `${label} ${repoPath} (WRITE — подтвердите)`,
+        label: label + ' ' + repoPath + ' (WRITE — подтвердите)',
         cid: r.confirmation.id,
         run: t => { void runWrite(label, call, t); },
       });
@@ -346,13 +383,13 @@ function OverviewSection({
     }
     if (r.status === 'done') {
       const res = r.result as SimpleGitResult;
-      if (res.ok) setNotice({ kind: 'ok', text: `${label}: OK${res.output ? ' — ' + res.output.split('\n')[0] : ''}` });
-      else setNotice({ kind: 'err', text: res.error || `${label}: ошибка` });
+      if (res.ok) setNotice({ kind: 'ok', text: label + ': OK' + (res.output ? ' — ' + res.output.split('\n')[0] : '') });
+      else setNotice({ kind: 'err', text: res.error || (label + ': ошибка') });
       reload();
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
     } else {
-      setNotice({ kind: 'err', text: `${label}: сервер вернул неожиданный статус` });
+      setNotice({ kind: 'err', text: label + ': сервер вернул неожиданный статус' });
     }
   };
 
@@ -376,20 +413,99 @@ function OverviewSection({
           <input
             value={commitMsg}
             onChange={e => setCommitMsg(e.target.value)}
-            placeholder="Сообщение коммита (если есть изменения — обязательно, как в sync.bat)"
-            className="flex-1 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-cyan-500/60"
+            disabled={busy || !!pending}
+            placeholder="Сообщение коммита (если есть изменения — обязательно)"
+            className="flex-1 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-cyan-500/60 disabled:opacity-50"
           />
           <button
-            disabled={busy}
-            onClick={() => runSync()}
+            disabled={busy || !!pending}
+            onClick={prepareSync}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/70 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
           >
-            Синхронизировать
+            {syncPreview ? 'Обновить preview' : 'Предпросмотр Sync'}
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          add -A → commit (если есть изменения) → pull --rebase → push → проверка merged PR. Одно подтверждение WRITE на весь пакет.
+          Сначала показывается diff всех staged, unstaged и новых файлов. Никакие файлы не индексируются и не коммитятся до отдельного подтверждения WRITE.
         </p>
+
+        {syncPreview && (
+          <div className="rounded-lg border border-gray-700 bg-gray-950/70 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-xs text-gray-300">
+                <span className="font-mono text-cyan-300">{syncPreview.branch || '—'}</span>
+                {syncPreview.upstream ? <span className="text-gray-500"> → {syncPreview.upstream}</span> : null}
+                <span className="text-gray-500"> · {syncPreview.snapshot_files.length} файл(ов)</span>
+              </div>
+              <span className={syncPreview.complete ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-300'}>
+                {syncPreview.complete ? 'Preview полный' : 'Preview неполный'}
+              </span>
+            </div>
+
+            {syncPreview.snapshot_files.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-400 font-semibold">Файлы, которые попадут в Sync</p>
+                {syncPreview.snapshot_files.map(file => (
+                  <div key={file} className="font-mono text-xs text-gray-300 break-all">{file}</div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">Изменённых файлов нет. Sync выполнит только pull --rebase → push.</p>
+            )}
+
+            {syncPreview.stat && <p className="text-xs text-gray-500 whitespace-pre-wrap">{syncPreview.stat}</p>}
+            {syncPreview.truncated && <p className="text-xs text-amber-300">Diff обрезан по лимиту 1 000 000 символов. Перед продолжением требуется явное подтверждение.</p>}
+            <div>
+              <p className="text-xs text-gray-400 font-semibold mb-2">Полный diff (staged + unstaged + untracked)</p>
+              {syncPreview.diff ? (
+                <pre className="max-h-[32rem] overflow-auto rounded-lg border border-gray-800 bg-black/40 p-3 text-xs text-gray-200 whitespace-pre-wrap break-words">{syncPreview.diff}</pre>
+              ) : (
+                <p className="text-xs text-gray-500">Diff пуст.</p>
+              )}
+            </div>
+
+            {syncPreview.omitted_files.length > 0 && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1">
+                <p className="text-xs font-semibold text-amber-300">Некоторые файлы нельзя показать полностью</p>
+                {syncPreview.omitted_files.map(item => (
+                  <p key={item.path} className="text-xs text-amber-200/80 break-all">
+                    <span className="font-mono">{item.path}</span> — {item.reason}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {!syncPreview.complete && (
+              <label className="flex items-start gap-2 text-xs text-amber-200">
+                <input
+                  type="checkbox"
+                  checked={previewAcknowledged}
+                  onChange={e => setPreviewAcknowledged(e.target.checked)}
+                  className="mt-0.5"
+                />
+                Я понимаю, что часть preview ограничена или не отображается, и всё равно хочу продолжить
+              </label>
+            )}
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}
+                onClick={requestSyncConfirmation}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/60 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40"
+              >
+                Перейти к подтверждению WRITE
+              </button>
+              <button
+                disabled={busy || !!pending}
+                onClick={() => { setSyncPreview(null); setPreviewAcknowledged(false); }}
+                className="px-3 py-2 rounded-lg text-sm border border-gray-700 text-gray-400 hover:border-gray-500 disabled:opacity-40"
+              >
+                Закрыть preview
+              </button>
+            </div>
+          </div>
+        )}
+
         {syncResult && (
           <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-3 text-xs font-mono space-y-1">
             {syncResult.steps.map((s, i) => (

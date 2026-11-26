@@ -118,3 +118,13 @@ def test_changes_section_lists_repo_files():
         'Кнопка «Обновить» в разделе «Изменения» не подключена. Путь исправления: '
         'ChangesSection должен вызывать load() + reload() (RepositoriesTab.tsx).'
     )
+
+
+def test_sync_overview_requires_preview_before_write_confirmation():
+    src = _read(REPOS_TAB)
+    assert 'reposSyncPreview(repoPath)' in src
+    assert 'Полный diff (staged + unstaged + untracked)' in src
+    assert 'Перейти к подтверждению WRITE' in src
+    assert 'syncPreview.complete' in src
+    assert 'syncPreview.truncated' in src
+    assert 'onClick={() => runSync()}' not in src

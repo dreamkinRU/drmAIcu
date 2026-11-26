@@ -270,3 +270,103 @@ def test_read_file_rejects_symlink_parent_escape(tmp_path):
 
     result = repos_service.read_file(repo, 'linked-dir/secret.txt')
     assert result['ok'] is False
+
+
+def test_sync_preview_contains_staged_unstaged_and_untracked_without_mutating_index(tmp_path):
+    from plugins.repos import repos_service
+
+    repo = make_repo(str(tmp_path / 'repo'))
+    readme = os.path.join(repo, 'README.md')
+    with open(readme, 'w', encoding='utf-8') as f:
+        f.write('inside\nstaged line\n')
+    subprocess.run(['git', 'add', 'README.md'], cwd=repo, check=True, capture_output=True)
+    with open(readme, 'a', encoding='utf-8') as f:
+        f.write('unstaged line\n')
+    new_file = os.path.join(repo, 'new-file.txt')
+    with open(new_file, 'w', encoding='utf-8') as f:
+        f.write('untracked line\n')
+
+    status = repos_service.repo_status(repo)
+    index_path = subprocess.run(
+        ['git', 'rev-parse', '--git-path', 'index'], cwd=repo,
+        check=True, capture_output=True, text=True, encoding='utf-8',
+    ).stdout.strip()
+    if not os.path.isabs(index_path):
+        index_path = os.path.join(repo, index_path)
+    with open(index_path, 'rb') as f:
+        index_before = f.read()
+
+    preview = repos_service.repo_sync_preview(repo)
+    with open(index_path, 'rb') as f:
+        index_after = f.read()
+
+    assert preview['ok'] is True
+    assert preview['snapshot'] == status['snapshot']
+    assert preview['complete'] is True
+    assert 'staged line' in preview['diff']
+    assert 'unstaged line' in preview['diff']
+    assert 'untracked line' in preview['diff']
+    assert 'new-file.txt' in preview['snapshot_files']
+    assert index_after == index_before
+
+
+def test_sync_preview_marks_binary_and_oversized_untracked_files_incomplete(tmp_path):
+    from plugins.repos import repos_service
+
+    repo = make_repo(str(tmp_path / 'repo'))
+    with open(os.path.join(repo, 'binary.bin'), 'wb') as f:
+        f.write(b'\x00\x01\x02')
+    with open(os.path.join(repo, 'large.txt'), 'w', encoding='utf-8') as f:
+        f.write('x' * (repos_service.READ_FILE_MAX_BYTES + 1))
+
+    preview = repos_service.repo_sync_preview(repo)
+    assert preview['ok'] is True
+    assert preview['complete'] is False
+    omitted = {item['path'] for item in preview['omitted_files']}
+    assert 'binary.bin' in omitted
+    assert 'large.txt' in omitted
+
+
+def test_sync_preview_capability_is_read_only_auto(monkeypatch):
+    from plugins.repos import plugin as repos_plugin
+
+    previous_context = repos_plugin._STATE.get('ctx')
+    registered = {}
+
+    class Context:
+        def register_capability(self, name, permission, handler, confirmation, description=''):
+            registered[name] = {
+                'permission': permission,
+                'confirmation': confirmation,
+                'handler': handler,
+            }
+
+    try:
+        assert repos_plugin.initialize(Context()) is True
+        preview = registered['repos.sync_preview']
+        assert preview['permission'] == 'repos.read'
+        assert preview['confirmation'] == 'auto'
+    finally:
+        repos_plugin._STATE['ctx'] = previous_context
+
+
+def test_sync_preview_rejects_worktree_change_during_diff_build(tmp_path, monkeypatch):
+    from plugins.repos import repos_service
+
+    repo = make_repo(str(tmp_path / 'repo'))
+    new_file = os.path.join(repo, 'racing.txt')
+    with open(new_file, 'w', encoding='utf-8') as f:
+        f.write('preview content\n')
+
+    original_read_file = repos_service.read_file
+
+    def mutate_after_read(path, rel, max_bytes=repos_service.READ_FILE_MAX_BYTES):
+        result = original_read_file(path, rel, max_bytes)
+        with open(os.path.join(path, rel), 'w', encoding='utf-8') as f:
+            f.write('changed during preview\n')
+        return result
+
+    monkeypatch.setattr(repos_service, 'read_file', mutate_after_read)
+    preview = repos_service.repo_sync_preview(repo)
+    assert preview['ok'] is False
+    assert preview['snapshot_changed'] is True
