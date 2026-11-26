@@ -1120,6 +1120,7 @@ def _recover_apply(j):
 
 
 def recover_journal():
+    global JOURNAL_LOCK
     # Crash recovery выполняется до любых новых операций записи.
     j = load_journal()
     if JOURNAL_LOCK:
