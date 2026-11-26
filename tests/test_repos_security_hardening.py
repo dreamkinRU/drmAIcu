@@ -348,3 +348,25 @@ def test_sync_preview_capability_is_read_only_auto(monkeypatch):
         assert preview['confirmation'] == 'auto'
     finally:
         repos_plugin._STATE['ctx'] = previous_context
+
+
+def test_sync_preview_rejects_worktree_change_during_diff_build(tmp_path, monkeypatch):
+    from plugins.repos import repos_service
+
+    repo = make_repo(str(tmp_path / 'repo'))
+    new_file = os.path.join(repo, 'racing.txt')
+    with open(new_file, 'w', encoding='utf-8') as f:
+        f.write('preview content\n')
+
+    original_read_file = repos_service.read_file
+
+    def mutate_after_read(path, rel, max_bytes=repos_service.READ_FILE_MAX_BYTES):
+        result = original_read_file(path, rel, max_bytes)
+        with open(os.path.join(path, rel), 'w', encoding='utf-8') as f:
+            f.write('changed during preview\n')
+        return result
+
+    monkeypatch.setattr(repos_service, 'read_file', mutate_after_read)
+    preview = repos_service.repo_sync_preview(repo)
+    assert preview['ok'] is False
+    assert preview['snapshot_changed'] is True

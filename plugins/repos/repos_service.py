@@ -299,6 +299,13 @@ def _repo_sync_preview_locked(path):
             break
 
     stat_result = _r(['diff', '--stat', 'HEAD', '--'], path)
+    final_snapshot = repo_sync_snapshot(path)
+    if not final_snapshot.get('ok') or final_snapshot.get('snapshot') != status.get('snapshot'):
+        return {
+            'ok': False,
+            'error': 'репозиторий изменился во время построения diff preview. Обновите preview и повторите.',
+            'snapshot_changed': True,
+        }
     return {
         'ok': True,
         'path': path,
