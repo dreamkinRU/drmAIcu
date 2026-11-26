@@ -10,6 +10,7 @@ import hashlib
 import os
 import re
 import subprocess
+import stat
 import sys
 import threading
 import uuid
@@ -137,16 +138,27 @@ def _status_fingerprint():
             raise UpdateError("Untracked-файл выходит за пределы репозитория", "unsafe_untracked_path")
         info = os.lstat(full)
         digest.update(rel.encode("utf-8", errors="surrogatepass"))
-        if os.path.islink(full):
+        digest.update(("MODE:%s" % stat.S_IMODE(info.st_mode)).encode("ascii"))
+        if stat.S_ISLNK(info.st_mode):
             digest.update(b"LINK")
             digest.update(os.readlink(full).encode("utf-8", errors="surrogatepass"))
-        elif os.path.isfile(full):
-            digest.update(b"FILE")
-            with open(full, "rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        elif stat.S_ISREG(info.st_mode):
+            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(full, flags)
+            try:
+                opened = os.fstat(fd)
+                if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    raise UpdateError("Untracked-файл изменился во время проверки", "untracked_race")
+                digest.update(b"FILE")
+                while True:
+                    chunk = os.read(fd, 1024 * 1024)
+                    if not chunk:
+                        break
                     digest.update(chunk)
+            finally:
+                os.close(fd)
         else:
-            digest.update(("MODE:%s" % info.st_mode).encode("ascii"))
+            digest.update(b"OTHER")
     return {"digest": digest.hexdigest()}
 
 
@@ -226,10 +238,10 @@ def _changed_files(status_text):
 
 
 def _read_update_diff(old_head, new_head):
-    result = _run_git(["diff", "--name-only", old_head, new_head], 30)
+    result = _run_git(["diff", "--name-only", "-z", old_head, new_head], 30)
     if not result["ok"]:
         raise UpdateError("Не удалось определить изменённые файлы обновления", "diff_failed")
-    files = sorted({line.strip() for line in result["stdout"].splitlines() if line.strip()})
+    files = sorted({name for name in result["stdout"].split("\\0") if name})
     return {
         "files": files,
         "python_changed": any(name.endswith(".py") for name in files),
