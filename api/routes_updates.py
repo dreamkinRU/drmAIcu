@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from core.updater.manager import UpdateError, manager
 
@@ -89,7 +90,7 @@ async def update_apply(request: Request):
         operation_id = body.get("operation_id") if isinstance(body, dict) else None
         if not isinstance(operation_id, str) or len(operation_id) != 32:
             raise UpdateError("Некорректный идентификатор плана.", "invalid_operation_id", 422)
-        return JSONResponse(manager.apply(operation_id))
+        return JSONResponse(await run_in_threadpool(manager.apply, operation_id))
     except Exception as exc:
         return _error(exc)
 
@@ -102,7 +103,7 @@ async def update_prepare(request: Request):
         operation_id = body.get("operation_id") if isinstance(body, dict) else None
         if not isinstance(operation_id, str) or len(operation_id) != 32:
             raise UpdateError("Некорректный идентификатор плана.", "invalid_operation_id", 422)
-        return JSONResponse(manager.prepare(operation_id))
+        return JSONResponse(await run_in_threadpool(manager.prepare, operation_id))
     except Exception as exc:
         return _error(exc)
 
@@ -113,9 +114,13 @@ async def update_recover(request: Request):
         _check_local_browser_request(request)
         body = await request.json()
         operation_id = body.get("operation_id") if isinstance(body, dict) else None
-        manual_confirmation = bool(body.get("manual_confirmation")) if isinstance(body, dict) else False
+        manual_confirmation = body.get("manual_confirmation", False) if isinstance(body, dict) else False
         if not isinstance(operation_id, str) or len(operation_id) != 32:
             raise UpdateError("Некорректный идентификатор операции.", "invalid_operation_id", 422)
-        return JSONResponse(manager.recover(operation_id, manual_confirmation=manual_confirmation))
+        if not isinstance(manual_confirmation, bool):
+            raise UpdateError("manual_confirmation должен быть логическим значением.", "invalid_manual_confirmation", 422)
+        return JSONResponse(await run_in_threadpool(
+            manager.recover, operation_id, manual_confirmation=manual_confirmation
+        ))
     except Exception as exc:
         return _error(exc)
