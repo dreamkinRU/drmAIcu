@@ -846,7 +846,8 @@ def _apply_patch_locked(data, pid):
     # восстанавливает старое состояние всех файлов (в том числе записанных до сбоя)
     jrec = {'op': 'apply', 'patch_id': pid,
             'steps': [{'path': pl['path'], 'tgt': pl['tgt'], 'existed': pl['existed'],
-                       'backs': pl['backs'], 'done': False} for pl in planned]}
+                       'backs': pl['backs'], 'backup_sha': pl['old_sha'], 'done': False}
+                      for pl in planned]}
     try:
         _write_journal(jrec)
         for pl in planned:
@@ -1089,10 +1090,11 @@ def _rollback_locked(resume_journal=False):
 
 
 def _recover_apply(j):
-    # B51 FIX (P1-04): восстановление старого состояния всех файлов журнальной записи apply
+    # Восстановление старого состояния всех целей; отсутствие/подмена backup не считается успехом.
     steps = j.get('steps') or []
     recovered = []
     failed = []
+    backup_root = os.path.realpath(BACKUP_DIR)
     for st in steps:
         tgt = st.get('tgt', '')
         sp = safe_path(tgt)
@@ -1100,27 +1102,50 @@ def _recover_apply(j):
             failed.append(str(tgt) + ': bad path')
             continue
         for suffix in ('.tmp', '.rbk.tmp'):
-            t = sp + suffix
-            if os.path.exists(t):
+            temp_path = sp + suffix
+            if os.path.exists(temp_path):
                 try:
-                    os.remove(t)
+                    os.remove(temp_path)
                 except OSError:
                     pass
         try:
-            src = _backup_path(_pick_backup(st.get('backs') or []))
-            if st.get('existed') and src and os.path.exists(src):
-                shutil.copy2(src, sp)
+            if st.get('existed'):
+                backup_ref = _pick_backup(st.get('backs') or [])
+                src = _backup_path(backup_ref)
+                if not src or not os.path.isfile(src):
+                    raise FileNotFoundError('backup missing for previously existing target')
+                resolved_src = os.path.realpath(src)
+                try:
+                    if os.path.normcase(os.path.commonpath([backup_root, resolved_src])) != os.path.normcase(backup_root):
+                        raise ValueError('backup path escapes BACKUP_DIR')
+                except ValueError:
+                    raise ValueError('backup path escapes BACKUP_DIR')
+                expected_backup_sha = st.get('backup_sha')
+                if expected_backup_sha is not None:
+                    with open(resolved_src, 'rb') as backup_file:
+                        actual_backup_sha = sha_bytes(backup_file.read())
+                    if actual_backup_sha != expected_backup_sha:
+                        raise ValueError('backup checksum mismatch')
+                shutil.copy2(resolved_src, sp)
+                if expected_backup_sha is not None:
+                    with open(sp, 'rb') as restored_file:
+                        actual_restored_sha = sha_bytes(restored_file.read())
+                    if actual_restored_sha != expected_backup_sha:
+                        raise ValueError('restored file checksum mismatch')
                 recovered.append(str(tgt))
-            elif not st.get('existed') and os.path.exists(sp):
+            elif os.path.exists(sp):
                 os.remove(sp)
                 recovered.append(str(tgt))
-        except Exception as e2:
-            failed.append(str(tgt) + ': ' + str(e2))
+        except Exception as exc:
+            failed.append(str(tgt) + ': ' + str(exc))
     if failed:
         log('CRASH RECOVERY (apply): неполное восстановление — ' + '; '.join(failed), 'ERROR')
         return {'action': 'apply-revert-incomplete', 'patch_id': j.get('patch_id'),
                 'recovered': recovered, 'failed': failed}
     _clear_journal()
+    if JOURNAL_LOCK:
+        return {'action': 'blocked', 'patch_id': j.get('patch_id'),
+                'error': JOURNAL_LOCK, 'recovered': recovered}
     log('CRASH RECOVERY (apply): состояние до патча ' + str(j.get('patch_id')) + ' восстановлено (' + str(len(recovered)) + ' файл(ов))', 'WARNING')
     return {'action': 'apply-reverted', 'patch_id': j.get('patch_id'), 'files': recovered}
 
