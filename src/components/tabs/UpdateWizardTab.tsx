@@ -163,6 +163,12 @@ export default function UpdateWizardTab() {
           Выполнить шаг 2
         </button>
         {journal?.backup_ref && <p className="text-xs text-emerald-300">Backup: <code>{journal.backup_ref}</code> {journal.backup_verified ? '· проверен' : '· проверка не завершена'}</p>}
+        {journal?.backup_bundle && (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-200">
+            Внешняя копия проверена: <code>{journal.backup_bundle.path}</code>
+            <div className="text-gray-400 mt-1">Размер: {Math.round(journal.backup_bundle.size_bytes / 1024)} KB · SHA-256: <code>{journal.backup_bundle.sha256}</code></div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-3">
