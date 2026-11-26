@@ -1,8 +1,8 @@
 {
   "id": "repos",
   "name": "Репозитории",
-  "version": "1.1.0",
-  "description": "Работа с локальными и сетевыми git-репозиториями через Git CLI: статус, история, ветки, add/commit/pull/push/fetch и Sync с подтверждением snapshot изменённых файлов. Авторизация — как в локальном git (Credential Manager/SSH), плагин ничего не хранит.",
+  "version": "1.2.0",
+  "description": "Работа с локальными и сетевыми git-репозиториями через Git CLI: статус, история, ветки, add/commit/pull/push/fetch и Sync с предварительным просмотром полного diff и подтверждением snapshot изменённых файлов. Авторизация — как в локальном git (Credential Manager/SSH), плагин ничего не хранит.",
   "author": "drmAIcu",
   "api_version": "1.0",
   "entry_point": "plugin.py",

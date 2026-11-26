@@ -9,6 +9,7 @@ import {
   RepoRemote,
   RepoStatus,
   RepoSyncResult,
+  RepoSyncPreview,
   SimpleGitResult,
 } from '../types';
 
@@ -112,6 +113,9 @@ export const reposFetch = (path: string, token?: string) =>
 
 export const reposCheckout = (path: string, branch: string, create: boolean, token?: string) =>
   execCapability<SimpleGitResult>('repos.checkout', { path, branch, create }, token);
+
+export const reposSyncPreview = (path: string) =>
+  execCapability<RepoSyncPreview>('repos.sync_preview', { path });
 
 export const reposSync = (path: string, message: string, snapshot: string, token?: string) =>
   execCapability<RepoSyncResult>('repos.sync', { path, message, snapshot }, token);
