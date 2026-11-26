@@ -255,10 +255,18 @@ def test_read_file_rejects_symlink_parent_escape(tmp_path):
     outside.mkdir()
     (outside / 'secret.txt').write_text('outside secret', encoding='utf-8')
     link = os.path.join(repo, 'linked-dir')
-    try:
-        os.symlink(str(outside), link, target_is_directory=True)
-    except (OSError, NotImplementedError):
-        pytest.skip('directory symlink creation is unavailable on this platform')
+    if os.name == 'nt':
+        junction = subprocess.run(
+            ['cmd', '/c', 'mklink', '/J', link, str(outside)],
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+        )
+        if junction.returncode != 0:
+            pytest.skip('directory junction creation is unavailable on this runner')
+    else:
+        try:
+            os.symlink(str(outside), link, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip('directory symlink creation is unavailable on this platform')
 
     result = repos_service.read_file(repo, 'linked-dir/secret.txt')
     assert result['ok'] is False
