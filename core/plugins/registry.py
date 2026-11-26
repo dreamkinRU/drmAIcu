@@ -6,6 +6,8 @@ import time
 
 from .models import PluginRecord, PluginStatus
 
+from .atomicio import atomic_write_json
+
 
 class PluginRegistry:
     def __init__(self, path, now=None):
@@ -55,10 +57,8 @@ class PluginRegistry:
                 'enabled': rec.enabled, 'installed_at': rec.installed_at,
                 'last_error': rec.last_error,
             })
-        tmp = self.path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, self.path)
+        # atomic_write_json: retry при WinError 5 (антивирус/облако держат файл)
+        atomic_write_json(self.path, data)
 
     def upsert(self, record):
         """Идемпотентная регистрация: повторная установка не создаёт дублей."""

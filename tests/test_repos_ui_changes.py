@@ -82,9 +82,10 @@ def test_push_rejected_error_has_fix_path(tmp_path):
 def test_actions_button_changes_orange_marker_source():
     """Кнопка «Изменения» помечается оранжевым (alert) при незакоммиченных изменениях."""
     src = _read(REPOS_TAB)
-    assert "alert={!!status?.changed}" in src, (
+    # v.3.12.3: alert теперь считается по числу изменённых файлов (счётчик на кнопке)
+    assert 'alert={(status?.entries.length ?? 0) > 0}' in src, (
         'Оранжевая метка кнопки «Изменения» отсутствует. Путь исправления: в RepositoriesTab.tsx '
-        'передайте alert={!!status?.changed} в SectionButton для раздела changes.'
+        'передайте alert={(status?.entries.length ?? 0) > 0} в SectionButton для раздела changes.'
     )
     assert 'bg-amber-500/15' in src, (
         'Стиль оранжевой метки отсутствует. Путь исправления: в SectionButton (RepositoriesTab.tsx) '

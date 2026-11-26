@@ -29,6 +29,25 @@ function mdButtonLabel(name: string): string {
 
 type ViewMode = 'preview' | 'edit';
 
+// Размер шрифта содержимого (px). По умолчанию 15 — на один пункт меньше базового 16
+// (запрос пользователя), выбор сохраняется в localStorage и применяется к окну
+// содержимого (просмотр + редактор) без перезагрузок и дёрганий страницы.
+const FONT_STORAGE_KEY = 'drmAIcu.md.fontPx';
+export const MD_FONT_OPTIONS = [13, 14, 15, 16, 17, 18];
+const DEFAULT_FONT_PX = 15;
+
+function loadFontPx(): number {
+  try {
+    const v = parseInt(localStorage.getItem(FONT_STORAGE_KEY) || '', 10);
+    if (MD_FONT_OPTIONS.includes(v)) return v;
+  } catch { /* no localStorage (приватный режим) — берём умолчание */ }
+  return DEFAULT_FONT_PX;
+}
+
+function saveFontPx(px: number) {
+  try { localStorage.setItem(FONT_STORAGE_KEY, String(px)); } catch { /* ок, только в памяти */ }
+}
+
 interface MDTabProps {
   selectedMDFile: MDFile | null;
   mdContent: string;
@@ -43,6 +62,7 @@ export default function MDTab({
   loadRealMDFile, saveRealMDFile,
 }: MDTabProps) {
   const [view, setView] = useState<ViewMode>('preview');
+  const [fontPx, setFontPx] = useState<number>(loadFontPx);
 
   // При выборе другого файла всегда возвращаемся в режим просмотра,
   // чтобы не увидеть «сырое» полотно разметки вместо документа.
@@ -57,14 +77,14 @@ export default function MDTab({
           <button
             key={file.name}
             onClick={() => loadRealMDFile(file)}
-            className={`rounded-xl border-2 p-4 text-left transition-all ${
+            className={`rounded-xl border-2 px-3 py-2 text-left transition-all ${
               selectedMDFile?.name === file.name
                 ? 'border-emerald-500/50 bg-emerald-500/5'
                 : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'
             }`}
           >
-            <h3 className="font-bold text-white text-base mb-2">{mdButtonLabel(file.name)}</h3>
-            <p className="text-xs text-gray-400">{file.description}</p>
+            <h3 className="font-bold text-white text-sm leading-tight">{mdButtonLabel(file.name)}</h3>
+            <p className="text-[11px] leading-snug text-gray-400">{file.description}</p>
           </button>
         ))}
       </div>
@@ -74,11 +94,26 @@ export default function MDTab({
           <div className="flex justify-between items-center gap-3 mb-4 flex-wrap">
             <h3 className="text-lg font-bold text-gray-300">📝 {mdButtonLabel(selectedMDFile.name)}</h3>
             <div className="flex items-center gap-2">
+              {/* Выбор размера шрифта содержимого — перед переключателем Просмотр/Редактор */}
+              <select
+                value={fontPx}
+                onChange={e => {
+                  const px = parseInt(e.target.value, 10);
+                  setFontPx(px);
+                  saveFontPx(px);
+                }}
+                title="Размер шрифта содержимого"
+                className="bg-gray-800/50 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-300 outline-none focus:border-cyan-500/60"
+              >
+                {MD_FONT_OPTIONS.map(px => (
+                  <option key={px} value={px}>{px} px</option>
+                ))}
+              </select>
               <div className="flex rounded-lg overflow-hidden border border-gray-700">
                 <button
                   type="button"
                   onClick={() => setView('preview')}
-                  className={`px-3 py-1.5 text-xs font-semibold transition-all ${
+                  className={`px-3 py-1 text-xs font-semibold transition-all ${
                     view === 'preview'
                       ? 'bg-cyan-500/15 text-cyan-300'
                       : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
@@ -89,7 +124,7 @@ export default function MDTab({
                 <button
                   type="button"
                   onClick={() => setView('edit')}
-                  className={`px-3 py-1.5 text-xs font-semibold transition-all ${
+                  className={`px-3 py-1 text-xs font-semibold transition-all ${
                     view === 'edit'
                       ? 'bg-cyan-500/15 text-cyan-300'
                       : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
@@ -100,7 +135,7 @@ export default function MDTab({
               </div>
               <button
                 onClick={saveRealMDFile}
-                className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold"
+                className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold"
               >
                 💾 Сохранить
               </button>
@@ -112,7 +147,7 @@ export default function MDTab({
             </div>
           )}
           {view === 'preview' ? (
-            <div className="h-96 overflow-y-auto rounded-lg bg-gray-800 border border-gray-700 px-5 py-4">
+            <div className="h-96 overflow-y-auto rounded-lg bg-gray-800 border border-gray-700 px-5 py-4" style={{ fontSize: fontPx }}>
               {/* remark-breaks: одиночный перевод строки -> <br>, как в GitHub-комментариях,
                   иначе строки без пустой строки между абзацами склеиваются в "простыню" */}
               <div className="prose prose-invert max-w-none prose-headings:text-white prose-a:text-cyan-300 prose-code:text-emerald-300 prose-pre:bg-gray-900 prose-strong:text-white">
@@ -124,7 +159,8 @@ export default function MDTab({
               value={mdContent}
               onChange={(e) => setMdContent(e.target.value)}
               placeholder="Начните писать…"
-              className="w-full h-96 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm font-mono focus:border-emerald-500 focus:outline-none resize-none"
+              style={{ fontSize: fontPx }}
+              className="w-full h-96 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white font-mono focus:border-emerald-500 focus:outline-none resize-none"
             />
           )}
           <div className="mt-2 text-xs text-gray-500">

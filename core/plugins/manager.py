@@ -364,6 +364,14 @@ class PluginManager:
     def activity_read(self, pid=None, limit=200, level=None, search=None):
         return self.activity.read(plugin_id=pid, limit=limit, level=level, search=search)
 
+    def clear_issues(self):
+        """Стереть ошибки/предупреждения всех плагинов из журналов активности (warn/error).
+
+        Нужно для кнопки «Очистить ошибки» во вкладке «Логи»: старые ошибки
+        остаются только до тех пор, пока пользователь их не закроет сам.
+        """
+        return self.activity.clear_issues()
+
     def recent_issues(self, limit=60):
         """Ошибки и предупреждения всех плагинов из журналов активности (data/plugins/activity/*.jsonl).
 

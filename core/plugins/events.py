@@ -77,6 +77,50 @@ class ActivityJournal:
             with open(path, 'w', encoding='utf-8') as f:
                 f.writelines(lines[-self.max_lines:])
 
+    def clear_issues(self, plugin_id=None):
+        """Удалить из журнала(ов) записи level warn/error (кнопка «Очистить ошибки»).
+
+        Не трогаем info/action — история действий остаётся честной, чистим только
+        уже увиденные/исправленные ошибки и предупреждения. Возвращает число удалённых строк.
+        """
+        total = 0
+        if plugin_id is not None:
+            names = ['%s.jsonl' % plugin_id]
+        else:
+            try:
+                names = os.listdir(self.dir_path)
+            except OSError:
+                return 0
+        for name in names:
+            if not name.endswith('.jsonl'):
+                continue
+            path = os.path.join(self.dir_path, name)
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+            except OSError:
+                continue
+            kept = []
+            for line in lines:
+                try:
+                    lvl = json.loads(line).get('level')
+                except ValueError:
+                    kept.append(line)
+                    continue
+                if lvl in ('warn', 'error'):
+                    total += 1
+                else:
+                    kept.append(line)
+            if len(kept) != len(lines):
+                try:
+                    # атомарно не обязательно (журнал append-only), но перезапишем аккуратно
+                    with open(path + '.tmp', 'w', encoding='utf-8') as f:
+                        f.writelines(kept)
+                    os.replace(path + '.tmp', path)
+                except OSError:
+                    pass
+        return total
+
     def read(self, plugin_id=None, limit=200, level=None, search=None):
         path = self._path(plugin_id)
         out = []

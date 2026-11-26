@@ -31,7 +31,7 @@ import { restartSystem as restartSystemApi } from './services/api';
 
 export default function App() {
   // === Хуки состояния ===
-  const { logs, addLog } = useLogs();
+  const { logs, addLog, clearIssues } = useLogs();
   const pluginCtl = usePlugins();
   const { codeIssues, fixCodeIssue, fixAll } = useCodeIssues();
   const {
@@ -371,7 +371,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'logs' && <LogsTab logs={logs} />}
+        {activeTab === 'logs' && <LogsTab logs={logs} onClearIssues={clearIssues} />}
 
         {activeTab === 'plugins' && (
           <PluginsTab

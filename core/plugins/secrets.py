@@ -8,6 +8,8 @@ import json
 import os
 import threading
 
+from .atomicio import atomic_write_json
+
 
 class SecretManager:
     def __init__(self, dir_path):
@@ -35,14 +37,8 @@ class SecretManager:
 
     def _save(self, plugin_id, data):
         path = self._path(plugin_id)
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        try:
-            os.chmod(tmp, 0o600)
-        except OSError:
-            pass
-        os.replace(tmp, path)
+        # atomic_write_json: retry при WinError 5 + chmod 0600 для tmp-файла
+        atomic_write_json(path, data, chmod=0o600)
 
     def set_secret(self, plugin_id, key, value):
         if not key or not isinstance(key, str):

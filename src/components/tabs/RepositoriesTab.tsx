@@ -89,6 +89,7 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
     setNotice(n);
   }, [addLog, setNotice]);
   const [pathInput, setPathInput] = useState<string>(() => localStorage.getItem(PATH_STORAGE_KEY) || '');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const repoPath = pathInput.trim().replace(/\/+$/, '');
 
   const rp = plugins.find(p => p.id === REPOS_PLUGIN_ID);
@@ -143,7 +144,14 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
           <SectionButton active={section === 'overview'} onClick={() => setSection('overview')}>Обзор</SectionButton>
           <SectionButton active={section === 'history'} onClick={() => setSection('history')}>История</SectionButton>
           <SectionButton active={section === 'branches'} onClick={() => setSection('branches')}>Ветки</SectionButton>
-          <SectionButton active={section === 'changes'} alert={!!status?.changed} onClick={() => setSection('changes')}>Изменения</SectionButton>
+          <SectionButton
+            active={section === 'changes'}
+            alert={(status?.entries.length ?? 0) > 0}
+            onClick={() => setSection('changes')}
+          >
+            Изменения{status && status.entries.length > 0 ? ` (${status.entries.length})` : ''}
+          </SectionButton>
+          <SectionButton active={false} onClick={() => setSettingsOpen(true)}>⚙ Настройки</SectionButton>
         </div>
       </div>
 
@@ -162,12 +170,7 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
         </div>
       )}
 
-      <RepoPathBar
-        pathInput={pathInput}
-        setPathInput={setPathInput}
-        onOpen={() => openRepo(repoPath)}
-        status={status}
-      />
+      <RepoPathBar repoPath={repoPath} hasStatus={!!status} onOpenSettings={() => setSettingsOpen(true)} />
 
       {!status ? (
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 text-sm text-gray-400">
@@ -182,50 +185,102 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
       ) : (
         <ChangesSection repoPath={repoPath} status={status} setNotice={setNoticeLogged} reload={reload} />
       )}
+
+      {settingsOpen && (
+        <SettingsModal
+          pathInput={pathInput}
+          setPathInput={setPathInput}
+          onOpen={openRepo}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-function RepoPathBar({
-  pathInput, setPathInput, onOpen, status,
+// Тонкая строка пути: только сам путь (клик открывает модальное окно настроек).
+// Ветка/↑↓/счётчики перенесены: ветка и ahead/behind — в карточке «Текущий проект»
+// (RepoInfoCard), счётчик изменений — на кнопке «Изменения». Дубли в правой части
+// path bar убраны по запросу пользователя.
+function RepoPathBar({ repoPath, hasStatus, onOpenSettings }: { repoPath: string; hasStatus: boolean; onOpenSettings: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpenSettings}
+      className="w-full rounded-xl border border-gray-800 bg-gray-900/50 p-3 flex items-center gap-3 text-left hover:border-gray-600"
+      title="Открыть настройки репозитория"
+    >
+      <span className="text-base leading-none">⚙</span>
+      <span className="flex-1 font-mono text-sm text-gray-300 truncate">{repoPath || <span className="text-gray-500">путь не задан — откройте ⚙ Настройки</span>}</span>
+      <span className="text-xs text-gray-500 shrink-0">{hasStatus ? 'открыт' : 'задать путь'}</span>
+    </button>
+  );
+}
+
+// Модальное окно настроек: ввод пути + «Открыть» + «Запомнить по умолчанию».
+// Открывается кнопкой «⚙ Настройки» в ряду секций (после «Изменения»).
+function SettingsModal({
+  pathInput, setPathInput, onOpen, onClose,
 }: {
   pathInput: string;
   setPathInput: (v: string) => void;
-  onOpen: () => void;
-  status: RepoStatus | null;
+  onOpen: (p: string) => Promise<void>;
+  onClose: () => void;
 }) {
   const saveDefault = async () => {
     const r = await putRepoSettings({ default_path: pathInput.trim() });
     if (r.ok) localStorage.setItem(PATH_STORAGE_KEY, pathInput.trim());
-    return r;
   };
+  const openAndClose = async () => { await onOpen(pathInput.trim().replace(/\/+$/, '')); onClose(); };
+
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-3 flex items-center gap-2 flex-wrap">
-      <input
-        value={pathInput}
-        onChange={e => setPathInput(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') onOpen(); }}
-        placeholder="C:\\projects\\drmAIcu — полный путь к папке с .git"
-        className="flex-1 min-w-[280px] bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-gray-200 outline-none focus:border-cyan-500/60"
-      />
-      <button onClick={onOpen} className="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-400/70 text-cyan-300 hover:bg-cyan-500/25">
-        Открыть
-      </button>
-      <button onClick={() => saveDefault()} className="px-3 py-2 rounded-lg text-xs border border-gray-700 text-gray-300 hover:border-gray-500">
-        Запомнить по умолчанию
-      </button>
-      {status && (
-        <div className="flex items-center gap-2 text-xs font-mono">
-          <span className="px-2 py-1 rounded bg-gray-800 border border-gray-700 text-cyan-300">{status.branch || '—'}</span>
-          {status.ahead > 0 && <span className="text-emerald-400">↑{status.ahead}</span>}
-          {status.behind > 0 && <span className="text-amber-400">↓{status.behind}</span>}
-          {status.changed ? (
-            <span className="text-amber-400">{status.entries.length} изменённых</span>
-          ) : (
-            <span className="text-gray-500">чисто</span>
-          )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-xl rounded-xl border border-gray-700 bg-gray-900 shadow-2xl p-5 space-y-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-bold text-white">⚙ Настройки репозитория</h3>
+          <button onClick={onClose} className="px-2 py-1 rounded-lg text-sm border border-gray-700 text-gray-400 hover:border-gray-500">✕</button>
         </div>
-      )}
+        <div className="space-y-2">
+          <label className="block text-xs text-gray-400">
+            Путь к локальному репозиторию — полный путь к папке, содержащей <span className="font-mono text-gray-300">.git</span>
+          </label>
+          <input
+            autoFocus
+            value={pathInput}
+            onChange={e => setPathInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') void openAndClose(); }}
+            placeholder="C:\\projects\\drmAIcu"
+            className="w-full bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-gray-200 outline-none focus:border-cyan-500/60"
+          />
+          <p className="text-xs text-gray-500">
+            Если git отвечает «не является репозиторием» или «dubious ownership» — проверьте наличие папки .git
+            и права: <span className="font-mono text-gray-400">git config --global --add safe.directory &lt;путь&gt;</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => void openAndClose()}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-400/70 text-cyan-300 hover:bg-cyan-500/25"
+          >
+            Открыть
+          </button>
+          <button
+            onClick={saveDefault}
+            className="px-3 py-2 rounded-lg text-xs border border-gray-700 text-gray-300 hover:border-gray-500"
+          >
+            Запомнить по умолчанию
+          </button>
+          <button
+            onClick={onClose}
+            className="px-3 py-2 rounded-lg text-xs border border-gray-700 text-gray-400 hover:border-gray-500"
+          >
+            Закрыть
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -375,6 +430,16 @@ function OverviewSection({
   );
 }
 
+// Время коммита в HH:MM UTC+3: git отдаёт ISO-дату со смещением (%aI), честно
+// конвертируем её в фиксированную зону Europe/Moscow (= UTC+3, без перевода часов).
+function timeUtc3(dateIso: string): string {
+  const d = new Date(dateIso);
+  if (isNaN(d.getTime())) return '--:--';
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
+}
+
 function HistorySection({ repoPath }: { repoPath: string }) {
   const [log, setLog] = useState<RepoLog | null>(null);
   const [err, setErr] = useState('');
@@ -398,7 +463,7 @@ function HistorySection({ repoPath }: { repoPath: string }) {
         <div key={c.sha} className="flex items-center gap-3 text-sm">
           <span className="font-mono text-cyan-300 text-xs">{c.sha}</span>
           <span className="text-gray-300 flex-1 truncate">{c.subject}</span>
-          <span className="text-gray-500 text-xs">{c.author} · {c.date.slice(0, 10)}</span>
+          <span className="text-gray-500 text-xs">{c.author} · {c.date.slice(0, 10)} · {timeUtc3(c.date)} UTC+3</span>
         </div>
       ))}
       {log.commits.length === 0 && <p className="text-sm text-gray-500">коммитов нет (репозиторий пуст)</p>}

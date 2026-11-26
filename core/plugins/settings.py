@@ -7,6 +7,8 @@ import json
 import os
 import threading
 
+from .atomicio import atomic_write_json
+
 
 class SettingsValidationError(Exception):
     pass
@@ -38,10 +40,8 @@ class SettingsManager:
 
     def _write(self, plugin_id, data):
         path = self._path(plugin_id)
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
+        # atomic_write_json: retry при WinError 5 (антивирус/облако держат файл)
+        atomic_write_json(path, data)
 
     @staticmethod
     def validate_value(schema, key, value):

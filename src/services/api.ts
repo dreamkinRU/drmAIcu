@@ -446,6 +446,20 @@ export async function fetchBackendLogs(): Promise<LogEntry[]> {
 }
 
 /**
+ * Очистить ошибки и предупреждения из журнала (кнопка «Очистить ошибки» во вкладке «Логи»):
+ * DELETE /api/issues/log сходит в LOG ядра и журналы плагинов data/plugins/activity/*.jsonl,
+ * предупреждающий фильтр убирает только error/warn записи — info/действия остаются честно.
+ */
+export async function clearBackendLogIssues(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/logs/issues', { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Отправить событие/ошибку UI на бэкенд (POST /api/logs), чтобы она осталась
  * во вкладке «Логи» даже после перезагрузки страницы. Fire-and-forget:
  * при недоступном бэкенде запись остаётся только в памяти страницы.

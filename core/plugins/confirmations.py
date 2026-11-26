@@ -6,6 +6,8 @@ import secrets as _secrets
 import threading
 import time
 
+from .atomicio import atomic_write_json
+
 TTL_SECONDS = 900
 
 
@@ -45,10 +47,8 @@ class ConfirmationManager:
     def _save(self):
         if not self.path:
             return
-        tmp = self.path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump({'pending': list(self._pending.values())}, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, self.path)
+        # atomic_write_json: retry при WinError 5 (антивирус/облако держат файл)
+        atomic_write_json(self.path, {'pending': list(self._pending.values())})
 
     def _drop_expired(self):
         cutoff = self._now() - self.ttl

@@ -5,15 +5,18 @@ type LogFilter = 'all' | 'issues';
 
 interface LogsTabProps {
   logs: LogEntry[];
+  onClearIssues: () => Promise<void> | void;
 }
 
 // Вкладка «Логи» получает: лог ядра (/api/logs), ошибки/предупреждения плагинов
 // (manager.recent_issues) и ошибки UI (addLog → POST /api/logs). Фильтр
 // «Ошибки» помогает найти сбой синхронизации, который раньше мигал и исчезал.
-export default function LogsTab({ logs }: LogsTabProps) {
+export default function LogsTab({ logs, onClearIssues }: LogsTabProps) {
   const [filter, setFilter] = useState<LogFilter>('all');
+  const [clearing, setClearing] = useState(false);
   const issues = logs.filter(l => l.level === 'error' || l.level === 'warn');
   const shown = filter === 'all' ? logs : issues;
+  const issuesCount = issues.length;
 
   return (
     <div className="space-y-6">
@@ -38,7 +41,21 @@ export default function LogsTab({ logs }: LogsTabProps) {
                 : 'border-gray-700 text-gray-400 hover:border-gray-500'
             }`}
           >
-            Ошибки и предупреждения ({issues.length})
+            Ошибки и предупреждения ({issuesCount})
+          </button>
+          {/* Кнопка очистки ошибок: ошибки не должны оставаться в журнале вечно —
+              пользователь сам решает, что старые уже исправленные записи можно убрать */}
+          <button
+            disabled={clearing || issuesCount === 0}
+            onClick={async () => {
+              setClearing(true);
+              await onClearIssues();
+              setClearing(false);
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-red-500/10 border-red-500/40 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+            title="Удалить из журнала все записи ошибок и предупреждений (info останется)"
+          >
+            ✕ Очистить ошибки{issuesCount > 0 ? ` (${issuesCount})` : ''}
           </button>
           <span className="text-xs text-gray-500">Обновление каждые 10 сек</span>
         </div>
