@@ -375,6 +375,12 @@ def s_status():
                                        'gemini': bool(cfg.get('gemini_api_key'))}})
 
 
+@app.get('/api/version')
+def s_version():
+    # Оболочка (Header) берёт версию отсюда — единый источник version.py (B68), без хардкода в UI.
+    return JSONResponse({'success': True, 'version': _VER})
+
+
 @app.get('/api/logs')
 def s_logs():
     # Вкладка «Логи»: ядро (LOG) + ошибки/предупреждения плагинов из журналов

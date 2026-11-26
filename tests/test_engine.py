@@ -3,6 +3,7 @@ import asyncio
 import time
 import importlib
 import json
+import re
 import os
 import pytest
 
@@ -1199,6 +1200,21 @@ def test_B68_version_single_source():
     pkg = json.load(open(os.path.join(os.path.dirname(__file__), "..", "package.json"), encoding="utf-8"))
     assert pkg["version"] == version.VERSION
     assert engine.stats()["version"] == version.VERSION
+
+
+def test_B68_shell_version_from_api():
+    """Оболочка берёт версию из /api/version (version.py) — хардкод версии в Header.tsx запрещён."""
+    import io as _io
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    header = _io.open(os.path.join(root, "src", "components", "layout", "Header.tsx"), encoding="utf-8").read()
+    assert not re.search(r"v\.\d+\.\d+", header), "в Header.tsx захардкожена версия"
+    assert "version" in header, "Header.tsx должен использовать проп version"
+    app = _io.open(os.path.join(root, "src", "App.tsx"), encoding="utf-8").read()
+    assert "loadAppVersionApi" in app and "version={appVersion}" in app
+    api = _io.open(os.path.join(root, "src", "services", "api.ts"), encoding="utf-8").read()
+    assert "/api/version" in api
+    main_src = _io.open(os.path.join(root, "main.py"), encoding="utf-8").read()
+    assert "/api/version" in main_src and "_VER" in main_src
 
 
 # ========================= B59: Fast возвращает первое готовое ответ =========================

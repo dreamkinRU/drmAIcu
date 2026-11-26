@@ -15,6 +15,17 @@ export async function loadAgentsApi(): Promise<Agent[] | null> {
   }
 }
 
+export async function loadAppVersionApi(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/version');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.version === 'string' && data.version ? data.version : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveAgentsApi(agents: Agent[]): Promise<boolean> {
   try {
     const res = await fetch('/api/agents', {
