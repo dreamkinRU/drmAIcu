@@ -224,7 +224,7 @@ def _read_update_diff(old_head, new_head):
         "python_changed": any(name.endswith(".py") for name in files),
         "requirements_changed": "requirements.txt" in files,
         "npm_lock_changed": "package-lock.json" in files,
-        "frontend_changed": any(name.startswith("src/") or name in ("vite.config.js", "package.json") for name in files),
+        "frontend_changed": any(name.startswith("src/") or name in ("vite.config.js", "package.json", "package-lock.json", "index.html") for name in files),
     }
 
 
@@ -239,7 +239,7 @@ class UpdateManager:
     def check(self):
         with _LOCK, _repo_lock():
             journal = _load_journal()
-            if journal.get("state") in ("APPLYING", "RESTORING", "PREPARING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"):
+            if journal.get("state") in ("APPLYING", "CODE_UPDATED", "RESTORING", "PREPARING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"):
                 raise UpdateError(
                     "Есть незавершённая операция (%s). Сначала завершите восстановление." % journal.get("state"),
                     "operation_incomplete", 423,
@@ -405,6 +405,8 @@ class UpdateManager:
                     journal["local_changes_restored"] = True
                     _save_journal(journal)
 
+                journal["state"] = "PREPARING"
+                _save_journal(journal)
                 summary = journal.get("change_summary") or {}
                 commands = []
                 if summary.get("requirements_changed"):
@@ -415,26 +417,43 @@ class UpdateManager:
                 if summary.get("frontend_changed"):
                     npm = "npm.cmd" if os.name == "nt" else "npm"
                     commands.append(("frontend_build", [npm, "run", "build"]))
-                results = []
+                results = list(journal.get("environment_steps") or [])
                 for label, argv in commands:
+                    if any(item.get("step") == label and item.get("ok") for item in results):
+                        continue
                     try:
                         proc = subprocess.run(
                             argv, cwd=BASE, capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=900,
                             shell=False, env={**os.environ, "CI": "1", "GIT_TERMINAL_PROMPT": "0"},
                         )
-                        results.append({
+                        step_result = {
                             "step": label, "ok": proc.returncode == 0,
                             "code": proc.returncode,
                             "stdout": (proc.stdout or "")[-8000:],
                             "stderr": (proc.stderr or "")[-8000:],
-                        })
+                        }
+                        results = [item for item in results if item.get("step") != label] + [step_result]
+                        journal["environment_steps"] = results
+                        _save_journal(journal)
                         if proc.returncode != 0:
                             raise UpdateError("%s завершился с кодом %s" % (label, proc.returncode), "environment_failed")
                     except subprocess.TimeoutExpired:
+                        results = [item for item in results if item.get("step") != label] + [
+                            {"step": label, "ok": False, "code": -1, "stdout": "", "stderr": "timeout"}
+                        ]
+                        journal["environment_steps"] = results
+                        _save_journal(journal)
                         raise UpdateError("%s: превышено время ожидания" % label, "environment_timeout", 504)
+                    except OSError as exc:
+                        results = [item for item in results if item.get("step") != label] + [
+                            {"step": label, "ok": False, "code": -1, "stdout": "", "stderr": str(exc)[:2000]}
+                        ]
+                        journal["environment_steps"] = results
+                        _save_journal(journal)
+                        raise UpdateError("%s: не удалось запустить команду: %s" % (label, exc), "environment_launch_failed", 503)
                 journal["environment_steps"] = results
-                journal["restart_required"] = bool(summary.get("python_changed"))
+                journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed"))
                 journal["state"] = "COMPLETED"
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
@@ -449,7 +468,7 @@ class UpdateManager:
         with _LOCK, _repo_lock():
             journal = _load_journal()
             if journal.get("id") != operation_id or journal.get("state") not in (
-                "APPLYING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR", "RESTORING"
+                "APPLYING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR", "RESTORING", "PREPARING"
             ):
                 raise UpdateError("Нет операции, требующей восстановления.", "invalid_state")
             backup_ref = journal.get("backup_ref")
