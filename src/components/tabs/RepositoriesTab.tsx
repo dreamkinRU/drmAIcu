@@ -474,6 +474,8 @@ function OverviewSection({
                 <span className="font-mono text-cyan-300">{syncPreview.branch || '—'}</span>
                 {syncPreview.upstream ? <span className="text-gray-500"> → {syncPreview.upstream}</span> : null}
                 <span className="text-gray-500"> · {syncPreview.snapshot_files.length} файл(ов)</span>
+                {!!syncPreview.ahead && <span className="text-amber-300"> · ↑{syncPreview.ahead} на отправку</span>}
+                {!!syncPreview.behind && <span className="text-cyan-300"> · ↓{syncPreview.behind} с remote</span>}
               </div>
               <span className={syncPreview.complete ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-300'}>
                 {syncPreview.complete ? 'Preview полный' : 'Preview неполный'}
@@ -487,8 +489,31 @@ function OverviewSection({
                   <div key={file} className="font-mono text-xs text-gray-300 break-all">{file}</div>
                 ))}
               </div>
+            ) : syncPreview.incoming && syncPreview.incoming.length > 0 ? (
+              <p className="text-xs text-gray-400">
+                Локальных изменённых файлов нет, но Sync выполнит pull --rebase → push и получит с remote {syncPreview.behind ?? syncPreview.incoming.length} коммит(ов) — см. список ниже.
+              </p>
             ) : (
               <p className="text-xs text-gray-400">Изменённых файлов нет. Sync выполнит только pull --rebase → push.</p>
+            )}
+
+            {syncPreview.fetch_ok === false && (
+              <p className="text-xs text-amber-300">
+                git fetch не удался ({syncPreview.fetch_error || 'причина неизвестна'}) — счётчики ↑/↓ могут быть неточными. Путь исправления: проверьте сеть и доступ к remote, затем обновите preview.
+              </p>
+            )}
+            {syncPreview.incoming && syncPreview.incoming.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-cyan-300 font-semibold">
+                  Придёт с remote ({syncPreview.behind ?? syncPreview.incoming.length})
+                  {syncPreview.incoming.length >= 20 ? ' — первые 20:' : ':'}
+                </p>
+                {syncPreview.incoming.map(c => (
+                  <div key={c.sha} className="font-mono text-xs text-gray-300 break-all">
+                    <span className="text-gray-500">{c.sha}</span> {c.subject}
+                  </div>
+                ))}
+              </div>
             )}
 
             {syncPreview.stat && <p className="text-xs text-gray-500 whitespace-pre-wrap">{syncPreview.stat}</p>}

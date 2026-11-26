@@ -316,6 +316,12 @@ export interface RepoSyncPreview {
   snapshot: string;
   snapshot_files: string[];
   changed: boolean;
+  /** Актуально после git fetch в preview; иначе ahead/behind могут быть неточны. */
+  fetch_ok?: boolean;
+  fetch_error?: string;
+  ahead?: number;
+  behind?: number;
+  incoming?: Array<{ sha: string; subject: string }>;
   stat: string;
   diff: string;
   truncated: boolean;

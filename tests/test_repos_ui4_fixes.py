@@ -114,3 +114,20 @@ def test_last_sync_persisted_in_plugin_state_and_restored_by_ui():
     # capability есть в service-слое frontend
     svc = _read(REPOS_TS)
     assert 'repos.last_sync' in svc
+
+
+
+# ==== 6. Preview Sync показывает входящие коммиты с remote (v3.12.7) ====
+
+def test_sync_preview_shows_incoming_commits_block():
+    """Локальных изменений нет — но preview обязан показать, что придёт с remote
+    (behind + список входящих коммитов), иначе Sync «ничего не делает», хотя
+    sync.bat через pull получает новые файлы."""
+    tab = _read(REPOS_TAB)
+    assert 'Придёт с remote' in tab, 'список входящих коммитов в preview'
+    assert 'syncPreview.behind' in tab and 'syncPreview.incoming' in tab
+    assert 'fetch_ok === false' in tab, 'честная пометка, если git fetch не удался'
+    svc = _read(REPOS_SVC)
+    assert "'fetch', '--all', '--prune'" in svc, 'preview обновляет remote-tracking refs'
+    assert "'rev-list', '--left-right', '--count'" in svc, 'точный ahead/behind'
+    assert "'incoming'" in svc
