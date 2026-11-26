@@ -72,6 +72,11 @@ def _git_ok(args, timeout=30):
 
 
 def _load_journal():
+    if os.path.exists(_JOURNAL_PATH + ".tmp"):
+        raise UpdateError(
+            "Обнаружен незавершённый временный журнал обновления. Файл сохранён для диагностики; продолжение заблокировано.",
+            "journal_temp_orphan", 423,
+        )
     try:
         with open(_JOURNAL_PATH, "r", encoding="utf-8") as stream:
             data = json.load(stream)
@@ -143,6 +148,16 @@ def _status_fingerprint():
         else:
             digest.update(("MODE:%s" % info.st_mode).encode("ascii"))
     return {"digest": digest.hexdigest()}
+
+
+def _git_operation_in_progress():
+    active = []
+    for marker in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"):
+        raw_path = _git_ok(["rev-parse", "--git-path", marker])
+        path = raw_path if os.path.isabs(raw_path) else os.path.join(BASE, raw_path)
+        if os.path.exists(path):
+            active.append(marker)
+    return active
 
 
 def _branch_and_upstream():
@@ -278,6 +293,11 @@ class UpdateManager:
                    and line.split(" ", 3)[2].startswith("S")
                    for line in before_status.splitlines()):
                 plan["blockers"].append("Обнаружены изменения submodule; автоматическое резервирование для них не поддерживается.")
+            if any(line.startswith("u ") for line in before_status.splitlines()):
+                plan["blockers"].append("Есть неразрешённые Git-конфликты; сначала завершите merge/rebase вручную.")
+            active_git_operations = _git_operation_in_progress()
+            if active_git_operations:
+                plan["blockers"].append("В Git уже выполняется операция: %s." % ", ".join(active_git_operations))
             plan["change_summary"] = _read_update_diff(old_head, remote_head)
             if any(name == "package.json" for name in plan["change_summary"]["files"]) and not plan["change_summary"]["npm_lock_changed"]:
                 plan["blockers"].append("package.json изменён без package-lock.json — зависимости нельзя обновить воспроизводимо.")
