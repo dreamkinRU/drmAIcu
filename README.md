@@ -61,6 +61,7 @@ python -m pytest tests -v
 ## Документация
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — архитектура системы, эндпоинты и механизмы безопасности
+- [docs/HANDOFF.md](docs/HANDOFF.md) — передача работы новому исполнителю: правила, роадмап, грабли
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — руководство пользователя и формат патчей
 - [docs/NEW_FEATURES.md](docs/NEW_FEATURES.md) — описание возможностей по версиям
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — полная история изменений
