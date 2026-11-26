@@ -1,8 +1,6 @@
-# Plugin SystemdrmAIcu v1.0
+# Plugin System drmAIcu v1.0
 
-Архитектура утверждена (B — Dynamic Plugin System, Repos Plugin — C Full Integration,
-авторизация — A GitHub App, установка — B Built-in Catalog + Manual, автоматизация — B
-Controlled Automation). Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN_API_CONTRACT.md).
+Архитектура утверждена (B — Dynamic Plugin System, Repos Plugin — C Full Integration, авторизация — A GitHub App, установка — B Built-in Catalog + Manual, автоматизация — B Controlled Automation). Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN_API_CONTRACT.md).
 
 ## Состав
 
@@ -20,15 +18,11 @@ Controlled Automation). Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN
 | Activity Journal | `core/plugins/events.py` | JSONL-журнал, redact секретов |
 | HTTP API | `core/plugins/routes.py` | REST-маршруты `/api/plugins/*` |
 
-Оркестрация — `core/plugins/manager.py` (`PluginManager`). Данные —
-`data/plugins/` (реестр, права, настройки, состояние, секреты, журнал — в
-раздельных файлах, не смешиваются).
+Оркестрация — `core/plugins/manager.py` (`PluginManager`). Данные — `data/plugins/` (реестр, права, настройки, состояние, секреты, журнал — в раздельных файлах, не смешиваются).
 
 ## Граница доверия (важно)
 
-Динамическая загрузка Python-модуля в основном процессе **не является песочницей**.
-Permission Manager контролирует вызовы через Plugin API, но не гарантирует, что код
-плагина не обратится к файловой системе/сети напрямую. Поэтому в v1.0:
+Динамическая загрузка Python-модуля в основном процессе **не является песочницей**. Permission Manager контролирует вызовы через Plugin API, но не гарантирует, что код плагина не обратится к файловой системе/сети напрямую. Поэтому в v1.0:
 
 - устанавливаются только плагины из встроенного каталога или проверенного локального источника;
 - входные параметры capability валидируются только по JSON-структуре;
@@ -37,21 +31,14 @@ Permission Manager контролирует вызовы через Plugin API, 
 
 ## Интеграция с ядром
 
-- `main.py` монтирует `plugin_router` две строки (`include_router`) — production-логика
-  ядра не изменяется.
-- Repos Plugin никогда не применяет AI-патчи сам: изменения исходников только через
-  PATCHMASTER (`patch_engine.apply_patch`), Repos Plugin анализирует `git diff`
-  и выполняет push только после подтверждения (этап 5+).
-- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд,
-  аргументы списком (без shell-строки), таймауты, проверка путей.
+- `main.py` монтирует `plugin_router` две строки (`include_router`) — production-логика ядра не изменяется.
+- Repos Plugin никогда не применяет AI-патчи сам: изменения исходников только через PATCHMASTER (`patch_engine.apply_patch`), Repos Plugin анализирует `git diff` и выполняет push только после подтверждения (этап 5+).
+- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд, аргументы списком (без shell-строки), таймауты, проверка путей.
 
 ## Статусы и хранение
 
-См. §8–9 контракта. Реестрpersistируется в `data/plugins/registry.json` и переживает
-рестарт (`restart.flag` → launcher.bat).
+См. §8–9 контракта. Реестр persistируется в `data/plugins/registry.json` и переживает рестарт (`restart.flag` → launcher.bat).
 
 ## Что не входит в v1.0
 
-Удалённый Marketplace, автопубликация, автообновления, произвольная загрузка
-React-компонентов (frontend отображает только заранее определённые представления),
-песочница сторонних Python-плагинов, автономный AI-режим без подтверждений.
+Удалённый Marketplace, автопубликация, автообновления, произвольная загрузка React-компонентов (frontend отображает только заранее определённые представления), песочница сторонних Python-плагинов, автономный AI-режим без подтверждений.

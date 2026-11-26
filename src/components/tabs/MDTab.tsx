@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import { MDFile } from '../../types';
 import { mdFiles } from '../../utils/constants';
+
+// Явные стили заголовков (как на GitHub): чёткая иерархия размеров и
+// подчёркивание у h1/h2. Задаётся через components, а не только prose,
+// чтобы иерархия не зависела от особенностей typography-плагина.
+const mdComponents: Components = {
+  h1: ({ children }) => (
+    <h1 className="text-3xl font-bold text-white mt-0 mb-4 pb-2 border-b border-gray-600">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-2xl font-bold text-white mt-8 mb-4 pb-2 border-b border-gray-600">{children}</h2>
+  ),
+  h3: ({ children }) => <h3 className="text-xl font-semibold text-white mt-6 mb-3">{children}</h3>,
+  h4: ({ children }) => <h4 className="text-lg font-semibold text-white mt-6 mb-3">{children}</h4>,
+  h5: ({ children }) => <h5 className="text-base font-semibold text-white mt-6 mb-3">{children}</h5>,
+  h6: ({ children }) => <h6 className="text-sm font-semibold text-gray-300 mt-6 mb-3">{children}</h6>,
+};
 
 // Метка кнопки без ведущего пути: docs/ARCHITECTURE.md → ARCHITECTURE.md,
 // а файл в корне (README.md) → /README.md.
@@ -100,7 +116,7 @@ export default function MDTab({
               {/* remark-breaks: одиночный перевод строки -> <br>, как в GitHub-комментариях,
                   иначе строки без пустой строки между абзацами склеиваются в "простыню" */}
               <div className="prose prose-invert max-w-none prose-headings:text-white prose-a:text-cyan-300 prose-code:text-emerald-300 prose-pre:bg-gray-900 prose-strong:text-white">
-                <ReactMarkdown remarkPlugins={[remarkBreaks]}>{mdContent}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkBreaks]} components={mdComponents}>{mdContent}</ReactMarkdown>
               </div>
             </div>
           ) : (
