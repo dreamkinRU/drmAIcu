@@ -236,7 +236,7 @@ class UpdateManager:
             if _status() != before_status:
                 raise UpdateError("Рабочее дерево изменилось во время проверки. Повторите шаг 1.", "working_tree_changed")
             old_head = _git_ok(["rev-parse", "HEAD"])
-            _git_ok(["fetch", "--no-tags", remote, remote_branch], _TIMEOUT)
+            _git_ok(["fetch", "--no-tags", remote], _TIMEOUT)
             remote_ref = "refs/remotes/%s/%s" % (remote, remote_branch)
             remote_head = _git_ok(["rev-parse", "--verify", remote_ref])
             counts = _git_ok(["rev-list", "--left-right", "--count", "HEAD...%s" % remote_ref])
