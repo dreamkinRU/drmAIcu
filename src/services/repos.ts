@@ -114,7 +114,7 @@ export const reposCheckout = (path: string, branch: string, create: boolean, tok
   execCapability<SimpleGitResult>('repos.checkout', { path, branch, create }, token);
 
 export const reposSyncPreview = (path: string) =>
-  execCapability<{ ok: boolean; snapshot: string; files: string[]; branch: string; head: string | null; diff_stat: string }>(
+  execCapability<{ ok: boolean; snapshot: string; files: string[]; branch: string; head: string | null; diff_stat: string; error?: string; snapshot_mismatch?: boolean }>(
     'repos.sync_preview', { path },
   );
 

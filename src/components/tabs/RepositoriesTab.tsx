@@ -30,6 +30,7 @@ import {
   reposRebaseContinue,
   reposRebaseAbort,
   reposSync,
+  reposSyncPreview,
   REPOS_PLUGIN_ID,
 } from '../../services/repos';
 

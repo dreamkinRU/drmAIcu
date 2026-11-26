@@ -108,6 +108,8 @@ def _sanitize_remote_url(value):
         if not parsed.scheme or not parsed.netloc:
             return raw
         host = parsed.hostname or ''
+        if ':' in host and not host.startswith('['):
+            host = '[%s]' % host
         if parsed.port:
             host += ':%d' % parsed.port
         safe_query = [
@@ -357,11 +359,15 @@ def repo_sync_preview(path, expected_files=None):
                     for chunk in iter(lambda: stream.read(1024 * 1024), b''):
                         digest.update(chunk)
             elif stat.S_ISDIR(info.st_mode):
-                nested_head = _r(['rev-parse', 'HEAD'], full)
-                digest.update(b'DIR:')
-                digest.update(nested_head.get('stdout', '').encode('utf-8', errors='replace'))
-                nested_status = _r(['status', '--porcelain=v1', '-z', '--untracked-files=all'], full)
-                digest.update(nested_status.get('stdout', '').encode('utf-8', errors='replace'))
+                # Submodule: include its own working-tree snapshot, not just the gitlink SHA.
+                try:
+                    nested = repo_sync_preview(full)
+                except Exception as e:
+                    return {'ok': False, 'error': 'не удалось проверить submodule %s: %s' % (rel, e)}
+                if not nested.get('ok'):
+                    return {'ok': False, 'error': 'не удалось проверить submodule %s: %s' % (rel, nested.get('error', 'unknown error'))}
+                digest.update(b'SUBMODULE:')
+                digest.update(nested['snapshot'].encode('ascii'))
             else:
                 digest.update(b'OTHER:')
         except FileNotFoundError:
