@@ -1,6 +1,6 @@
 # Plugin System drmAIcu v1.0
 
-Архитектура утверждена (B — Dynamic Plugin System, Repos Plugin — C Full Integration, авторизация — A GitHub App, установка — B Built-in Catalog + Manual, автоматизация — B Controlled Automation). Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN_API_CONTRACT.md).
+Архитектура утверждена: Dynamic Plugin System, Repos Plugin с интеграцией через локальный Git CLI, авторизация средствами настроенного Git (Credential Manager / SSH), установка из Built-in Catalog + Manual, Controlled Automation. Отдельная GitHub App-интеграция не используется. Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN_API_CONTRACT.md).
 
 ## Состав
 
@@ -26,7 +26,8 @@
 
 - устанавливаются только плагины из встроенного каталога или проверенного локального источника;
 - входные параметры capability валидируются только по JSON-структуре;
-- критические операции выполняются только после одноразового подтверждения;
+- ядро принудительно задаёт минимальную политику: READ — AUTO, WRITE — CONFIRM, CRITICAL — отдельное подтверждение; плагин может только усилить эту политику;
+- токен подтверждения привязан к plugin ID, capability, permission, policy и точным параметрам операции;
 - полная процессная изоляция сторонних плагинов — отдельный этап развития (вне v1.0).
 
 ## Интеграция с ядром

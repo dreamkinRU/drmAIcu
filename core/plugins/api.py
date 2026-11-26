@@ -9,8 +9,8 @@ import threading
 import traceback
 
 from .confirmations import ConfirmationError
-from .models import ConfirmationPolicy
-from .permissions import PermissionDenied
+from .models import ConfirmationPolicy, PermissionLevel
+from .permissions import PermissionDenied, permission_level
 
 
 class GatewayBlocked(Exception):
@@ -90,9 +90,30 @@ class PluginAPI:
     # --- capabilities ---
 
     def register_capability(self, name, permission, handler, confirmation='auto', description=''):
-        ConfirmationPolicy(confirmation)
+        """Регистрирует capability, не позволяя плагину ослабить политику ядра."""
+        try:
+            requested = ConfirmationPolicy(confirmation).value
+            level = permission_level(permission)
+        except ValueError as e:
+            raise ValueError('invalid capability permission/policy: %s' % e)
+
+        minimum = {
+            PermissionLevel.READ.value: ConfirmationPolicy.AUTO.value,
+            PermissionLevel.WRITE.value: ConfirmationPolicy.CONFIRM.value,
+            PermissionLevel.CRITICAL.value: ConfirmationPolicy.CRITICAL.value,
+        }[level]
+        rank = {
+            ConfirmationPolicy.AUTO.value: 0,
+            ConfirmationPolicy.CONFIRM.value: 1,
+            ConfirmationPolicy.CRITICAL.value: 2,
+        }
+        if rank[requested] < rank[minimum]:
+            raise ValueError(
+                'confirmation policy %s is weaker than required %s for %s' %
+                (requested, minimum, permission)
+            )
         with self._caps_lock:
-            self._caps[name] = Capability(name, permission, handler, confirmation, description or '')
+            self._caps[name] = Capability(name, permission, handler, requested, description or '')
 
     def capabilities(self):
         with self._caps_lock:
@@ -121,7 +142,14 @@ class PluginAPI:
         if cap.policy in (ConfirmationPolicy.CONFIRM.value, ConfirmationPolicy.CRITICAL.value):
             if confirmation_token:
                 try:
-                    self._manager.confirmations.consume(confirmation_token, params=params)
+                    self._manager.confirmations.consume(
+                        confirmation_token,
+                        plugin_id=self._plugin_id,
+                        capability=name,
+                        permission=cap.permission,
+                        policy=cap.policy,
+                        params=params,
+                    )
                 except ConfirmationError as e:
                     raise GatewayBlocked('confirmation_invalid', str(e))
                 return self._invoke(cap, params)

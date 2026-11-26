@@ -63,7 +63,7 @@ def initialize(ctx):
                                            create=bool((params or {}).get('create')))
 
     def _sync(params):
-        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False))
+        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False), _sc(params, 'snapshot'))
 
     reg = ctx.register_capability
     reg('repos.diagnostics', 'repos.read', _diagnostics, 'auto',

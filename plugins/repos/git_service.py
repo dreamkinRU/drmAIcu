@@ -12,7 +12,7 @@ import subprocess
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
     'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base', 'config',
-    'add', 'commit', 'switch',
+    'add', 'commit', 'switch', 'check-ref-format',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}
 
@@ -42,8 +42,23 @@ def git_version():
 def validate_repo_path(path):
     if not path or not os.path.isdir(path):
         raise GitCommandRejected('repo path does not exist: %s' % path)
-    if not os.path.isdir(os.path.join(path, '.git')):
+    marker = os.path.join(path, '.git')
+    if not os.path.exists(marker):
         raise GitCommandRejected('not a git repository: %s' % path)
+    # В обычном репозитории .git — каталог; в worktree/submodule — файл.
+    git = shutil.which('git')
+    if not git:
+        raise GitUnavailable('Git CLI не установлен')
+    try:
+        probe = subprocess.run(
+            [git, '-C', os.path.abspath(path), 'rev-parse', '--is-inside-work-tree'],
+            capture_output=True, text=True, timeout=DEFAULT_TIMEOUT,
+            shell=False, encoding='utf-8', errors='replace',
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise GitCommandRejected('cannot validate git repository: %s' % e)
+    if probe.returncode != 0 or probe.stdout.strip() != 'true':
+        raise GitCommandRejected('not a git working tree: %s' % path)
 
 
 def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):

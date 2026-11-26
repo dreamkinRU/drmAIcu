@@ -93,8 +93,8 @@ class ConfirmationManager:
         items.sort(key=lambda p: p.get('created', 0))
         return items
 
-    def consume(self, cid, params=None):
-        """Валидация и изъятие подтверждения (single-use). Возвращает item."""
+    def consume(self, cid, plugin_id, capability, permission, policy, params):
+        """Проверяет полный контекст операции и изымает одноразовый токен."""
         with self._lock:
             item = self._pending.get(cid)
             if item is None:
@@ -103,10 +103,18 @@ class ConfirmationManager:
                 self._pending.pop(cid, None)
                 self._save()
                 raise ConfirmationError('confirmation expired')
-            if params is not None:
-                given = self._hash_params_safe(item['plugin'], item['capability'], params)
-                if given != item['params_hash']:
-                    raise ConfirmationError('confirmation does not match provided params')
+            expected = {
+                'plugin': plugin_id,
+                'capability': capability,
+                'permission': permission,
+                'policy': policy,
+            }
+            for key, value in expected.items():
+                if item.get(key) != value:
+                    raise ConfirmationError('confirmation does not match operation context (%s)' % key)
+            given = self._hash_params_safe(plugin_id, capability, params)
+            if given != item.get('params_hash'):
+                raise ConfirmationError('confirmation does not match provided params')
             self._pending.pop(cid, None)
             self._save()
             return item
