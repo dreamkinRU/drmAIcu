@@ -957,11 +957,17 @@ def _rollback_locked(resume_journal=False):
     journal = load_journal()
     if JOURNAL_LOCK:
         return {'success': False, 'error': 'Движок заблокирован: ' + JOURNAL_LOCK}
-    if journal is not None and not resume_journal:
-        return {'success': False, 'error': 'Незавершённая транзакция требует recover_journal() перед откатом.'}
     man = load_manifest()
     if MANIFEST_LOCK:
         return {'success': False, 'error': 'Движок заблокирован: ' + MANIFEST_LOCK}
+    if journal is not None and not resume_journal:
+        if journal.get('op') != 'rollback':
+            return {'success': False, 'error': 'Незавершённый apply требует recover_journal() перед откатом.'}
+        applied = man.get('applied') or []
+        last_applied = applied[-1] if applied else None
+        if not last_applied or str(last_applied.get('patch_id')) != str(journal.get('patch_id')):
+            return {'success': False, 'error': 'Rollback-журнал не соответствует последнему применённому патчу; требуется ручная диагностика.'}
+        # Повторный вызов rollback безопасно возобновляет ранее прерванный rollback.
     if not man.get('applied'):
         return {'success': False, 'error': 'Нет патчей для отката'}
     last = man['applied'][-1]
