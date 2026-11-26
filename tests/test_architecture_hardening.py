@@ -1,9 +1,14 @@
 import json
+import os
+import subprocess
+import sys
+import time
 
 import pytest
 
 import patch_engine
 from core.plugins.resource_governor import PluginResourceGovernor, PluginResourceLimitError
+from core.plugins.worker_process import PluginWorker
 from plugins.repos import git_service
 
 
@@ -139,3 +144,37 @@ def test_corrupt_journal_recovery_reports_blocked(tmp_path, monkeypatch):
     assert patch_engine.JOURNAL_LOCK
     assert journal.exists()
     assert (tmp_path / 'patch_journal.json.corrupt').exists()
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='POSIX process-group integration test')
+def test_worker_cleanup_kills_descendant_after_group_leader_exits(tmp_path):
+    parent_code = (
+        "import subprocess,sys; "
+        "child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
+        "print(child.pid, flush=True)"
+    )
+    parent = subprocess.Popen(
+        [sys.executable, '-c', parent_code],
+        cwd=str(tmp_path), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, start_new_session=True,
+    )
+    child_pid = int(parent.stdout.readline().strip())
+    parent.wait(timeout=5)
+    parent.stdout.close()
+
+    worker = PluginWorker(object(), 'test', str(tmp_path), 'plugin.py', object())
+    worker._terminate_process_tree(parent)
+
+    def child_is_alive():
+        stat_path = '/proc/%s/stat' % child_pid
+        try:
+            with open(stat_path, 'r', encoding='utf-8') as handle:
+                return handle.read().split()[2] != 'Z'
+        except FileNotFoundError:
+            return False
+
+    for _ in range(40):
+        if not child_is_alive():
+            break
+        time.sleep(0.05)
+    assert not child_is_alive()
