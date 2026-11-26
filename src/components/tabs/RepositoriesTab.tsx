@@ -4,6 +4,7 @@ import type { LogEntry, PluginInfo,
   RepoBranches,
   RepoDiff,
   RepoFileContent,
+  RepoRemote,
   RepoLog,
   RepoStatus,
   RepoSyncResult,
@@ -23,6 +24,7 @@ import {
   reposPull,
   reposPush,
   reposReadFile,
+  reposRemote,
   reposStatus,
   reposSync,
   REPOS_PLUGIN_ID,
@@ -141,7 +143,7 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
           <SectionButton active={section === 'overview'} onClick={() => setSection('overview')}>Обзор</SectionButton>
           <SectionButton active={section === 'history'} onClick={() => setSection('history')}>История</SectionButton>
           <SectionButton active={section === 'branches'} onClick={() => setSection('branches')}>Ветки</SectionButton>
-          <SectionButton active={section === 'changes'} onClick={() => setSection('changes')}>Изменения</SectionButton>
+          <SectionButton active={section === 'changes'} alert={!!status?.changed} onClick={() => setSection('changes')}>Изменения</SectionButton>
         </div>
       </div>
 
@@ -176,9 +178,9 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
       ) : section === 'history' ? (
         <HistorySection repoPath={repoPath} />
       ) : section === 'branches' ? (
-        <BranchesSection repoPath={repoPath} setNotice={setNoticeLogged} reload={reload} />
+        <BranchesSection repoPath={repoPath} status={status} setNotice={setNoticeLogged} reload={reload} />
       ) : (
-        <ChangesSection repoPath={repoPath} setNotice={setNoticeLogged} reload={reload} />
+        <ChangesSection repoPath={repoPath} status={status} setNotice={setNoticeLogged} reload={reload} />
       )}
     </div>
   );
@@ -404,9 +406,48 @@ function HistorySection({ repoPath }: { repoPath: string }) {
   );
 }
 
+// ==== карточка текущего проекта: с каким репозиторием сейчас работаем ====
+
+function RepoInfoCard({ repoPath, status }: { repoPath: string; status: RepoStatus | null }) {
+  const [remote, setRemote] = useState<RepoRemote | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const r = await reposRemote(repoPath);
+      if (alive && r.status === 'done' && r.result.ok) setRemote(r.result);
+    })();
+    return () => { alive = false; };
+  }, [repoPath]);
+
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 space-y-1.5 text-sm">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold uppercase tracking-wide text-cyan-300">Текущий проект</span>
+        <span className="font-mono text-gray-200 break-all">{repoPath || '—'}</span>
+        {status && <span className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-cyan-300 text-xs font-mono">{status.branch || '—'}</span>}
+        {status && status.upstream && <span className="text-xs text-gray-400 font-mono">→ {status.upstream}</span>}
+        {status && status.ahead > 0 && <span className="text-emerald-400 text-xs">↑{status.ahead} не запушено</span>}
+        {status && status.behind > 0 && <span className="text-amber-400 text-xs">↓{status.behind} не получено</span>}
+      </div>
+      {remote && remote.remotes.length > 0 ? (
+        <div className="text-xs text-gray-400 space-y-0.5">
+          {remote.remotes.map(rm => (
+            <div key={rm.name} className="break-all"><span className="font-mono text-gray-300">{rm.name}:</span> <span className="font-mono">{rm.url}</span></div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs text-amber-400">
+          Удалённые репозитории не настроены («git remote -v» пуст) — push будет невозможен. Путь исправления: в консоли репозитория выполните <span className="font-mono">git remote add origin &lt;URL&gt;</span> и нажмите «Обновить».
+        </div>
+      )}
+      <div className="text-xs text-gray-500">Все разделы — История, Ветки, Изменения — показывают файлы и коммиты именно этого репозитория.</div>
+    </div>
+  );
+}
+
 function BranchesSection({
-  repoPath, setNotice, reload,
-}: { repoPath: string; setNotice: (n: Notice) => void; reload: () => void }) {
+  repoPath, status, setNotice, reload,
+}: { repoPath: string; status: RepoStatus | null; setNotice: (n: Notice) => void; reload: () => void }) {
   const [branches, setBranches] = useState<RepoBranches | null>(null);
   const [newBranch, setNewBranch] = useState('');
   const [busy, setBusy] = useState(false);
@@ -439,8 +480,10 @@ function BranchesSection({
   };
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-      <h3 className="font-bold text-white">🌿 Ветки</h3>
+    <div className="space-y-4">
+      <RepoInfoCard repoPath={repoPath} status={status} />
+      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
+        <h3 className="font-bold text-white">🌿 Ветки</h3>
       <div className="flex items-center gap-2">
         <input
           value={newBranch}
@@ -474,13 +517,14 @@ function BranchesSection({
       ) : (
         <p className="text-sm text-gray-500">загрузка…</p>
       )}
+      </div>
     </div>
   );
 }
 
 function ChangesSection({
-  repoPath, setNotice, reload,
-}: { repoPath: string; setNotice: (n: Notice) => void; reload: () => void }) {
+  repoPath, status, setNotice, reload,
+}: { repoPath: string; status: RepoStatus | null; setNotice: (n: Notice) => void; reload: () => void }) {
   const [stagedDiff, setStagedDiff] = useState<RepoDiff | null>(null);
   const [unstagedDiff, setUnstagedDiff] = useState<RepoDiff | null>(null);
   const [commitMsg, setCommitMsg] = useState('');
@@ -494,6 +538,9 @@ function ChangesSection({
   }, [repoPath]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Обновить список файлов и диффы + общий статус (сомнений в том, откуда данные, не остётся).
+  const refresh = useCallback(() => { load(); reload(); }, [load, reload]);
 
   const write = async (label: string, call: (token?: string) => ReturnType<typeof reposAdd>) => {
     setBusy(true);
@@ -516,6 +563,8 @@ function ChangesSection({
     <div className="space-y-4">
       {pending && <ConfirmationBar pending={pending} busy={busy} clear={() => setPending(null)} />}
 
+      <RepoInfoCard repoPath={repoPath} status={status} />
+
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">✏️ Коммит (по шагам)</h3>
         <div className="flex items-center gap-2">
@@ -529,6 +578,41 @@ function ChangesSection({
           <OpBtn busy={busy} label="commit" onClick={() => write('commit', t => reposCommit(repoPath, commitMsg, t))} />
           <OpBtn busy={busy} label="push" onClick={() => write('push', t => reposPush(repoPath, t))} />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-white text-sm">Файлы с изменениями в этом репозитории ({status?.entries.length ?? 0})</h3>
+          <button
+            onClick={refresh}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 border border-gray-700 text-gray-200 hover:border-gray-500"
+          >
+            ↻ Обновить
+          </button>
+        </div>
+        {status && status.entries.length > 0 ? (
+          <div className="space-y-1">
+            {status.entries.map(e => (
+              <div key={e.file} className="flex items-center gap-2 text-sm">
+                <span
+                  className={`font-mono text-[10px] px-1.5 py-0.5 rounded border ${
+                    e.code.includes('D')
+                      ? 'bg-red-500/10 border-red-400/40 text-red-300'
+                      : e.code === '??'
+                      ? 'bg-emerald-500/10 border-emerald-400/40 text-emerald-300'
+                      : 'bg-amber-500/10 border-amber-400/40 text-amber-300'
+                  }`}
+                  title={e.code === '??' ? 'новый файл' : e.code.includes('D') ? 'удалён' : 'изменён'}
+                >{e.code.trim() || '—'}</span>
+                <span className="font-mono text-gray-300 flex-1 truncate" title={e.file}>{e.file}</span>
+                {e.staged && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-400/30 text-cyan-300">staged</span>}
+                {e.unstaged && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400">unstaged</span>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500">изменений нет — рабочее дерево чистое (если изменения есть в другой папке — откройте её в поле пути выше и нажмите «Открыть»)</p>
+        )}
       </div>
 
       <DiffCard title="staged (--cached)" diff={stagedDiff} />
@@ -591,7 +675,7 @@ function OpBtn({ busy, label, onClick, disabled }: { busy: boolean; label: strin
   );
 }
 
-function SectionButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function SectionButton({ active, alert, onClick, children }: { active: boolean; alert?: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -599,6 +683,8 @@ function SectionButton({ active, onClick, children }: { active: boolean; onClick
       className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
         active
           ? 'bg-cyan-500/15 border-cyan-400/70 text-cyan-300'
+          : alert
+          ? 'bg-amber-500/15 border-amber-400/70 text-amber-300 hover:bg-amber-500/25'
           : 'bg-gray-800/50 border-gray-700/60 text-gray-300 hover:border-gray-600'
       }`}
     >

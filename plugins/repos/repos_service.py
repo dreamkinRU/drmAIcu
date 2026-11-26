@@ -171,7 +171,7 @@ def repo_add(path):
 def repo_commit(path, message):
     validate(path)
     if not message or not str(message).strip():
-        return {'ok': False, 'error': 'требуется сообщение коммита — пустой коммит отклонён (как в sync.bat)'}
+        return {'ok': False, 'error': 'требуется сообщение коммита — пустой коммит отклонён (как в sync.bat). Путь исправления: введите осмысленное сообщение в поле «Сообщение коммита» над кнопками git add -A / commit / push и повторите commit.'}
     r = _r(['commit', '-m', str(message).strip()], path)
     if not r['ok']:
         err = r['stderr'].strip() or r['stdout'].strip() or 'git commit failed'
@@ -207,7 +207,7 @@ def repo_push(path):
         err = (r['stderr'].strip() or r['stdout'].strip() or 'git push failed')[-1500:]
         if 'rejected' in err.lower():
             return {'ok': False, 'rejected': True,
-                    'error': 'push отклонён — на сервере есть новые коммиты. Сначала выполните pull.',
+                    'error': 'push отклонён — на сервере есть новые коммиты. Путь исправления: вкладка «Репозитории» → «Обзор» → кнопка «pull --rebase» или «Синхронизировать», затем повторите push',
                     'details': err}
         return {'ok': False, 'error': err}
     return {'ok': True, 'branch': rb, 'remote': remote, 'output': (r['stderr'] or r['stdout'] or '')[-1500:]}
@@ -248,7 +248,7 @@ def repo_sync(path, message):
         msg = (message or '').strip() if message else ''
         if not msg:
             return {'ok': False,
-                    'error': 'есть незакоммиченные изменения — требуется сообщение коммита (как в sync.bat: пустое сообщение отклоняется)',
+                    'error': 'есть незакоммиченные изменения — требуется сообщение коммита (как в sync.bat: пустое сообщение отклоняется). Путь исправления: введите сообщение коммита в поле над кнопкой «Синхронизировать» и повторите — sync сам выполнит add -A → commit → pull --rebase → push',
                     'steps': steps}
         ra = repo_add(path)
         steps.append({'step': 'add', **ra})
