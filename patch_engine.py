@@ -1,5 +1,5 @@
 # patch_engine.py
-# Patch engine HARDENED: atomic two-phase commits, no UI dependencies (версия — version.py)
+# Patch engine HARDENED: journaled crash-recoverable multi-file transactions (версия — version.py)
 from version import VERSION as _ENGINE_VERSION
 import json, os, re, ast, shutil, hashlib, threading, subprocess
 from datetime import datetime
@@ -12,6 +12,7 @@ DOWNLOADS_DIR = os.path.join(os.path.expanduser('~'), 'Downloads')
 MANIFEST = os.path.join(BASE, 'patch_manifest.json')
 JOURNAL = os.path.join(BASE, 'patch_journal.json')
 MANIFEST_LOCK = ''
+JOURNAL_LOCK = ''
 LOG = []
 
 for d in (PATCH_DIR, ARCHIVE_DIR, BACKUP_DIR):
@@ -78,18 +79,29 @@ def to_bytes(text, nl):
 
 
 def check_ts(name, code):
+    """None означает PASS; строка описывает FAIL или UNAVAILABLE."""
     root = os.path.dirname(os.path.abspath(__file__))
     script = os.path.join(root, 'tools', 'tscheck.cjs')
-    if not os.path.exists(script):
-        return None
+    if not os.path.isfile(script):
+        return 'UNAVAILABLE: tools/tscheck.cjs отсутствует'
+    node = shutil.which('node')
+    if not node:
+        return 'UNAVAILABLE: Node.js не найден в PATH'
     try:
-        r = subprocess.run(['node', script, name], input=code.encode('utf-8'),
-                           capture_output=True, timeout=30, cwd=root)
-    except Exception:
+        result = subprocess.run(
+            [node, script, name], input=code.encode('utf-8'),
+            capture_output=True, timeout=30, cwd=root,
+        )
+    except subprocess.TimeoutExpired:
+        return 'UNAVAILABLE: проверка Node.js превысила timeout 30s'
+    except OSError as exc:
+        return 'UNAVAILABLE: не удалось запустить Node.js: %s' % exc
+    except Exception as exc:
+        return 'UNAVAILABLE: ошибка запуска валидатора: %s' % exc
+    if result.returncode == 0:
         return None
-    if r.returncode == 0:
-        return None
-    return (r.stdout or r.stderr).decode('utf-8', 'replace').strip()[:300]
+    output = (result.stdout or result.stderr).decode('utf-8', 'replace').strip()
+    return output[:500] or 'FAIL: TypeScript validator exited with code %s' % result.returncode
 
 
 def load_manifest():
@@ -146,19 +158,58 @@ def _write_journal(j):
 
 
 def load_journal():
+    """Повреждение/неоднозначность журнала блокируют новые операции записи."""
+    global JOURNAL_LOCK
+    if not os.path.exists(JOURNAL):
+        if os.path.exists(JOURNAL + '.tmp'):
+            JOURNAL_LOCK = 'обнаружен незавершённый временный crash-журнал: ' + JOURNAL + '.tmp'
+            return None
+        JOURNAL_LOCK = ''
+        return None
     try:
         with open(JOURNAL, 'r', encoding='utf-8') as f:
-            j = json.load(f)
-        return j if isinstance(j, dict) else None
-    except Exception:
+            journal = json.load(f)
+        if not isinstance(journal, dict):
+            raise ValueError('journal root must be an object')
+        if journal.get('op') not in ('apply', 'rollback'):
+            raise ValueError('unknown journal operation')
+        if not isinstance(journal.get('steps'), list) or not journal['steps']:
+            raise ValueError('journal steps must be a non-empty list')
+        for index, step in enumerate(journal['steps']):
+            if not isinstance(step, dict) or not isinstance(step.get('tgt'), str):
+                raise ValueError('invalid journal step %s' % index)
+            if not isinstance(step.get('done', False), bool):
+                raise ValueError('invalid journal done flag at step %s' % index)
+        JOURNAL_LOCK = ''
+        return journal
+    except Exception as exc:
+        corrupt_copy = JOURNAL + '.corrupt'
+        try:
+            if not os.path.exists(corrupt_copy):
+                shutil.copy2(JOURNAL, corrupt_copy)
+        except OSError:
+            pass
+        JOURNAL_LOCK = 'crash-журнал повреждён или недоступен (%s); файл сохранён для ручного восстановления' % str(exc)[:160]
+        log('JOURNAL CORRUPT: ' + JOURNAL_LOCK, 'ERROR')
         return None
 
 
 def _clear_journal():
+    global JOURNAL_LOCK
     try:
         os.remove(JOURNAL)
-    except OSError:
+    except FileNotFoundError:
         pass
+    except OSError as exc:
+        JOURNAL_LOCK = 'не удалось удалить crash-журнал: %s' % exc
+        return
+    try:
+        if os.path.exists(JOURNAL + '.tmp'):
+            os.remove(JOURNAL + '.tmp')
+    except OSError as exc:
+        JOURNAL_LOCK = 'не удалось удалить временный crash-журнал: %s' % exc
+        return
+    JOURNAL_LOCK = ''
 
 
 def _pick_backup(backs):
@@ -731,6 +782,11 @@ def apply_patch(raw):
 def _apply_patch_locked(data, pid):
     patch_fname = data.get('filename', '') if isinstance(data, dict) else ''
     # B52 FIX: повреждённый манифест → любые изменения движка запрещены
+    journal0 = load_journal()
+    if JOURNAL_LOCK:
+        return {'success': False, 'error': 'Движок заблокирован: ' + JOURNAL_LOCK}
+    if journal0 is not None:
+        return {'success': False, 'error': 'Движок ожидает восстановления незавершённой транзакции. Сначала выполните recover_journal().'}
     man0 = load_manifest()
     if MANIFEST_LOCK:
         log('Patch ' + pid + ' rejected: манифест заблокирован (повреждён)', 'ERROR')
@@ -836,7 +892,7 @@ def _apply_patch_locked(data, pid):
                 log('Patch ' + pid + ' auto-archived to ' + os.path.basename(dst_patch), 'INFO')
             except Exception as arch_err:
                 log('Auto-archive failed for ' + pid + ': ' + str(arch_err), 'WARN')
-        log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
+        log('Patch ' + pid + ' applied with journaled recovery to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
         return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам) и перемещён в архив', 'backups': allb}
     except Exception as e:
         rollback_failed = []
@@ -897,7 +953,12 @@ def _verify_current_for_rollback(op, path):
     return None
 
 
-def _rollback_locked():
+def _rollback_locked(resume_journal=False):
+    journal = load_journal()
+    if JOURNAL_LOCK:
+        return {'success': False, 'error': 'Движок заблокирован: ' + JOURNAL_LOCK}
+    if journal is not None and not resume_journal:
+        return {'success': False, 'error': 'Незавершённая транзакция требует recover_journal() перед откатом.'}
     man = load_manifest()
     if MANIFEST_LOCK:
         return {'success': False, 'error': 'Движок заблокирован: ' + MANIFEST_LOCK}
@@ -1059,13 +1120,16 @@ def _recover_apply(j):
 
 
 def recover_journal():
-    # B51 FIX (P1-04): вызывается на старте процесса (main.py __main__) —
-    # завершает незавершённую транзакцию, оставленную аварийным завершением предыдущего процесса
+    # Crash recovery выполняется до любых новых операций записи.
     j = load_journal()
+    if JOURNAL_LOCK:
+        return {'action': 'blocked', 'error': JOURNAL_LOCK}
     if j is None:
         return None
     with TX_LOCK:
         j = load_journal()
+        if JOURNAL_LOCK:
+            return {'action': 'blocked', 'error': JOURNAL_LOCK}
         if j is None:
             return None
         op = j.get('op')
@@ -1085,10 +1149,10 @@ def recover_journal():
                 _clear_journal()
                 return {'action': 'rollback-stale', 'patch_id': pid}
             log('CRASH RECOVERY: незавершённый rollback патча ' + pid + ' — завершаю восстановление', 'WARNING')
-            return _rollback_locked()
-        _clear_journal()
-        log('CRASH RECOVERY: неизвестный тип журнала (' + str(op) + ') — журнал удалён', 'WARNING')
-        return None
+            return _rollback_locked(resume_journal=True)
+        JOURNAL_LOCK = 'неизвестная операция crash-журнала: ' + str(op)
+        log('CRASH RECOVERY: неизвестный тип журнала (' + str(op) + ') — новые записи заблокированы', 'ERROR')
+        return {'action': 'blocked', 'patch_id': pid, 'error': JOURNAL_LOCK}
 
 
 def force_unlock_manifest():
@@ -1110,10 +1174,13 @@ def stats():
     ps = list_patches()
     man = load_manifest()
     ap = len([p for p in ps if p['is_applied']])
+    load_journal()
     return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap, 'version': _ENGINE_VERSION,
             'errors': len([p for p in ps if p.get('error')]),
             'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),
             'rollbacks_count': len(man.get('rollbacks', [])),
             'backups_count': len(os.listdir(BACKUP_DIR)),
-            'locked': bool(MANIFEST_LOCK)}
+            'locked': bool(MANIFEST_LOCK or JOURNAL_LOCK),
+            'journal_locked': bool(JOURNAL_LOCK),
+            'journal_lock_reason': JOURNAL_LOCK}

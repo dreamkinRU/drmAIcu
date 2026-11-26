@@ -1,8 +1,18 @@
 # Новые возможности drmAIcu
 
-**Версия 3.6.1 Model** · Обновлено: 23.11.2026 · PR #10–#19 и патчи 144–160
+**Версия 3.14.0 Model** · Обновлено: 27.11.2026 · PR #10–#54 и патчи 144–162
 
-Все описанные ниже механизмы сверены с кодом (`patch_engine.py`, `agent_engine.py`, `main.py`, фронтенд и тесты). Тест-бейзлайн: `python -m pytest tests -q` → **88 passed**.
+Ниже сохранена историческая хронология возможностей. Тестовый результат 88 passed относится к старому состоянию v3.6.1; текущий результат проверяется в GitHub Actions для конкретного коммита и не фиксируется здесь.
+
+## 3.14.0 Model (27.11.2026, PR #54)
+
+### Architecture hardening: PATCHMASTER, Repos Sync, Plugin API и Worker Runtime
+- TypeScript/JavaScript validation теперь fail-closed: PASS только после успешного запуска validator; отсутствие Node.js/скрипта, timeout и launch error возвращают UNAVAILABLE и блокируют запись.
+- Повреждённый crash journal и orphan journal.tmp блокируют новые apply/rollback и сохраняются для диагностики; multi-file transaction документирована как crash-recoverable, но не atomic visibility для внешних читателей.
+- Repos Sync сериализован под advisory lock всего flow; staged tree сверяется перед commit и после commit; при mismatch push запрещён. Git output проходит credential redaction.
+- Plugin API проверяет browser Origin/Sec-Fetch-Site и loopback Host для mutating-запросов; это CSRF/DNS-rebinding mitigation, не user authentication.
+- PluginResourceGovernor ограничивает до 8 worker-процессов и 16 одновременных RPC; worker lifecycle и завершение process tree усилены. Hard CPU/RAM quotas и полноценная OS sandbox остаются вне этого изменения.
+- Добавлены регрессионные тесты на corrupt journal, unavailable validator, API origin guard, resource limits, Git secret redaction и staged-tree race.
 
 ## 3.6.1 Model (23.11.2026, патчи 144–160)
 
@@ -86,7 +96,7 @@
 
 ```bash
 python -m pytest tests -v
-# 88 passed: 47 в tests/test_engine.py + 41 в tests/test_patching_hardcore.py
+# Исторический результат на v3.6.1: 88 passed (47 в tests/test_engine.py + 41 в tests/test_patching_hardcore.py)
 ```
 
 - Тесты работают в `tmp_path` и не трогают реальный репозиторий.

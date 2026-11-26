@@ -1,6 +1,19 @@
+## v.3.14.0 Model (Текущая) — 27.11.2026
+
+### Architecture hardening: PATCHMASTER, Repos Sync, Plugin API и Worker Runtime
+
+- PATCHMASTER: TypeScript/JavaScript validator теперь различает PASS и FAIL/UNAVAILABLE; отсутствие Node.js, отсутствие инструмента, timeout и ошибки запуска не превращаются в успешную проверку.
+- PATCHMASTER: повреждённый crash journal и оставшийся journal.tmp сохраняются для диагностики и блокируют новые apply/rollback до ручного восстановления; неизвестный формат не удаляется автоматически.
+- PATCHMASTER: гарантия уточнена — multi-file apply является crash-recoverable транзакцией с recovery barrier, но не атомарна для внешних читателей между отдельными os.replace.
+- Repos Plugin: весь Sync flow выполняется под межпоточной/межпроцессной advisory lock; staged Git tree фиксируется и сверяется перед commit и после него; при несовпадении push блокируется.
+- Repos Plugin: lock registry переведён на WeakValueDictionary; Git stdout/stderr очищаются от распространённых форм credentials перед выдачей в UI/API.
+- Plugin API: браузерные mutations проверяют Origin, Sec-Fetch-Site и loopback Host; cross-site и DNS-rebinding Host отклоняются. Запросы без Origin остаются допустимыми для локальных CLI/API-клиентов — guard не является пользовательской аутентификацией.
+- Plugin Runtime: добавлен PluginResourceGovernor (до 8 worker-процессов и 16 одновременных RPC); lifecycle worker получает явные состояния; остановка завершает process group на POSIX и дерево процессов через taskkill /T на Windows.
+- Добавлены регрессионные тесты на повреждённый journal, недоступный TypeScript validator, API Origin guard, resource limits и очистку Git credentials.
+- Ограничения зафиксированы явно: hard CPU/RAM quotas и OS sandbox не реализованы; внешний Git CLI не обязан соблюдать advisory lock; mismatch после commit оставляет локальный commit, но блокирует push.
 # drmAIcu — История изменений
 
-## v.3.13.1 Model (Текущая) — 26.11.2026
+## v.3.13.1 Model — 26.11.2026
 
 ### Resilience: разноверсионные файлы плагина после прервавшейся синхронизации
 

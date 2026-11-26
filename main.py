@@ -369,7 +369,7 @@ def s_status():
     except Exception:
         pass
     return JSONResponse({'ollama': 'online' if ok else 'offline', 'guardian': 'active',
-                         'version': _VER + ' MULTI-ATOMIC HARDENED',
+                         'version': _VER + ' CRASH-RECOVERABLE HARDENED',
                          'providers': {'groq': bool(cfg.get('groq_api_key')),
                                        'openrouter': bool(cfg.get('openrouter_api_key')),
                                        'gemini': bool(cfg.get('gemini_api_key'))}})

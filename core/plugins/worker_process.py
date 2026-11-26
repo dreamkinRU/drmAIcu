@@ -5,6 +5,7 @@ under the same OS account and must not be treated as hostile-code containment.
 """
 import json
 import os
+import signal
 import struct
 import subprocess
 import sys
@@ -79,15 +80,29 @@ class PluginWorker:
         self._stopping = False
         self._stderr_tail = ''
         self._subscriptions = []
+        self.state = 'created'
+        self._governor_worker_acquired = False
+        self._governor_lock = threading.Lock()
 
     def start(self, timeout=30):
+        if self.state != 'created':
+            raise PluginWorkerError('invalid worker state: %s' % self.state)
+        self.state = 'starting'
+        governor = getattr(self.manager, 'resource_governor', None)
+        if governor is not None:
+            try:
+                governor.acquire_worker()
+                self._governor_worker_acquired = True
+            except Exception as exc:
+                self.state = 'failed'
+                raise PluginWorkerError(str(exc))
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'worker.py')
         env = {}
         for key in ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'HOME',
                     'USERPROFILE', 'APPDATA', 'LOCALAPPDATA'):
             if key in os.environ:
                 env[key] = os.environ[key]
-        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
+        flags = (getattr(subprocess, 'CREATE_NO_WINDOW', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)) if os.name == 'nt' else 0
         kwargs = {
             'stdin': subprocess.PIPE,
             'stdout': subprocess.PIPE,
@@ -99,23 +114,33 @@ class PluginWorker:
         }
         if os.name != 'nt':
             kwargs['start_new_session'] = True
-        self.process = subprocess.Popen(
-            [sys.executable, '-I', script, self.plugin_id, self.plugin_dir, self.entry_point],
-            **kwargs
-        )
+        try:
+            self.process = subprocess.Popen(
+                [sys.executable, '-I', script, self.plugin_id, self.plugin_dir, self.entry_point],
+                **kwargs
+            )
+        except Exception:
+            self.state = 'failed'
+            self._release_governor_worker()
+            raise
         self._reader = threading.Thread(target=self._reader_loop, name='plugin-rpc-' + self.plugin_id, daemon=True)
         self._stderr_reader = threading.Thread(target=self._stderr_loop, name='plugin-stderr-' + self.plugin_id, daemon=True)
         self._reader.start()
         self._stderr_reader.start()
         if not self._ready.wait(timeout):
             self.terminate()
+            self.state = 'failed'
             raise PluginWorkerError('plugin worker startup timed out after %ss' % timeout)
         if self._ready_error:
             error = self._ready_error
             self.terminate()
+            self.state = 'failed'
             raise PluginWorkerError('plugin worker startup failed: %s' % error)
         if self._dead_error:
+            self.state = 'failed'
+            self._release_governor_worker()
             raise PluginWorkerError('plugin worker exited during startup: %s' % self._dead_error)
+        self.state = 'running'
         return True
 
     def _send(self, message):
@@ -129,6 +154,12 @@ class PluginWorker:
         with self._request_lock:
             if self._dead_error:
                 raise PluginWorkerError(self._dead_error)
+            governor = getattr(self.manager, 'resource_governor', None)
+            call_acquired = False
+            if governor is not None:
+                call_acquired = governor.acquire_call(timeout)
+                if not call_acquired:
+                    raise PluginWorkerError('plugin RPC concurrency limit reached')
             self._next_id += 1
             request_id = self._next_id
             event = threading.Event()
@@ -148,6 +179,8 @@ class PluginWorker:
             finally:
                 with self._pending_lock:
                     self._pending.pop(request_id, None)
+                if call_acquired:
+                    governor.release_call()
 
     def invoke(self, capability, params):
         return self._request('invoke', capability=capability, params=params or {})
@@ -163,6 +196,7 @@ class PluginWorker:
         if self.process is None:
             return
         self._stopping = True
+        self.state = 'stopping'
         try:
             self._request('stop', timeout=10)
         except Exception:
@@ -175,26 +209,59 @@ class PluginWorker:
                 pass
         self._subscriptions.clear()
 
+    def _release_governor_worker(self):
+        with self._governor_lock:
+            if not self._governor_worker_acquired:
+                return
+            self._governor_worker_acquired = False
+        governor = getattr(self.manager, 'resource_governor', None)
+        if governor is not None:
+            governor.release_worker()
+
+    def _terminate_process_tree(self, proc):
+        if proc.poll() is not None:
+            return
+        if os.name == 'nt':
+            try:
+                subprocess.run(
+                    ['taskkill', '/PID', str(proc.pid), '/T', '/F'],
+                    capture_output=True, timeout=5, check=False,
+                )
+                proc.wait(timeout=3)
+                return
+            except Exception:
+                pass
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+                proc.wait(timeout=3)
+                return
+            except ProcessLookupError:
+                return
+            except Exception:
+                pass
+        try:
+            proc.kill()
+            proc.wait(timeout=3)
+        except Exception:
+            pass
+
     def terminate(self):
         proc = self.process
         if proc is None:
+            self._release_governor_worker()
+            if self.state not in ('failed', 'stopped'):
+                self.state = 'stopped'
             return
-        if proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=3)
-            except Exception:
-                try:
-                    proc.kill()
-                    proc.wait(timeout=3)
-                except Exception:
-                    pass
+        self._terminate_process_tree(proc)
         for stream in (proc.stdin, proc.stdout, proc.stderr):
             try:
                 if stream:
                     stream.close()
             except OSError:
                 pass
+        self._release_governor_worker()
+        self.state = 'failed' if self._dead_error and not self._stopping else 'stopped'
 
     def _handle_rpc(self, message):
         method = message.get('method')
@@ -276,19 +343,14 @@ class PluginWorker:
                 try:
                     self.process.wait(timeout=0.2)
                 except Exception:
-                    try:
-                        self.process.terminate()
-                        self.process.wait(timeout=2)
-                    except Exception:
-                        try:
-                            self.process.kill()
-                            self.process.wait(timeout=2)
-                        except Exception:
-                            pass
+                    self._terminate_process_tree(self.process)
             if self.process and self.process.poll() is not None and not self._stopping:
                 self._dead_error = self._dead_error or ('worker exited with code %s' % self.process.returncode)
                 self.manager._worker_crashed(self.plugin_id, self._dead_error)
             self._ready.set()
+            self._release_governor_worker()
+            if self.state not in ('stopping', 'stopped'):
+                self.state = 'failed' if self._dead_error else 'stopped'
             with self._pending_lock:
                 pending = list(self._pending.values())
             for event, result in pending:

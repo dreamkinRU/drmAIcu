@@ -1,10 +1,12 @@
 # Архитектура drmAIcu
 
-**Версия 3.13.1 Model** · Обновлено: 26.11.2026 · Единый источник версии — `version.py` · PR #10–#50 и патчи 144–162
+**Версия 3.14.0 Model** · Обновлено: 27.11.2026 · Единый источник версии — `version.py` · PR #10–#54 и патчи 144–162
 
 ## Компоненты
 - **main.py**: UI-слой на NiceGUI/FastAPI (порт 8080): REST API, SSE-стриминг задач, опрос провайдеров, мониторинг RAM/VRAM, аналитик проекта, логи, рестарт. Движок патчей вынесен в отдельный модуль.
-- **patch_engine.py**: Чистое ядро движка патчей (без NiceGUI): `safe_path`, two-phase атомарные транзакции, `TX_LOCK`, `expected_sha`, манифест, бэкапы. Его импортируют и тесты, и UI.
+- **patch_engine.py**: Чистое ядро движка патчей (без NiceGUI): `safe_path`, журналируемые crash-recoverable multi-file транзакции, `TX_LOCK`, `expected_sha`, манифест, бэкапы. `os.replace` атомарен для одного файла; набор файлов не является атомарным для внешних читателей. Его импортируют и тесты, и UI.
+- **Plugin Runtime Governor** (`core/plugins/resource_governor.py`): лимит до 8 внешних worker-процессов и 16 одновременных RPC; это ограничение admission/concurrency, а не hard CPU/RAM quota или OS sandbox. Browser-origin guard для `/api/plugins/*` блокирует cross-site browser mutations и не-loopback Host, но не является пользовательской аутентификацией.
+- **Storage Contract**: `docs/STORAGE_CONTRACT.md` фиксирует правила новых persistence-изменений и карту миграционного долга; legacy JSON-хранилища ещё не все мигрированы на schema_version.
 - **agent_engine.py (v2.3+)**: Асинхронный движок ИИ с поддержкой `run_task` и потокового `stream_task` для локальных (Ollama, Strata, LM Studio, Bionic) и облачных (Groq, OpenRouter, Together, Hugging Face, Gemini) провайдеров.
 - **src/App.tsx (v.3.10.0 Model)**: React-панель управления (порт 5173), работающая через Vite Proxy.
 - **core/plugins/**: Plugin System v1.0 — PluginManager (registry/loader/lifecycle/permissions/settings/secrets/events/confirmations), REST `/api/plugins/*` (`routes.py`), контракт `docs/PLUGIN_API_CONTRACT.md`. Repos Plugin — `plugins/repos/` (работа с локальными и сетевыми git-репозиториями: status/log/branches/diff/read_file — auto READ; add/commit/pull/push/fetch/checkout/sync — WRITE с подтверждением; Sync = полная замена `sync.bat`; авторизация как в локальном git, allowlist Git CLI). Этап 5 — мост PATCHMASTER ↔ Sync: `repos.patch_status` (READ/auto) читает журнал патчей движка (только чтение; запись исходников — у `patch_engine.apply_patch`) и подсвечивает несинхронизированные файлы патчей. Данные плагинов — `data/plugins/` (в .gitignore).
@@ -24,13 +26,13 @@
 - **Документация**: `/api/md/{name}` читает/пишет MD-файлы.
 - **Статус**: `/api/status` возвращает состояние системы и готовность ядра.
 - **Валидация**: `validate()` проверяет `.py` через `ast.parse` и `.json` через `json.loads`.
-- **Валидация TSX**: `check_ts()` вызывает локальный `typescript` через `tscheck.cjs` для проверки синтаксиса до записи.
+- **Валидация TS/JS**: `check_ts()` возвращает PASS только после успешного запуска `tools/tscheck.cjs`; отсутствие Node.js/скрипта, timeout и ошибка запуска дают UNAVAILABLE и блокируют запись.
 - **Песочница путей**: `safe_path()` отклоняет `../` и абсолютные пути в операциях и файловых эндпоинтах.
 - **Байтовый SHA**: `sha_file()` вычисляет SHA-256 файла по байтам для детекта изменений и `expected_sha`.
 
 ## Механизмы безопасности и надёжности
 - **Universal AI-Guardian**: Валидация `ast.parse` для Python, `json.loads` для JSON и `typescript` для TSX перед любой записью.
-- **Двухфазный атомарный коммит**: Гарантия «всё или ничего» при мультифайловых патчах. Фаза 1 валидирует все файлы до записи; Фаза 2 пишет и проверяет контрольные суммы.
+- **Crash-recoverable multi-file transaction**: Фаза 1 валидирует все файлы; перед первой заменой сохраняется crash-журнал; после каждой замены обновляется `done`; при старте выполняется recovery barrier. Это восстанавливаемая транзакция, а не атомарная видимость нескольких файлов для внешних процессов.
 - **Замок транзакций** (`TX_LOCK`): одна транзакция одновременно, защита от двойного клика (B12, B24).
 - **Детект устаревшего кода** (per-file SHA): `expected_sha` в операции + повторная сверка SHA-256 каждого целевого файла с диском между расчётом и записью; если файл изменён вне панели — весь патч отказывается с ошибкой «Код на диске изменился вне панели (stale target_file)» (B19, B21).
 - **Накопление операций** (кэш в `compute_ops`): Последовательные операции над одним файлом складываются корректно, а не перезаписывают друг друга (B18).
@@ -41,12 +43,12 @@
 - **Песочница путей**: `safe_path()` отклоняет `../` и абсолютные пути (B9).
 - **Байтовый SHA-256**: Контрольная сумма считается по байтам, файлы сохраняются с исходным типом переносов строк (B11).
 - **Ротация манифеста**: Последние 100 записей `applied` / 500 записей `history` (B14).
-- **88 тестов**: `python -m pytest tests` покрывает все критические дефекты движка (B1–B44), включая security-регрессы (path traversal, tampered-бэкап, дубликаты `patch_id`, мусорные diff).
+- **Регрессионное покрытие**: тесты PATCHMASTER, Plugin API, Repos Plugin и hardening запускаются в CI на Ubuntu и Windows; число passed/skipped фиксируется только по фактическому результату CI.
 
 ## Известные ограничения и долги
-- **CORS/host**: Закрыто в 3.5.3 — только localhost, `127.0.0.1`.
+- **Plugin API browser-origin guard**: mutating-запросы с браузерным `Origin` принимаются только от локальных UI-origin (`localhost` / `127.0.0.1`, порты 5173/8080); cross-site и DNS-rebinding Host отклоняются. Запросы без `Origin` оставлены для локальных CLI/API-клиентов — это CSRF-защита, не аутентификация.
 - **`expected_sha` поддерживается движком, но не генерируется в UI**: Поле можно задать вручную в операции, но панель его автоматически не передаёт.
 - **Документация**: актуализирована в `v.3.9.0 Model` (26.11.2026) — отражены новые провайдеры, объединённая вкладка «Провайдеры», SSE-стриминг и обновлённый UI.
-- **Декомпозиция `main.py`**: Движок патчей вынесен в `patch_engine.py` (3.5.3); `App.tsx` остаётся основным контейнером состояния.
+- **Декомпозиция `main.py`**: файл остаётся composition root и содержит legacy API/UI orchestration; поэтапное выделение routers/services — отдельный архитектурный долг, сознательно не смешанный с hardening-транзакциями.
 - **CI**: Добавлен в `.github/workflows/ci.yml` (`pytest` + `tsc` + `vite build`).
 - **`sync.bat`**: отчёт о последнем merged PR требует установленного `gh` CLI — есть fallback на `git log` (PR #17, #19).

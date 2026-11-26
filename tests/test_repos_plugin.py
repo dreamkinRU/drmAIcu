@@ -327,3 +327,40 @@ def test_rebase_recovery_reports_conflicts_and_requires_explicit_actions(tmp_pat
     # rebase --abort вне rebase — честная ошибка, а не fake-успех
     aborted = repos_service.repo_rebase_abort(local)
     assert aborted['ok'] is False and 'rebase' in aborted['error']
+
+
+def test_sync_aborts_when_staged_tree_changes_before_commit(tmp_path, monkeypatch):
+    from plugins.repos import repos_service
+
+    repo = make_repo(tmp_path)
+    with open(os.path.join(repo, 'README.md'), 'w', encoding='utf-8') as handle:
+        handle.write('approved content\n')
+    snapshot = repos_service.repo_sync_snapshot(repo)['snapshot']
+    original_run = repos_service._r
+    write_tree_calls = {'count': 0}
+
+    def concurrent_index_change(args, path=None, timeout=None):
+        result = original_run(args, path, timeout or repos_service.git_service.DEFAULT_TIMEOUT)
+        if args == ['write-tree']:
+            write_tree_calls['count'] += 1
+            if write_tree_calls['count'] == 2:
+                result = dict(result)
+                result['stdout'] = 'externally-changed-tree\n'
+        return result
+
+    monkeypatch.setattr(repos_service, '_r', concurrent_index_change)
+    before = subprocess.run(
+        ['git', 'rev-parse', 'HEAD'], cwd=repo, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+
+    result = repos_service.repo_sync(repo, 'test: approved tree', snapshot)
+
+    after = subprocess.run(
+        ['git', 'rev-parse', 'HEAD'], cwd=repo, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    assert result['ok'] is False
+    assert result['snapshot_changed'] is True
+    assert 'index изменился' in result['error']
+    assert before == after
