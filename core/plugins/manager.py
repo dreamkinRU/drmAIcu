@@ -22,6 +22,7 @@ from .models import (PLUGIN_API_VERSION, PluginRecord, PluginStatus, api_compati
 from .permissions import PermissionLevel, PermissionManager, permission_level
 from .secrets import SecretManager
 from .settings import SettingsManager, SettingsValidationError
+from .worker_process import PluginWorker, PluginWorkerError
 
 
 class PluginInstallError(Exception):
@@ -52,6 +53,7 @@ class PluginManager:
         self.activity = ActivityJournal(os.path.join(p, 'activity'))
         self.loader = Loader(self.builtin_dir, os.path.join(p, 'installed'))
         self._modules = {}
+        self._workers = {}
         self._apis = {}
         self._hooks = {}
         self._lock = threading.RLock()
@@ -79,7 +81,11 @@ class PluginManager:
 
     def install(self, source, grant_read=True):
         """Установка из builtin:<id> / каталога / архива: VALIDATE → REGISTER → AUTHORIZE."""
-        plugin_dir, manifest, errors = self.loader.resolve_source(source)
+        try:
+            plugin_dir, manifest, errors = self.loader.resolve_source(source)
+        except Exception as e:
+            self.activity.add(None, 'error', 'install_rejected', source=str(source), error=str(e))
+            raise PluginInstallError(str(e))
         if errors:
             self.activity.add(None, 'error', 'install_rejected', source=str(source), error='; '.join(errors))
             raise PluginInstallError('; '.join(errors))
@@ -97,7 +103,22 @@ class PluginManager:
             builtin_path = os.path.abspath(os.path.join(self.builtin_dir, pid))
             is_builtin = os.path.abspath(plugin_dir) == builtin_path
             if not is_builtin:
-                plugin_dir = self.loader.install_copy(pid, plugin_dir)
+                try:
+                    plugin_dir = self.loader.install_copy(pid, plugin_dir)
+                    # После staging повторно читаем manifest из фактически установленной копии.
+                    copied_manifest, _manifest_path = self.loader.read_manifest(plugin_dir)
+                    copied_manifest, copied_errors = self.loader.validate_manifest(copied_manifest)
+                    if copied_errors:
+                        raise PluginInstallError('installed plugin manifest validation failed: %s' % '; '.join(copied_errors))
+                    if copied_manifest.get('id') != pid:
+                        raise PluginInstallError('installed plugin manifest id changed during copy')
+                    manifest = copied_manifest
+                except PluginInstallError:
+                    shutil.rmtree(os.path.join(self.loader.installed_dir, pid), ignore_errors=True)
+                    raise
+                except Exception as e:
+                    shutil.rmtree(os.path.join(self.loader.installed_dir, pid), ignore_errors=True)
+                    raise PluginInstallError('failed to copy/validate installed plugin: %s' % e)
             rec = PluginRecord.from_manifest(manifest)
             rec.source = 'builtin' if is_builtin else 'installed'
             rec.path = plugin_dir
@@ -138,20 +159,46 @@ class PluginManager:
         self.registry.update(pid, status=PluginStatus.LOADING.value, last_error='')
         self.activity.add(pid, 'info', 'loading')
         try:
-            module = load_entry(pid, rec.path, rec.entry_point)
             api = PluginAPI(self, pid)
-            if not hasattr(module, 'initialize'):
-                raise ImportError('entry_point does not define initialize(ctx)')
-            ok = module.initialize(api)
-            if ok is False:
-                raise RuntimeError('initialize() returned False')
-            self._modules[pid] = module
-            self._apis[pid] = api
-            hooks = {k: getattr(module, k) for k in ('start', 'stop', 'health', 'uninstall') if hasattr(module, k)}
-            if 'start' in hooks:
-                hooks['start']()
+            if rec.source == 'installed':
+                # Любой вручную установленный Python-плагин работает вне процесса ядра.
+                worker = PluginWorker(self, pid, rec.path, rec.entry_point, api)
+                self._workers[pid] = worker
+                self._apis[pid] = api
+                worker.start()
+                hooks = {
+                    'stop': worker.stop,
+                    'health': worker.health,
+                    'uninstall': worker.uninstall,
+                }
+            else:
+                module = load_entry(pid, rec.path, rec.entry_point)
+                if not hasattr(module, 'initialize'):
+                    raise ImportError('entry_point does not define initialize(ctx)')
+                ok = module.initialize(api)
+                if ok is False:
+                    raise RuntimeError('initialize() returned False')
+                self._modules[pid] = module
+                self._apis[pid] = api
+                hooks = {k: getattr(module, k) for k in ('start', 'stop', 'health', 'uninstall') if hasattr(module, k)}
+                if 'start' in hooks:
+                    hooks['start']()
             self._hooks[pid] = hooks
+            # Проверка и переход LOADING → RUNNING атомарны относительно worker-crash callback.
+            with self._lock:
+                current = self.registry.get(pid)
+                if current is None or current.status == PluginStatus.ERROR.value:
+                    raise PluginWorkerError('plugin worker failed during startup')
+                if rec.source == 'installed':
+                    active_worker = self._workers.get(pid)
+                    if (active_worker is None or active_worker._dead_error
+                            or active_worker.process is None or active_worker.process.poll() is not None):
+                        raise PluginWorkerError('plugin worker exited during startup')
+                self.registry.update(pid, status=PluginStatus.RUNNING.value, enabled=True, last_error='')
         except Exception as e:
+            worker = self._workers.pop(pid, None)
+            if worker:
+                worker.terminate()
             unload(pid)
             with self._lock:
                 self._modules.pop(pid, None)
@@ -161,7 +208,6 @@ class PluginManager:
                                  last_error=str(e))
             self.activity.add(pid, 'error', 'initialize_failed', error=str(e))
             raise
-        self.registry.update(pid, status=PluginStatus.RUNNING.value, enabled=True, last_error='')
         self.activity.add(pid, 'info', 'running')
 
     def enable(self, pid):
@@ -187,7 +233,9 @@ class PluginManager:
             except Exception as e:
                 if api:
                     api.log('error', 'stop_failed', error=str(e))
-        unload(pid)
+        worker = self._workers.pop(pid, None)
+        if worker is None:
+            unload(pid)
         with self._lock:
             self._modules.pop(pid, None)
             self._apis.pop(pid, None)
@@ -197,8 +245,14 @@ class PluginManager:
         rec = self.registry.get(pid)
         if rec is None:
             raise KeyError(pid)
+        worker = self._workers.get(pid)
         module = self._modules.get(pid)
-        if module is not None and hasattr(module, 'uninstall'):
+        if worker is not None:
+            try:
+                worker.uninstall()
+            except Exception:
+                pass
+        elif module is not None and hasattr(module, 'uninstall'):
             try:
                 module.uninstall()
             except Exception:
@@ -211,6 +265,17 @@ class PluginManager:
         self.settings.remove_plugin(pid, keep=False)
         self.registry.remove(pid)
         self.activity.add(pid, 'action', 'uninstalled')
+
+    def _worker_crashed(self, pid, error):
+        """Отмечает аварийное завершение внешнего процесса плагина."""
+        with self._lock:
+            rec = self.registry.get(pid)
+            if rec is None or self._workers.get(pid) is None:
+                return
+            if rec.status not in (PluginStatus.LOADING.value, PluginStatus.RUNNING.value):
+                return
+            self.registry.update(pid, status=PluginStatus.ERROR.value, enabled=False, last_error=str(error))
+        self.activity.add(pid, 'error', 'worker_crashed', error=str(error))
 
     # ------------------------------------------------------------------ info / health
 
@@ -232,15 +297,20 @@ class PluginManager:
         if rec is None:
             raise KeyError(pid)
         result = {'status': rec.status, 'enabled': rec.enabled, 'last_error': rec.last_error}
-        if rec.status == PluginStatus.RUNNING.value and pid in self._modules:
-            module = self._modules[pid]
-            if hasattr(module, 'health'):
-                try:
+        if rec.status == PluginStatus.RUNNING.value:
+            worker = self._workers.get(pid)
+            module = self._modules.get(pid)
+            try:
+                if worker is not None:
+                    h = worker.health() or {}
+                elif module is not None and hasattr(module, 'health'):
                     h = module.health() or {}
-                    if isinstance(h, dict):
-                        result.update(h)
-                except Exception as e:
-                    result['health_error'] = str(e)
+                else:
+                    h = {}
+                if isinstance(h, dict):
+                    result.update(h)
+            except Exception as e:
+                result['health_error'] = str(e)
         return result
 
     # ------------------------------------------------------------------ gateway

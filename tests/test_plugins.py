@@ -3,6 +3,10 @@ import json
 import os
 import sys
 import zipfile
+import tarfile
+import stat
+import subprocess
+import time
 
 import pytest
 
@@ -469,3 +473,182 @@ def test_recent_issues_updates_api_logs_contract():
     src = open(os.path.join(BASE, 'main.py'), encoding='utf-8').read()
     assert "mgr.recent_issues(limit=60)" in src
     assert "@app.post('/api/logs')" in src
+
+
+def test_manual_plugin_executes_in_separate_worker_process(env, manager):
+    import os
+
+    srcroot = env[0].parent / 'external_worker'
+    src = _write_plugin(srcroot)
+    info = manager.install(str(src))
+    assert info['source'] == 'installed'
+    assert info['execution_mode'] == 'isolated_process'
+
+    manager.enable('demo')
+    worker = manager._workers['demo']
+    assert worker.process is not None
+    assert worker.process.pid != os.getpid()
+    assert manager.health('demo')['items'] == 0
+
+    manager.permissions.grant('demo', 'demo.storage.write')
+    request = manager.exec('demo', 'demo.write_store', params={'item': 'from-worker'})
+    assert request['status'] == 'confirmation_required'
+    result = manager.confirm(request['confirmation']['id'], True)
+    assert result['result'] == {'count': 1}
+    assert manager.health('demo')['items'] == 1
+
+    manager.disable('demo')
+    assert 'demo' not in manager._workers
+    assert manager.registry.get('demo').status == 'disabled'
+
+
+def test_worker_context_bridges_settings_secrets_and_events(env, manager):
+    srcroot = env[0].parent / 'external_worker_api'
+    source = '''
+EVENTS = []
+CTX = None
+
+def initialize(ctx):
+    global CTX
+    CTX = ctx
+    ctx.set_settings({'greeting': 'hello from worker'})
+    ctx.set_secret('token', 'worker-secret-value')
+    ctx.subscribe(lambda event, payload: EVENTS.append((event, payload)))
+    ctx.register_capability('demo.worker_state', 'demo.storage.read', _state, 'auto')
+    return True
+
+def _state(params):
+    return {'settings': CTX.settings(), 'secret': CTX.get_secret('token'), 'events': len(EVENTS), 'manager_exposed': hasattr(CTX, '_manager')}
+
+def health():
+    return {'events': len(EVENTS)}
+'''
+    d = srcroot / 'demo'
+    d.mkdir(parents=True)
+    (d / 'plugin.json').write_text(json.dumps(GOOD_PLUGIN), encoding='utf-8')
+    (d / 'plugin.py').write_text(source, encoding='utf-8')
+    manager.install(str(d))
+    manager.enable('demo')
+
+    manager.events.publish('worker_test_event', {'value': 1})
+    result = manager.exec('demo', 'demo.worker_state', params={})
+    assert result['status'] == 'done'
+    assert result['result']['settings']['greeting'] == 'hello from worker'
+    assert result['result']['secret'] == 'worker-secret-value'
+    assert result['result']['events'] == 1
+    assert result['result']['manager_exposed'] is False
+    assert manager.secrets.get_secret('demo', 'token') == 'worker-secret-value'
+    manager.uninstall('demo')
+
+
+def test_install_rejects_zip_member_path_traversal(env, manager):
+    archive = str(env[0] / 'traversal.zip')
+    outside = env[0] / 'outside-plugin-file.txt'
+    with zipfile.ZipFile(archive, 'w') as z:
+        z.writestr('../outside-plugin-file.txt', 'must not be extracted')
+    with pytest.raises(PluginInstallError):
+        manager.install(archive)
+    assert not outside.exists()
+
+
+def test_install_rejects_zip_symlink_member(env, manager):
+    archive = str(env[0] / 'symlink.zip')
+    info = zipfile.ZipInfo('demo/escape')
+    info.create_system = 3
+    info.external_attr = (stat.S_IFLNK | 0o777) << 16
+    with zipfile.ZipFile(archive, 'w') as z:
+        z.writestr(info, '../../outside.txt')
+    with pytest.raises(PluginInstallError):
+        manager.install(archive)
+
+
+def test_install_rejects_tar_symlink_member(env, manager):
+    archive = str(env[0] / 'symlink.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:
+        info = tarfile.TarInfo('demo/escape')
+        info.type = tarfile.SYMTYPE
+        info.linkname = '../../outside.txt'
+        tar.addfile(info)
+    with pytest.raises(PluginInstallError):
+        manager.install(archive)
+
+
+def test_install_rejects_archive_over_uncompressed_size_limit(env, manager, monkeypatch):
+    import core.plugins.loader as loader_module
+
+    monkeypatch.setattr(loader_module, 'MAX_PACKAGE_BYTES', 512)
+    archive = str(env[0] / 'oversized.zip')
+    with zipfile.ZipFile(archive, 'w') as z:
+        z.writestr('demo/large.txt', 'x' * 1024)
+    with pytest.raises(PluginInstallError):
+        manager.install(archive)
+
+
+def test_install_rejects_symlink_in_manual_plugin_source(env, manager, tmp_path):
+    srcroot = tmp_path / 'external_symlink'
+    src = _write_plugin(srcroot)
+    outside = tmp_path / 'outside.txt'
+    outside.write_text('outside', encoding='utf-8')
+    link = src / 'linked.txt'
+    try:
+        os.symlink(str(outside), str(link))
+    except (OSError, NotImplementedError):
+        pytest.skip('symlink creation is unavailable on this platform')
+    with pytest.raises(PluginInstallError):
+        manager.install(str(src))
+
+
+def test_install_rejects_windows_junction_in_manual_plugin_source(env, manager, tmp_path):
+    if os.name != 'nt':
+        pytest.skip('Windows junction test')
+    src = _write_plugin(tmp_path / 'external_junction')
+    outside = tmp_path / 'outside_dir'
+    outside.mkdir()
+    junction = src / 'linked_dir'
+    result = subprocess.run(
+        ['cmd', '/c', 'mklink', '/J', str(junction), str(outside)],
+        capture_output=True, text=True, encoding='utf-8', errors='replace',
+    )
+    if result.returncode != 0:
+        pytest.skip('junction creation is unavailable on this runner')
+    with pytest.raises(PluginInstallError):
+        manager.install(str(src))
+
+
+def test_install_safe_tar_archive_starts_worker(env, manager, tmp_path):
+    source = _write_plugin(tmp_path / 'tar_source')
+    archive = str(tmp_path / 'safe-plugin.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:
+        tar.add(str(source), arcname='demo')
+    info = manager.install(archive)
+    assert info['execution_mode'] == 'isolated_process'
+    manager.enable('demo')
+    assert manager.health('demo')['items'] == 0
+    manager.disable('demo')
+
+
+def test_worker_crash_marks_only_that_plugin_as_error(env, manager, tmp_path):
+    source = '''
+def initialize(ctx):
+    ctx.register_capability('demo.read_after_crash', 'demo.storage.read', lambda params: {'ok': True}, 'auto')
+    return True
+'''
+    d = tmp_path / 'crash_plugin' / 'demo'
+    d.mkdir(parents=True)
+    (d / 'plugin.json').write_text(json.dumps(GOOD_PLUGIN), encoding='utf-8')
+    (d / 'plugin.py').write_text(source, encoding='utf-8')
+    manager.install(str(d))
+    manager.enable('demo')
+
+    worker = manager._workers['demo']
+    worker.process.terminate()
+    worker.process.wait(timeout=5)
+    for _ in range(100):
+        if manager.registry.get('demo').status == 'error':
+            break
+        time.sleep(0.02)
+    assert manager.registry.get('demo').status == 'error'
+    assert manager.registry.get('demo').enabled is False
+    with pytest.raises(Exception):
+        manager.exec('demo', 'demo.read_after_crash', params={})
+    manager.uninstall('demo')

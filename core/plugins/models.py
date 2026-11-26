@@ -88,7 +88,9 @@ class PluginRecord:
             'id': self.id, 'name': self.name, 'version': self.version,
             'description': self.description, 'author': self.author,
             'api_version': self.api_version, 'status': self.status,
-            'source': self.source, 'enabled': self.enabled,
+            'source': self.source,
+            'execution_mode': 'trusted_in_process' if self.source == 'builtin' else 'isolated_process',
+            'enabled': self.enabled,
             'last_error': self.last_error,
         }
         if details:
