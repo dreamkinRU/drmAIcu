@@ -103,6 +103,26 @@ def _save_journal(data):
         os.fsync(stream.fileno())
     os.replace(temp, _JOURNAL_PATH)
 
+def _create_backup_bundle(operation_id, backup_ref, backup_oid):
+    """Экспортирует backup ref в отдельный bundle вне .git и проверяет его."""
+    backup_dir = os.path.join(_JOURNAL_DIR, "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    bundle_path = os.path.join(backup_dir, operation_id + ".bundle")
+    _git_ok(["bundle", "create", bundle_path, backup_ref], _TIMEOUT)
+    _git_ok(["bundle", "verify", bundle_path], _TIMEOUT)
+    heads = _git_ok(["bundle", "list-heads", bundle_path], _TIMEOUT)
+    if not any(line.split() == [backup_oid, backup_ref] for line in heads.splitlines()):
+        raise UpdateError("Backup bundle не содержит ожидаемую Git-ссылку", "bundle_ref_missing")
+    digest = hashlib.sha256()
+    with open(bundle_path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "path": os.path.relpath(bundle_path, BASE).replace(os.sep, "/"),
+        "sha256": digest.hexdigest(),
+        "size_bytes": os.path.getsize(bundle_path),
+    }
+
 
 def _repo_lock():
     # Локальный импорт предотвращает цикл api -> routes_updates -> updater -> api.shared.
@@ -370,6 +390,8 @@ class UpdateManager:
                     _save_journal(journal)
                     _git_ok(["update-ref", backup_ref, stash_oid])
                     _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
+                    journal["backup_bundle"] = _create_backup_bundle(backup_id, backup_ref, stash_oid)
+                    _save_journal(journal)
                     if _worktree_status():
                         raise UpdateError("После резервирования рабочее дерево не стало чистым", "backup_incomplete")
                     journal["backup_verified"] = True
