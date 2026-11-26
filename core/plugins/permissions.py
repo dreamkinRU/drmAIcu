@@ -6,8 +6,8 @@ import threading
 from .models import PermissionLevel
 
 CRITICAL_PERMISSIONS = {
-    'github.pull_requests.merge',
-    'github.repositories.delete',
+    'repos.remote.delete',
+    'repos.history.drop',
 }
 
 
@@ -17,7 +17,7 @@ def permission_level(permission):
     full = str(permission or '').lower()
     if full in CRITICAL_PERMISSIONS or action in ('merge', 'delete'):
         return PermissionLevel.CRITICAL.value
-    if action == 'write':
+    if action in ('write', 'sync'):
         return PermissionLevel.WRITE.value
     if action == 'read':
         return PermissionLevel.READ.value

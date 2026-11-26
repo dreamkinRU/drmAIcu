@@ -2,7 +2,8 @@
 
 AI не получает возможность выполнить произвольную команду ОС: команда выбирается
 только из GIT_COMMANDS, аргументы передаются списком (shell=False), пути
-ограничиваются рабочим каталогом проекта/репозитория.
+ограничиваются каталогом репозитория. Для pull/push требуется подтверждение
+WRITE через Capability Gateway — сам сервис политику не решает.
 """
 import os
 import shutil
@@ -11,11 +12,14 @@ import subprocess
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
     'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base', 'config',
+    'add', 'commit', 'switch',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}
 
 DEFAULT_TIMEOUT = 30
 PUSH_TIMEOUT = 120
+
+DIFF_MAX_CHARS = 200_000
 
 
 class GitUnavailable(Exception):
@@ -45,7 +49,7 @@ def validate_repo_path(path):
 def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):
     """-> {'ok': bool, 'code': int, 'stdout': str, 'stderr': str}"""
     if not is_git_available():
-        raise GitUnavailable('Git CLI не установлен. Установите git — REST-функции GitHub продолжают работать без него.')
+        raise GitUnavailable('Git CLI не установлен. Установите git — локальные операции с репозиториями недоступны.')
     if not args:
         raise GitCommandRejected('empty git command')
     head = str(args[0])
@@ -54,8 +58,9 @@ def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):
     if cwd is not None:
         validate_repo_path(cwd)
     argv = ['git'] + [str(a) for a in args]
+    attempt_timeout = PUSH_TIMEOUT if head == 'push' else timeout
     try:
-        proc = subprocess.run(argv, cwd=cwd, timeout=PUSH_TIMEOUT if head == 'push' else timeout,
+        proc = subprocess.run(argv, cwd=cwd, timeout=attempt_timeout,
                               capture_output=True, text=True, shell=False,
                               encoding='utf-8', errors='replace')
     except subprocess.TimeoutExpired:

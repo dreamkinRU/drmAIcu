@@ -1,6 +1,6 @@
 # Plugin SystemdrmAIcu v1.0
 
-Архитектура утверждена (B — Dynamic Plugin System, GitHub Plugin — C Full Integration,
+Архитектура утверждена (B — Dynamic Plugin System, Repos Plugin — C Full Integration,
 авторизация — A GitHub App, установка — B Built-in Catalog + Manual, автоматизация — B
 Controlled Automation). Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN_API_CONTRACT.md).
 
@@ -39,10 +39,10 @@ Permission Manager контролирует вызовы через Plugin API, 
 
 - `main.py` монтирует `plugin_router` две строки (`include_router`) — production-логика
   ядра не изменяется.
-- GitHub Plugin никогда не применяет AI-патчи сам: изменения исходников только через
-  PATCHMASTER (`patch_engine.apply_patch`), GitHub Plugin анализирует `git diff`
+- Repos Plugin никогда не применяет AI-патчи сам: изменения исходников только через
+  PATCHMASTER (`patch_engine.apply_patch`), Repos Plugin анализирует `git diff`
   и выполняет push только после подтверждения (этап 5+).
-- Git CLI вызывается только через `plugins/github/git_service.py`: allowlist команд,
+- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд,
   аргументы списком (без shell-строки), таймауты, проверка путей.
 
 ## Статусы и хранение

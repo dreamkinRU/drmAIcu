@@ -116,12 +116,12 @@ def test_api_compatibility():
 
 
 def test_permission_levels():
-    assert permission_level('github.pull_requests.merge') == 'critical'
-    assert permission_level('github.repositories.delete') == 'critical'
-    assert permission_level('github.contents.write') == 'write'
-    assert permission_level('github.contents.read') == 'read'
+    assert permission_level('repos.remote.delete') == 'critical'
+    assert permission_level('repos.history.merge') == 'critical'
+    assert permission_level('repos.sync') == 'write'
+    assert permission_level('repos.read') == 'read'
     with pytest.raises(ValueError):
-        permission_level('github.contents.execute')
+        permission_level('repos.contents.execute')
 
 
 def test_builtin_catalog_lists_manifest(manager):

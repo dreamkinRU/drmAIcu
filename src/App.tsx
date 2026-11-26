@@ -25,7 +25,7 @@ import LogsTab from './components/tabs/LogsTab';
 import TasksTab from './components/tabs/TasksTab';
 import PatchesTab from './components/tabs/PatchesTab';
 import PluginsTab from './components/tabs/PluginsTab';
-import GitHubTab from './components/tabs/GitHubTab';
+import RepositoriesTab from './components/tabs/RepositoriesTab';
 import { usePlugins } from './hooks/usePlugins';
 import { restartSystem as restartSystemApi } from './services/api';
 
@@ -396,8 +396,8 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'github' && (
-          <GitHubTab
+        {activeTab === 'repositories' && (
+          <RepositoriesTab
             plugins={pluginCtl.plugins}
             refresh={pluginCtl.refresh}
             setActiveTab={setActiveTab}
