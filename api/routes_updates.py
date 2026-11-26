@@ -11,25 +11,26 @@ from core.updater.manager import UpdateError, manager
 router = APIRouter()
 
 
-def _check_local_browser_request(request: Request):
+def _check_local_browser_request(request: Request, require_origin=True):
     """CSRF/browser-origin барьер для изменяющих состояние endpoint-ов.
 
     Это защита от cross-site запросов из браузера, не аутентификация против
     другого локального процесса под той же учётной записью ОС.
     """
     origin = request.headers.get("origin")
-    if not origin:
+    if not origin and require_origin:
         raise UpdateError("Для операции обновления требуется заголовок Origin.", "origin_required", 403)
-    try:
-        parsed = urlparse(origin)
-        host = parsed.hostname
-        origin_ip = ipaddress.ip_address(host) if host else None
-    except (ValueError, TypeError):
-        raise UpdateError("Некорректный Origin.", "origin_rejected", 403)
-    allowed_name = host in ("localhost", "127.0.0.1", "::1")
-    allowed_ip = bool(origin_ip and origin_ip.is_loopback)
-    if parsed.scheme != "http" or not (allowed_name or allowed_ip):
-        raise UpdateError("Операции обновления доступны только из локального браузера.", "origin_rejected", 403)
+    if origin:
+        try:
+            parsed = urlparse(origin)
+            host = parsed.hostname
+            origin_ip = ipaddress.ip_address(host) if host else None
+        except (ValueError, TypeError):
+            raise UpdateError("Некорректный Origin.", "origin_rejected", 403)
+        allowed_name = host in ("localhost", "127.0.0.1", "::1")
+        allowed_ip = bool(origin_ip and origin_ip.is_loopback)
+        if parsed.scheme != "http" or not (allowed_name or allowed_ip):
+            raise UpdateError("Операции обновления доступны только из локального браузера.", "origin_rejected", 403)
     host_header = request.headers.get("host", "")
     try:
         request_host = urlparse("//" + host_header).hostname
@@ -65,7 +66,7 @@ def _error(exc):
 @router.get("/api/updates/state")
 def update_state(request: Request):
     try:
-        _check_local_browser_request(request)
+        _check_local_browser_request(request, require_origin=False)
         return JSONResponse(manager.state())
     except Exception as exc:
         return _error(exc)
