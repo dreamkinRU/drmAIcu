@@ -1,4 +1,4 @@
-"""Repos Plugin v1.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
+"""Repos Plugin v1.2.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
 
 Политика автоматизации (замороженная, §2): READ-операции со статусом/историей/
 ветками выполняются автоматически; любые изменения (add/commit/pull/push/fetch/
@@ -62,8 +62,11 @@ def initialize(ctx):
         return repos_service.repo_checkout(_sc(params, 'path'), _sc(params, 'branch'),
                                            create=bool((params or {}).get('create')))
 
+    def _sync_preview(params):
+        return repos_service.repo_sync_preview(_sc(params, 'path'))
+
     def _sync(params):
-        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False))
+        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False), _sc(params, 'snapshot'))
 
     reg = ctx.register_capability
     reg('repos.diagnostics', 'repos.read', _diagnostics, 'auto',
@@ -92,6 +95,8 @@ def initialize(ctx):
         'git fetch --all --prune (WRITE, подтверждение)')
     reg('repos.checkout', 'repos.write', _checkout, 'confirm',
         'Переключение/создание ветки (WRITE, подтверждение)')
+    reg('repos.sync_preview', 'repos.read', _sync_preview, 'auto',
+        'Полный предварительный diff Sync без изменения index/worktree')
     reg('repos.sync', 'repos.sync', _sync, 'confirm',
         'Кнопка «Синхронизировать»: add -A -> commit -> pull --rebase -> push (одно подтверждение на весь пакет, замена sync.bat)')
     return True

@@ -166,7 +166,7 @@ def test_full_sync_package(tmp_path):
     assert step_names == ['status', 'add', 'commit', 'pull --rebase', 'merged_pr_check', 'push'], step_names
     assert res['committed'] is True and res['commit_sha']
     # коммит реально на удалённом
-    out = subprocess.run(['git', 'log', '--oneline', '-1'], cwd=remote, capture_output=True, text=True)
+    out = subprocess.run(['git', 'log', '--oneline', '-1'], cwd=remote, capture_output=True, text=True, encoding='utf-8', errors='replace')
     assert 'feat: новая фича' in out.stdout
 
     # sync без изменений — без нового коммита, но с pull/push
@@ -246,7 +246,8 @@ def test_sync_exec_flow_through_manager(tmp_path):
         rows.append({'permission': row['permission'], 'granted': True})
     mgr.permissions_put('repos', rows)
 
-    params = {'path': repo, 'message': 'e2e sync через gateway'}
+    from plugins.repos import repos_service
+    params = {'path': repo, 'message': 'e2e sync через gateway', 'snapshot': repos_service.repo_status(repo)['snapshot']}
     out = mgr.exec('repos', 'repos.sync', params)
     assert out['status'] == 'confirmation_required', out
     cid = out['confirmation']['id']
@@ -261,7 +262,7 @@ def test_sync_exec_flow_through_manager(tmp_path):
     step_names = [s['step'] for s in result['steps']]
     assert 'commit' in step_names and 'push' in step_names
     # коммит реально ушёл в bare-remote
-    out_log = subprocess.run(['git', 'log', '--oneline', '-1'], cwd=remote, capture_output=True, text=True)
+    out_log = subprocess.run(['git', 'log', '--oneline', '-1'], cwd=remote, capture_output=True, text=True, encoding='utf-8', errors='replace')
     assert 'e2e sync через gateway' in out_log.stdout
     # повторный запуск с тем же токеном — честный отказ (токен одноразовый)
     from core.plugins.api import GatewayBlocked

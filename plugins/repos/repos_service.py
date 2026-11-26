@@ -9,10 +9,16 @@
 никогда не превращается в fake-успех.
 """
 import os
+import stat
+import hashlib
+import ntpath
+import difflib
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from . import git_service
 
 READ_FILE_MAX_BYTES = 512_000
+SYNC_PREVIEW_MAX_CHARS = 1_000_000
 LOG_LIMIT_MAX = 200
 
 
@@ -20,7 +26,94 @@ def _r(args, path=None, timeout=git_service.DEFAULT_TIMEOUT):
     return git_service.run_git(args, cwd=path, timeout=timeout)
 
 
+def repo_sync_snapshot(path):
+    with git_service.repo_operation_lock(path):
+        return _repo_sync_snapshot_locked(path)
+
+
+def _repo_sync_snapshot_locked(path):
+    """Хэширует текущее содержимое изменённых/новых файлов для подтверждения Sync."""
+    validate(path)
+    commands = (
+        ['diff', '--name-only', '-z', '--no-renames'],
+        ['diff', '--cached', '--name-only', '-z', '--no-renames'],
+        ['ls-files', '--others', '--exclude-standard', '-z'],
+    )
+    names = set()
+    for args in commands:
+        result = _r(args, path)
+        if not result['ok']:
+            return {'ok': False, 'error': result['stderr'].strip() or 'cannot build sync snapshot'}
+        names.update(os.fsdecode(item) for item in result['stdout'].split('\0') if item)
+    branch = _r(['rev-parse', '--abbrev-ref', 'HEAD'], path)
+    head = _r(['rev-parse', 'HEAD'], path)
+    upstream = _r(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], path)
+    remotes = _r(['remote', '-v'], path)
+    digest = hashlib.sha256()
+    digest.update((branch.get('stdout', '').strip() + '\0').encode('utf-8'))
+    digest.update((head.get('stdout', '').strip() + '\0').encode('ascii', errors='ignore'))
+    digest.update((upstream.get('stdout', '').strip() + '\0').encode('utf-8'))
+    # Сырые URL участвуют только в хэше: в snapshot/ответ API они не возвращаются.
+    digest.update(remotes.get('stdout', '').encode('utf-8', errors='replace'))
+    files = sorted(names)
+    root = os.path.realpath(path)
+    for rel in files:
+        if not isinstance(rel, str) or rel.startswith('/') or '\\' in rel or ntpath.splitdrive(rel)[0]:
+            return {'ok': False, 'error': 'unsafe path returned by Git status'}
+        parts = rel.split('/')
+        if any(part in ('', '.', '..') for part in parts):
+            return {'ok': False, 'error': 'unsafe path returned by Git status'}
+        digest.update(rel.encode('utf-8', errors='surrogatepass'))
+        digest.update(b'\0')
+        full = root
+        try:
+            for index, part in enumerate(parts):
+                full = os.path.join(full, part)
+                info = os.lstat(full)
+                reparse = bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400))
+                if stat.S_ISLNK(info.st_mode) or reparse:
+                    if index != len(parts) - 1:
+                        return {'ok': False, 'error': 'symlink/reparse parent in changed path'}
+                    digest.update(b'LINK\0')
+                    digest.update(os.readlink(full).encode('utf-8', errors='surrogatepass'))
+                    break
+            else:
+                if stat.S_ISREG(info.st_mode):
+                    flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+                    fd = os.open(full, flags)
+                    try:
+                        opened = os.fstat(fd)
+                        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                            return {'ok': False, 'error': 'changed file was replaced while building snapshot'}
+                        digest.update(('MODE:%s:' % stat.S_IMODE(opened.st_mode)).encode('ascii'))
+                        digest.update(b'FILE\0')
+                        while True:
+                            chunk = os.read(fd, 1024 * 1024)
+                            if not chunk:
+                                break
+                            digest.update(chunk)
+                    finally:
+                        os.close(fd)
+                elif stat.S_ISDIR(info.st_mode):
+                    digest.update(b'DIR\0')
+                    if os.path.exists(os.path.join(full, '.git')):
+                        sub_head = _r(['rev-parse', 'HEAD'], full)
+                        sub_status = _r(['status', '--porcelain=v1', '-z'], full)
+                        digest.update(sub_head.get('stdout', '').strip().encode('ascii', errors='ignore'))
+                        digest.update(sub_status.get('stdout', '').encode('utf-8', errors='replace'))
+                else:
+                    digest.update(('MODE:%s\0' % info.st_mode).encode('ascii'))
+        except FileNotFoundError:
+            digest.update(b'DELETED\0')
+    return {'ok': True, 'snapshot': digest.hexdigest(), 'files': files}
+
+
 def repo_status(path):
+    with git_service.repo_operation_lock(path):
+        return _repo_status_locked(path)
+
+
+def _repo_status_locked(path):
     """status --porcelain=v1 -b + ahead/behind/branch/upstream."""
     validate(path)
     r = _r(['status', '--porcelain=v1', '-b'], path)
@@ -54,9 +147,13 @@ def repo_status(path):
         entries.append({'code': code, 'file': file,
                         'staged': code[0] not in (' ', '?'),
                         'unstaged': code[1] != ' ' if code[0] != '?' else True})
+    snapshot = repo_sync_snapshot(path)
+    if not snapshot.get('ok'):
+        return {'ok': False, 'error': snapshot.get('error', 'cannot build repository snapshot')}
     return {'ok': True, 'path': path, 'branch': branch, 'upstream': upstream,
             'ahead': ahead, 'behind': behind,
-            'changed': bool(entries), 'entries': entries}
+            'changed': bool(entries), 'entries': entries,
+            'snapshot': snapshot['snapshot'], 'snapshot_files': snapshot['files']}
 
 
 def repo_log(path, limit=30):
@@ -113,8 +210,122 @@ def repo_remote(path):
         parts = line.split()
         if len(parts) >= 2 and parts[0] not in seen:
             seen.add(parts[0])
-            remotes.append({'name': parts[0], 'url': parts[1]})
+            remotes.append({'name': parts[0], 'url': _sanitize_remote_url(parts[1])})
     return {'ok': True, 'remotes': remotes}
+
+
+def repo_sync_preview(path):
+    """Возвращает полный review diff и snapshot, не изменяя Git index/worktree."""
+    with git_service.repo_operation_lock(path):
+        return _repo_sync_preview_locked(path)
+
+
+def _repo_sync_preview_locked(path):
+    status = _repo_status_locked(path)
+    if not status.get('ok'):
+        return status
+
+    tracked = _r([
+        'diff', '--no-ext-diff', '--no-textconv', '--no-color',
+        '--binary', '--full-index', 'HEAD', '--',
+    ], path)
+    if not tracked.get('ok'):
+        return {'ok': False, 'error': tracked.get('stderr', '').strip() or 'cannot build tracked diff'}
+
+    untracked_result = _r(['ls-files', '--others', '--exclude-standard', '-z'], path)
+    if not untracked_result.get('ok'):
+        return {'ok': False, 'error': untracked_result.get('stderr', '').strip() or 'cannot list untracked files'}
+
+    diff_text = tracked.get('stdout', '')
+    truncated = len(diff_text) > SYNC_PREVIEW_MAX_CHARS
+    if truncated:
+        diff_text = diff_text[:SYNC_PREVIEW_MAX_CHARS]
+    omitted = []
+    root = os.path.realpath(path)
+
+    def append_chunk(chunk):
+        nonlocal diff_text, truncated
+        remaining = SYNC_PREVIEW_MAX_CHARS - len(diff_text)
+        if remaining <= 0:
+            truncated = True
+            return False
+        if len(chunk) > remaining:
+            diff_text += chunk[:remaining]
+            truncated = True
+            return False
+        diff_text += chunk
+        return True
+
+    for rel in sorted(item for item in untracked_result['stdout'].split('\0') if item):
+        if truncated:
+            break
+        if (rel.startswith('/') or '\\' in rel or ntpath.splitdrive(rel)[0]
+                or any(part in ('', '.', '..') for part in rel.split('/'))):
+            return {'ok': False, 'error': 'unsafe untracked path returned by Git'}
+        full = os.path.join(root, *rel.split('/'))
+        try:
+            info = os.lstat(full)
+            reparse = bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400))
+            if stat.S_ISLNK(info.st_mode) or reparse:
+                target = os.readlink(full)
+                if not append_chunk(
+                    'diff --git a/%s b/%s\nnew file mode 120000\n--- /dev/null\n+++ b/%s\n+%s\n'
+                    % (rel, rel, rel, target)
+                ):
+                    break
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                omitted.append({'path': rel, 'reason': 'тип файла не поддерживается для текстового preview'})
+                continue
+        except FileNotFoundError:
+            omitted.append({'path': rel, 'reason': 'файл исчез во время построения preview'})
+            continue
+        except OSError as e:
+            omitted.append({'path': rel, 'reason': 'не удалось проверить файл: %s' % e})
+            continue
+
+        content = read_file(path, rel)
+        if not content.get('ok'):
+            omitted.append({'path': rel, 'reason': content.get('error', 'файл не прочитан')})
+            continue
+        text = content.get('content', '')
+        if '\0' in text:
+            if not append_chunk(
+                'diff --git a/%s b/%s\nnew file mode 100644\nBinary file omitted from text preview\n'
+                % (rel, rel)
+            ):
+                break
+            omitted.append({'path': rel, 'reason': 'binary file'})
+            continue
+        lines = text.splitlines(keepends=True)
+        patch = ''.join(difflib.unified_diff(
+            [], lines, fromfile='/dev/null', tofile='b/' + rel,
+        ))
+        if not append_chunk('diff --git a/%s b/%s\nnew file mode 100644\n%s' % (rel, rel, patch)):
+            break
+
+    stat_result = _r(['diff', '--stat', 'HEAD', '--'], path)
+    final_snapshot = repo_sync_snapshot(path)
+    if not final_snapshot.get('ok') or final_snapshot.get('snapshot') != status.get('snapshot'):
+        return {
+            'ok': False,
+            'error': 'репозиторий изменился во время построения diff preview. Обновите preview и повторите.',
+            'snapshot_changed': True,
+        }
+    return {
+        'ok': True,
+        'path': path,
+        'branch': status.get('branch', ''),
+        'upstream': status.get('upstream', ''),
+        'snapshot': status['snapshot'],
+        'snapshot_files': status['snapshot_files'],
+        'changed': status.get('changed', False),
+        'stat': stat_result.get('stdout', '').strip() if stat_result.get('ok') else '',
+        'diff': diff_text,
+        'truncated': truncated,
+        'omitted_files': omitted,
+        'complete': not truncated and not omitted,
+    }
 
 
 def repo_diff(path, staged=False):
@@ -127,20 +338,47 @@ def repo_diff(path, staged=False):
 
 
 def read_file(path, rel, max_bytes=READ_FILE_MAX_BYTES):
-    """Чтение файла репозитория с защитой от выхода за пределы каталога."""
+    """Чтение обычного файла без перехода через symlink/reparse components."""
     validate(path)
-    if not rel or rel.startswith('/') or '..' in os.path.normpath(rel).split(os.sep) or '\\' in str(rel):
+    if (not isinstance(rel, str) or not rel or rel.startswith('/') or '\\' in rel
+            or ntpath.splitdrive(rel)[0] or '\x00' in rel
+            or (os.name == 'nt' and ':' in rel)
+            or any(p in ('', '.', '..') for p in rel.split('/'))):
         return {'ok': False, 'error': 'недопустимый путь файла'}
-    full = os.path.normpath(os.path.join(path, rel))
-    if not (full == os.path.normpath(path) or full.startswith(os.path.normpath(path) + os.sep)):
-        return {'ok': False, 'error': 'путь вне репозитория'}
-    if not os.path.isfile(full):
+    if not isinstance(max_bytes, int) or max_bytes < 1:
+        return {'ok': False, 'error': 'недопустимый лимит размера файла'}
+    root_real = os.path.realpath(path)
+    full = root_real
+    try:
+        parts = rel.split('/')
+        for index, part in enumerate(parts):
+            full = os.path.join(full, part)
+            info = os.lstat(full)
+            reparse = bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400))
+            if stat.S_ISLNK(info.st_mode) or reparse:
+                return {'ok': False, 'error': 'чтение через symbolic link/reparse point запрещено'}
+            if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+                return {'ok': False, 'error': 'родительский компонент пути не является каталогом'}
+        if not stat.S_ISREG(info.st_mode):
+            return {'ok': False, 'error': 'допускается чтение только обычных файлов'}
+        flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+        fd = os.open(full, flags)
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                return {'ok': False, 'error': 'файл был заменён во время безопасного открытия'}
+            if opened.st_size > max_bytes:
+                return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (opened.st_size, max_bytes)}
+            data = os.read(fd, max_bytes + 1)
+        finally:
+            os.close(fd)
+    except FileNotFoundError:
         return {'ok': False, 'error': 'файл не найден: %s' % rel}
-    size = os.path.getsize(full)
-    if size > max_bytes:
-        return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (size, max_bytes)}
-    with open(full, 'rb') as f:
-        data = f.read()
+    except OSError as e:
+        return {'ok': False, 'error': 'не удалось безопасно открыть файл: %s' % e}
+    if len(data) > max_bytes:
+        return {'ok': False, 'error': 'файл слишком большой (лимит %d байт)' % max_bytes}
+    size = len(data)
     try:
         text = data.decode('utf-8')
         encoding = 'utf-8'
@@ -231,7 +469,14 @@ def repo_checkout(path, branch, create=False):
     validate(path)
     if not branch or not str(branch).strip():
         return {'ok': False, 'error': 'требуется имя ветки'}
-    clean = str(branch).strip().replace('remotes/origin/', '')
+    clean = str(branch).strip()
+    if clean.startswith('remotes/origin/'):
+        clean = clean[len('remotes/origin/'):]
+    if clean.startswith('-'):
+        return {'ok': False, 'error': 'имя ветки не может начинаться с дефиса'}
+    check = _r(['check-ref-format', '--branch', clean], path)
+    if not check['ok']:
+        return {'ok': False, 'error': 'недопустимое имя ветки: %s' % clean}
     args = ['checkout'] + (['-b'] if create else []) + [clean]
     r = _r(args, path)
     if not r['ok']:
@@ -239,13 +484,20 @@ def repo_checkout(path, branch, create=False):
     return {'ok': True, 'branch': clean, 'created': bool(create)}
 
 
-def repo_sync(path, message):
-    """Полная замена sync.bat: add -> commit -> pull --rebase -> push (+ merged PR check)."""
+def repo_sync(path, message, expected_snapshot=None):
+    """Sync выполняется только если рабочие файлы совпадают с подтверждённым snapshot."""
     validate(path)
     steps = []
     st = repo_status(path)
     if not st.get('ok'):
         return {'ok': False, 'error': st.get('error', 'git status failed'), 'steps': []}
+    if expected_snapshot is None:
+        expected_snapshot = st.get('snapshot')
+    if not expected_snapshot or st.get('snapshot') != expected_snapshot:
+        return {'ok': False,
+                'error': 'рабочие файлы изменились после предварительного просмотра. Обновите статус и подтвердите Sync заново.',
+                'snapshot_changed': True, 'steps': [],
+                'expected_snapshot': expected_snapshot, 'actual_snapshot': st.get('snapshot')}
 
     changes = st.get('changed', False)
     steps.append({'step': 'status', 'ok': True, 'changed': changes, 'branch': st.get('branch')})
@@ -260,6 +512,11 @@ def repo_sync(path, message):
         steps.append({'step': 'add', **ra})
         if not ra.get('ok'):
             return {'ok': False, 'error': ra.get('error', 'git add failed'), 'steps': steps}
+        after_add = repo_sync_snapshot(path)
+        if not after_add.get('ok') or after_add.get('snapshot') != expected_snapshot:
+            return {'ok': False,
+                    'error': 'содержимое изменилось во время git add. Коммит и push отменены; проверьте staged changes и повторите Sync.',
+                    'snapshot_changed': True, 'steps': steps}
         rc = repo_commit(path, msg)
         steps.append({'step': 'commit', **{k: v for k, v in rc.items() if k in ('ok', 'sha', 'error')}})
         if not rc.get('ok'):
@@ -290,6 +547,26 @@ def repo_sync(path, message):
 def last_merged_pr(path):
     r = _r(['log', '-1', '--grep=Merge pull request #', '--format=%s'], path)
     return (r.get('stdout', '').strip() if r.get('ok') else None) or None
+
+
+def _sanitize_remote_url(value):
+    """Удаляет userinfo и секреты из query string перед выдачей в UI/API."""
+    try:
+        parsed = urlsplit(value)
+        if not parsed.scheme or not parsed.netloc:
+            return value
+        host = parsed.hostname or ''
+        if parsed.port:
+            host = '%s:%s' % (host, parsed.port)
+        netloc = ('***@' if parsed.username is not None or parsed.password is not None else '') + host
+        sensitive = ('token', 'access_token', 'password', 'passwd', 'auth', 'key', 'secret', 'signature', 'credential', 'jwt', 'bearer')
+        query = [
+            (key, '***' if any(word in key.lower() for word in sensitive) else val)
+            for key, val in parse_qsl(parsed.query, keep_blank_values=True)
+        ]
+        return urlunsplit((parsed.scheme, netloc, parsed.path, urlencode(query), ''))
+    except (ValueError, TypeError):
+        return '[remote URL скрыт]'
 
 
 def validate(path):
