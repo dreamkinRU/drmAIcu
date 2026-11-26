@@ -389,6 +389,7 @@ export default function App() {
             uninstall={pluginCtl.uninstall}
             grantAll={pluginCtl.grantAll}
             decide={pluginCtl.decide}
+            addLog={addLog}
           />
         )}
 
@@ -397,6 +398,7 @@ export default function App() {
             plugins={pluginCtl.plugins}
             refresh={pluginCtl.refresh}
             setActiveTab={setActiveTab}
+            addLog={addLog}
           />
         )}
 

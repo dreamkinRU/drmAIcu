@@ -363,3 +363,48 @@ class PluginManager:
 
     def activity_read(self, pid=None, limit=200, level=None, search=None):
         return self.activity.read(plugin_id=pid, limit=limit, level=level, search=search)
+
+    def recent_issues(self, limit=60):
+        """Ошибки и предупреждения всех плагинов из журналов активности (data/plugins/activity/*.jsonl).
+
+        Нужно для вкладки Логи: раньше /api/logs отдавал только ядро (main.py LOG),
+        и ошибки плагинов (sync/confirm/deny и т.п.) туда не попадали.
+        Формат элемента совпадает с ядром: {'time' (HH:MM:SS), 'level', 'message', 'source'}.
+        """
+        entries = []
+        try:
+            names = os.listdir(self.activity.dir_path)
+        except OSError:
+            return []
+        for name in names:
+            if not name.endswith('.jsonl'):
+                continue
+            pid = name[:-len('.jsonl')]
+            read_pid = None if pid == 'global' else pid
+            try:
+                rows = self.activity.read(plugin_id=read_pid, limit=500)
+            except Exception:
+                continue
+            for row in rows:
+                if row.get('level') not in ('error', 'warn'):
+                    continue
+                details = row.get('details') or {}
+                who = 'core' if read_pid is None else pid
+                parts = ['%s: %s' % (who, row.get('event', '?'))]
+                for k in ('error', 'reason', 'capability', 'source'):
+                    v = details.get(k)
+                    if v:
+                        parts.append('%s=%s' % (k, str(v)[:300]))
+                ts = row.get('ts') or ''
+                entries.append({
+                    'time': ts.split('T', 1)[1] if 'T' in ts else ts,
+                    'level': row.get('level'),
+                    'message': '; '.join(parts[:4]),
+                    'source': ('plugin/' + who) if read_pid is not None else 'plugins',
+                })
+        entries.sort(key=lambda e: e.get('time') or '')
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = 60
+        return entries[-limit:] if limit > 0 else entries

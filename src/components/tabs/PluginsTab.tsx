@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { nowStr } from '../../utils/logHelpers';
 import {
   PluginActivityEntry,
   PluginCatalogEntry,
@@ -18,6 +19,7 @@ interface PluginsTabProps {
   loading: boolean;
   notice: { kind: 'ok' | 'err'; text: string } | null;
   setNotice: (n: { kind: 'ok' | 'err'; text: string } | null) => void;
+  addLog: (entry: { time: string; level: 'info' | 'warn' | 'error' | 'success'; message: string; source: string }) => void;
   refresh: () => Promise<void>;
   install: (source: string) => Promise<boolean>;
   enable: (id: string) => Promise<boolean>;
@@ -57,7 +59,15 @@ const SECTIONS: { id: Section; label: string }[] = [
 ];
 
 export default function PluginsTab(props: PluginsTabProps) {
-  const { plugins, catalog, confirmations, activity, loading, notice, setNotice } = props;
+  const { plugins, catalog, confirmations, activity, loading, notice, setNotice: setNoticeRaw, addLog } = props;
+  // Ошибки вкладки «Плагины» тоже попадают во вкладку «Логи» (addLog → POST /api/logs),
+  // а не только в короткую плашку, которая могла затереться следующим действием.
+  const setNotice = useCallback((n: { kind: 'ok' | 'err'; text: string } | null) => {
+    if (n && n.kind === 'err') {
+      addLog({ time: nowStr(), level: 'error', message: n.text, source: 'Плагины' });
+    }
+    setNoticeRaw(n);
+  }, [addLog, setNoticeRaw]);
   const [section, setSection] = useState<Section>('installed');
   const [permissionRow, setPermissionRow] = useState<PluginPermissionRow | null>(null);
   const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
