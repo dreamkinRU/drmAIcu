@@ -178,3 +178,48 @@ def test_worker_cleanup_kills_descendant_after_group_leader_exits(tmp_path):
             break
         time.sleep(0.05)
     assert not child_is_alive()
+
+
+def test_apply_recovery_does_not_clear_journal_when_backup_is_missing(tmp_path, monkeypatch):
+    _configure_engine(tmp_path, monkeypatch)
+    target = tmp_path / 'module.py'
+    target.write_text('new value\n', encoding='utf-8')
+    (tmp_path / 'patch_journal.json').write_text(json.dumps({
+        'op': 'apply',
+        'patch_id': 'missing-backup',
+        'steps': [{
+            'path': str(target), 'tgt': 'module.py', 'existed': True,
+            'backs': [], 'backup_sha': None, 'done': True,
+        }],
+    }), encoding='utf-8')
+
+    result = patch_engine.recover_journal()
+
+    assert result['action'] == 'apply-revert-incomplete'
+    assert 'backup missing' in result['failed'][0]
+    assert target.read_text(encoding='utf-8') == 'new value\n'
+    assert (tmp_path / 'patch_journal.json').exists()
+
+
+def test_apply_recovery_rejects_tampered_backup(tmp_path, monkeypatch):
+    _configure_engine(tmp_path, monkeypatch)
+    target = tmp_path / 'module.py'
+    target.write_text('new value\n', encoding='utf-8')
+    backup = tmp_path / 'backups' / 'module.bak'
+    backup.write_text('tampered value\n', encoding='utf-8')
+    expected_sha = patch_engine.sha_bytes(b'original value\n')
+    (tmp_path / 'patch_journal.json').write_text(json.dumps({
+        'op': 'apply',
+        'patch_id': 'tampered-backup',
+        'steps': [{
+            'path': str(target), 'tgt': 'module.py', 'existed': True,
+            'backs': ['backups/module.bak'], 'backup_sha': expected_sha, 'done': True,
+        }],
+    }), encoding='utf-8')
+
+    result = patch_engine.recover_journal()
+
+    assert result['action'] == 'apply-revert-incomplete'
+    assert 'backup checksum mismatch' in result['failed'][0]
+    assert target.read_text(encoding='utf-8') == 'new value\n'
+    assert (tmp_path / 'patch_journal.json').exists()
