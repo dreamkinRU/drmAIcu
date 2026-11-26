@@ -354,6 +354,11 @@ export interface RepoSyncResult {
   push_rejected?: boolean;
   pulled?: Array<{ sha: string; subject: string }>;
   pulled_count?: number;
+  /** Файлы, пришедшие с remote в pulled-коммитах (для честных подсказок после Sync). */
+  pulled_files?: string[];
+  /** Честные подсказки: что sync.bat делал сам (npm install/build/перезапуск), а плагин только рекомендует. */
+  refresh_hints?: string[];
+
 }
 
 /** PATCHMASTER-мост (только чтение): журнал патчей и их статус синхронизации. */
