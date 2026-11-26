@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+setlocal enabledelayedexpansion
 title drmAIcu Launcher [WATCHDOG]
 color 0A
 
@@ -23,8 +24,16 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 if not exist "node_modules" (
-    echo [INFO] Installing dependencies...
+    echo [INFO] Installing dependencies (first run)...
     call npm install
+    if !errorlevel! neq 0 (
+        echo [ERROR] npm install failed. Check Node.js: node --version, npm --version
+        pause
+        exit /b 1
+    )
+) else (
+    echo [INFO] Syncing dependencies with package-lock.json...
+    call npm install --no-audit --no-fund
 )
 if not exist "patch" mkdir "patch"
 if not exist "logs" mkdir "logs"
