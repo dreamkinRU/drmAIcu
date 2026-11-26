@@ -28,6 +28,7 @@ def git_fixture(tmp_path, monkeypatch):
     journal_dir.mkdir()
 
     subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main"], check=True, capture_output=True)
     subprocess.run(["git", "init", "-b", "main", str(seed)], check=True, capture_output=True)
     (seed / "app.txt").write_text("base\n", encoding="utf-8")
     _commit(seed, "initial")
@@ -42,6 +43,19 @@ def git_fixture(tmp_path, monkeypatch):
     _commit(seed, "remote update")
     _git(seed, "push", "origin", "main")
 
+    original_run_git = updater._run_git
+
+    def run_git_for_test(args, timeout=30):
+        if args and args[0] == "fetch":
+            proc = subprocess.run(
+                ["git", "-C", str(work), *args], capture_output=True, text=True,
+                timeout=timeout, shell=False, env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:file"},
+            )
+            return {"ok": proc.returncode == 0, "code": proc.returncode,
+                    "stdout": proc.stdout or "", "stderr": proc.stderr or ""}
+        return original_run_git(args, timeout)
+
+    monkeypatch.setattr(updater, "_run_git", run_git_for_test)
     monkeypatch.setattr(updater, "BASE", str(work))
     monkeypatch.setattr(updater, "_JOURNAL_DIR", str(journal_dir))
     monkeypatch.setattr(updater, "_JOURNAL_PATH", str(journal_dir / "journal.json"))
