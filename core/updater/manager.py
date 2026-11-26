@@ -174,15 +174,19 @@ def _changed_files(status_text):
     for line in status_text.splitlines():
         if not line or line.startswith("#"):
             continue
-        if line.startswith("1 ") or line.startswith("2 "):
-            parts = line.split(" ")
-            if len(parts) >= 9:
+        if line.startswith("1 "):
+            parts = line.split(" ", 8)
+            if len(parts) == 9:
                 files.append(parts[8])
+        elif line.startswith("2 "):
+            parts = line.split(" ", 9)
+            if len(parts) == 10:
+                files.append(parts[9])
         elif line.startswith("? "):
             files.append(line[2:])
         elif line.startswith("u "):
-            parts = line.split(" ")
-            if len(parts) >= 11:
+            parts = line.split(" ", 10)
+            if len(parts) == 11:
                 files.append(parts[10])
     return sorted(set(files))
 
@@ -283,12 +287,15 @@ class UpdateManager:
                     backup_id = journal["id"]
                     message = "drmAIcu-update-backup:" + backup_id
                     previous_stash = _run_git(["rev-parse", "--verify", "refs/stash"])
-                    _git_ok(["stash", "push", "--include-untracked", "--message", message], _TIMEOUT)
-                    stash_oid = _git_ok(["rev-parse", "--verify", "refs/stash"])
-                    if previous_stash.get("ok") and previous_stash["stdout"].strip() == stash_oid:
-                        raise UpdateError("Git не создал новую резервную копию локальных изменений", "backup_missing")
                     backup_ref = "refs/drmaicu/update-backups/" + backup_id
                     journal["backup_ref"] = backup_ref
+                    journal["backup_message"] = message
+                    journal["previous_stash_oid"] = previous_stash["stdout"].strip() if previous_stash.get("ok") else None
+                    _save_journal(journal)
+                    _git_ok(["stash", "push", "--include-untracked", "--message", message], _TIMEOUT)
+                    stash_oid = _git_ok(["rev-parse", "--verify", "refs/stash"])
+                    if journal.get("previous_stash_oid") == stash_oid:
+                        raise UpdateError("Git не создал новую резервную копию локальных изменений", "backup_missing")
                     journal["backup_oid"] = stash_oid
                     _save_journal(journal)
                     _git_ok(["update-ref", backup_ref, stash_oid])
@@ -320,7 +327,7 @@ class UpdateManager:
             journal["state"] = "RESTORING"
             _save_journal(journal)
             try:
-                if journal.get("backup_ref"):
+                if journal.get("backup_ref") and not journal.get("local_changes_restored"):
                     if _worktree_status():
                         raise UpdateError(
                             "После обновления появились новые локальные изменения. "
@@ -380,23 +387,42 @@ class UpdateManager:
                 _save_journal(journal)
                 raise
 
-    def recover(self, operation_id):
-        """Повторная попытка восстановления исходных локальных изменений."""
+    def recover(self, operation_id, manual_confirmation=False):
+        """Повторная попытка или подтверждение ручного восстановления локальных изменений."""
         with _LOCK, _repo_lock():
             journal = _load_journal()
             if journal.get("id") != operation_id or journal.get("state") not in (
-                "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR", "RESTORING"
+                "APPLYING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR", "RESTORING"
             ):
                 raise UpdateError("Нет операции, требующей восстановления.", "invalid_state")
             backup_ref = journal.get("backup_ref")
             if not backup_ref:
                 raise UpdateError("Резервная копия для восстановления не найдена.", "backup_missing")
-            if _worktree_status():
-                raise UpdateError(
-                    "Рабочее дерево не чистое. Сначала сохраните или устраните новые изменения вручную.",
-                    "working_tree_dirty",
-                )
-            if not journal.get("local_changes_restored"):
+            if not journal.get("backup_oid"):
+                # Восстановление после аварии между stash push и записью backup_oid в журнал.
+                latest = _git_ok(["rev-parse", "--verify", "refs/stash"])
+                subject = _git_ok(["log", "-1", "--format=%s", latest])
+                if subject != journal.get("backup_message"):
+                    raise UpdateError(
+                        "Не удалось однозначно найти stash резервной копии. Ничего не изменено.",
+                        "backup_ambiguous", 423,
+                    )
+                journal["backup_oid"] = latest
+                _save_journal(journal)
+                _git_ok(["update-ref", backup_ref, latest])
+                _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
+                journal["backup_verified"] = True
+                _save_journal(journal)
+            if manual_confirmation:
+                journal["local_changes_restored"] = True
+                journal["manual_recovery_ack"] = True
+            elif not journal.get("local_changes_restored"):
+                if _worktree_status():
+                    raise UpdateError(
+                        "Рабочее дерево содержит конфликт или новые изменения. Разрешите конфликт вручную, "
+                        "затем подтвердите ручное восстановление отдельной кнопкой. Backup сохранён.",
+                        "working_tree_dirty",
+                    )
                 result = _run_git(["stash", "apply", "--index", backup_ref], _TIMEOUT)
                 if not result["ok"]:
                     journal["state"] = "RECOVERY_REQUIRED"
@@ -404,7 +430,13 @@ class UpdateManager:
                     _save_journal(journal)
                     raise UpdateError(journal["error"], "restore_conflict")
                 journal["local_changes_restored"] = True
-            journal["state"] = "CODE_UPDATED"
+            current_head = _git_ok(["rev-parse", "HEAD"])
+            if current_head == journal.get("remote_head"):
+                journal["new_head"] = current_head
+                journal["change_summary"] = _read_update_diff(journal["old_head"], current_head)
+                journal["state"] = "CODE_UPDATED"
+            else:
+                journal["state"] = "FAILED"
             journal.pop("error", None)
             _save_journal(journal)
             return {"success": True, "journal": journal}
