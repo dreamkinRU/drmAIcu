@@ -45,7 +45,7 @@ def _run_git(args, timeout=30):
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "Never"
     env["GIT_ALLOW_PROTOCOL"] = "https"
-    argv[2:2] = ["-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never"]
+    argv[3:3] = ["-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never"]
     try:
         proc = subprocess.run(
             argv, cwd=BASE, capture_output=True, text=True, encoding="utf-8",
