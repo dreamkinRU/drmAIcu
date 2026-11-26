@@ -9,6 +9,7 @@
 - Preview diff остался: «Предпросмотр Sync» по-прежнему показывает полный diff; при обрезанном diff — чекбокс осознанного продолжения.
 - UI: тексты кнопок («Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)») и подсказок приведены к новой механике; plugin.json 1.2.1 → 1.3.0.
 - Тесты: test_sync_no_confirmation.py (новый: repos.sync — auto, allowlist не ослабляет остальные WRITE), обновлены test_repos_plugin/test_repos_last_sync/test_sync_refresh_hints/test_repos_ui_changes/test_repos_ui4_fixes.
+
 ## v.3.15.0 Model — 26.11.2026
 
 ### Sync: честные подсказки после обновления (закрытие разрыва с sync.bat)
@@ -16,6 +17,7 @@
 - repos.sync возвращает `pulled_files` (файлы полученных с remote коммитов) и `refresh_hints` — панель «✅ Актуально» подсказывает требуемые шаги: `npm install` при изменении package.json/package-lock.json (шаг 2.7 sync.bat, которого не было в плагине), `npm run build`/перезапуск при изменениях src/, перезапуск панели при .py-файлах.
 - Команды плагин не запускает (замороженная политика: WRITE только через гейтвей с подтверждением) — только честные подсказки в результате Sync.
 - UI: RepositoriesTab рендерит подсказки в панели результата Sync; тесты: tests/test_sync_refresh_hints.py (4 шт).
+
 ## v.3.14.0 Model — 26.11.2026
 
 ### Декомпозиция REST-слоя main.py в api/
