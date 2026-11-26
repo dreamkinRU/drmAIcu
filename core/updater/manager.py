@@ -123,6 +123,41 @@ def _create_backup_bundle(operation_id, backup_ref, backup_oid):
         "size_bytes": os.path.getsize(bundle_path),
     }
 
+def _ensure_backup_ref(journal):
+    """Проверяет ref; при потере Git-объекта восстанавливает его из проверенного bundle."""
+    backup_ref = journal["backup_ref"]
+    backup_oid = journal["backup_oid"]
+    current_ref = _run_git(["rev-parse", "--verify", backup_ref])
+    if current_ref.get("ok") and current_ref["stdout"].strip() != backup_oid:
+        raise UpdateError("Backup ref указывает на неожиданный commit; автоматическая перезапись запрещена.", "backup_ref_mismatch", 423)
+    object_exists = _run_git(["cat-file", "-e", backup_oid + "^{commit}"])
+    if not object_exists["ok"]:
+        bundle = journal.get("backup_bundle") or {}
+        relative = bundle.get("path", "")
+        expected_dir = os.path.realpath(os.path.join(_JOURNAL_DIR, "backups"))
+        bundle_path = os.path.realpath(os.path.join(BASE, relative))
+        if (not relative or os.path.commonpath([expected_dir, bundle_path]) != expected_dir
+                or os.path.basename(bundle_path) != journal.get("id", "") + ".bundle"
+                or not os.path.isfile(bundle_path)):
+            raise UpdateError("Git backup object и внешний bundle недоступны.", "backup_missing", 423)
+        digest = hashlib.sha256()
+        with open(bundle_path, "rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != bundle.get("sha256"):
+            raise UpdateError("Контрольная сумма внешнего backup bundle не совпала.", "backup_bundle_tampered", 423)
+        _git_ok(["bundle", "verify", bundle_path], _TIMEOUT)
+        heads = _git_ok(["bundle", "list-heads", bundle_path], _TIMEOUT)
+        if not any(line.split() == [backup_oid, backup_ref] for line in heads.splitlines()):
+            raise UpdateError("Backup bundle не содержит ожидаемый объект.", "backup_bundle_invalid", 423)
+        _git_ok(["bundle", "unbundle", bundle_path], _TIMEOUT)
+        object_exists = _run_git(["cat-file", "-e", backup_oid + "^{commit}"])
+        if not object_exists["ok"]:
+            raise UpdateError("Git не восстановил объект из backup bundle.", "backup_bundle_invalid", 423)
+    if not current_ref.get("ok"):
+        _git_ok(["update-ref", backup_ref, backup_oid])
+    _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
+
 
 def _repo_lock():
     # Локальный импорт предотвращает цикл api -> routes_updates -> updater -> api.shared.
@@ -550,10 +585,7 @@ class UpdateManager:
                     raise UpdateError(journal["error"], "backup_lost", 423)
                 journal["backup_oid"] = found
                 _save_journal(journal)
-            backup_exists = _run_git(["cat-file", "-e", backup_ref + "^{commit}"])
-            if not backup_exists["ok"]:
-                _git_ok(["update-ref", backup_ref, journal["backup_oid"]])
-            _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
+            _ensure_backup_ref(journal)
             journal["backup_verified"] = True
             _save_journal(journal)
             if manual_confirmation:
