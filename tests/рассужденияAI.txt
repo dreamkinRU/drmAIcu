@@ -1,0 +1,71 @@
+я мечтаю сделать такую же разметку для рассуждений ИИ в виде Mistral
+давай закроем все техдолги одним PR
+
+Checking what repository access is available for the cleanup.
+
+Planning a safe, verifiable cleanup patch.
+
+Choosing the safest hardening changes for the patch.
+
+Selecting which patches auto-apply and which config keys to guard.
+
+Deciding which hardening steps to defer and which to apply.
+
+Делаю в локальной копии на отдельной ветке, с прогоном тестов. Сначала смотрю, что нельзя сломать: кто вызывает затрагиваемые эндпоинты и как тесты работают с main.py.
+
+bash
+
+cd /home/claude/drmAIcu && git checkout -q -b fix/security-and-tech-debt && git status -sb | head -3
+echo "--- frontend/doc/test users of endpoints to touch:"; grep -rn "verify-108\|patches/dump\|api/project/file\|providers/config\|apply-all" src tests docs README.md --include=* -l | sort -u
+echo "--- tests importing main:"; grep -ln "import main\|from main" tests/*.py; grep -n "TestClient" tests/*.py | head -3
+echo "--- config keys sent by UI to /providers/config:"; grep -n "cfgUpdates\.\w*\|cfgUpdates\[" src/components/tabs/ProvidersTab.tsx | grep -o "cfgUpdates\.[a-z_]*" | sort -u; grep -rn "providers/config\|saveConfig\|/api/providers" src/services/api.ts | head
+echo "--- git_service argv assertions in tests:"; grep -rn "\['git'" tests | head -5; grep -rn "run_git" tests | head -5
+
+Вывод
+
+## fix/security-and-tech-debt
+--- frontend/doc/test users of endpoints to touch:
+docs/ARCHITECTURE.md
+docs/CHANGELOG.md
+docs/NEW_FEATURES.md
+src/components/tabs/ProvidersTab.tsx
+src/services/api.ts
+--- tests importing main:
+tests/test_docs_api.py
+tests/test_patching_hardcore.py
+tests/test_repos_ui2_fixes.py
+tests/test_docs_api.py:5:обхода каталога) и фактическое чтение реальных доков через TestClient.
+tests/test_docs_api.py:11:from fastapi.testclient import TestClient
+tests/test_docs_api.py:39:    client = TestClient(main.app)
+--- config keys sent by UI to /providers/config:
+cfgUpdates.bionic_api_key
+cfgUpdates.bionic_url
+cfgUpdates.gemini_api_key
+cfgUpdates.groq_api_key
+cfgUpdates.hf_api_key
+cfgUpdates.lmstudio_api_key
+cfgUpdates.lmstudio_url
+cfgUpdates.ollama_url
+cfgUpdates.openrouter_api_key
+cfgUpdates.strata_api_key
+cfgUpdates.strata_url
+cfgUpdates.together_api_key
+--- git_service argv assertions in tests:
+tests/test_repos_ui_changes.py:25:    subprocess.run(['git', 'init', '-b', 'main', str(repo)], check=True, capture_output=True)
+tests/test_repos_ui_changes.py:27:    subprocess.run(['git', '-C', str(repo), 'add', '-A'], check=True, capture_output=True)
+tests/test_repos_ui_changes.py:29:    subprocess.run(['git', '-C', str(repo), 'commit', '-m', 'init'], check=True, capture_output=True, env=env)
+tests/test_repos_ui_changes.py:58:    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote], check=True, capture_output=True)
+tests/test_repos_ui_changes.py:60:    subprocess.run(['git', '-C', repo_a, 'remote', 'add', 'origin', remote], check=True, capture_output=True)
+tests/test_repos_plugin.py:225:    from plugins.repos.git_service import GitCommandRejected, run_git
+tests/test_repos_plugin.py:228:        run_git(['rm', '-rf', '/'], cwd=repo)
+tests/test_repos_plugin.py:230:        run_git(['format-patch', 'HEAD~1'], cwd=repo)
+tests/test_repos_plugin.py:231:    assert run_git(['status', '--porcelain'], cwd=repo)['ok'] is True
+
+Пишу новый модуль HTTP-защиты и расширяю guards.py
+Просматриваю фронтенд, чтобы согласовать правки `main.py`
+Checking other config keys sent elsewhere.
+Reviewing the Ollama models endpoint's request handling.
+Переходим к фронтенду: ключи убираем из localStorage
+Удаляю неиспользуемые зависимости и собираю проект
+
+bash
