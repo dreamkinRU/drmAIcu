@@ -1,5 +1,13 @@
 # drmAIcu — История изменений
 
+## v.3.11.1 Model (Текущая) — 26.11.2026
+
+### Автосинхронизация npm-зависимостей (инцидент после PR #33)
+- Причина инцидента: PR 3.11.0 добавил npm-зависимость react-markdown; node_modules не хранится в git, а sync.bat зависимостей не ставил — после pull фронтенд падал в оверлей Vite «Failed to resolve import "react-markdown"»
+- sync.bat: запоминает HEAD до pull, после pull сравнивает package-lock.json и при изменении автоматически выполняет npm install; при сбое выводит пути исправления (проверка node/npm, восстановление через удаление node_modules + package-lock.json, ссылка на docs/USER_GUIDE.md)
+- launcher.bat: npm install теперь выполняется при каждом старте (сверка с package-lock.json), а не только при самом первом запуске; добавлен setlocal enabledelayedexpansion для корректной обработки ошибок
+- docs/USER_GUIDE.md: в «Типовые ошибки и пути исправления» добавлен кейс «Белый экран / оверлей Vite Failed to resolve import после обновления»
+
 ## v.3.11.0 Model (Текущая) — 26.11.2026
 
 ### Рендер Markdown и UX документации
