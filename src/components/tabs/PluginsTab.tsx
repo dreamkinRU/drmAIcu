@@ -220,6 +220,12 @@ function InstalledSection({
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400">
                   {p.source === 'builtin' ? 'встроенный' : 'установлен'}
                 </span>
+                <span
+                  title={p.execution_mode === 'isolated_process' ? 'Отдельный процесс; это не полноценная OS-песочница' : 'Доверенный встроенный код выполняется в процессе drmAIcu'}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400"
+                >
+                  {p.execution_mode === 'isolated_process' ? 'отдельный процесс' : 'доверенный код'}
+                </span>
               </div>
               <p className="text-xs text-gray-500 mt-1">{p.description}</p>
               {p.last_error && <p className="text-xs text-red-400 mt-1">⚠ {p.last_error}</p>}

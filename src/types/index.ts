@@ -182,6 +182,7 @@ export interface PluginInfo {
   api_version: string;
   status: PluginStatus;
   source: 'builtin' | 'installed';
+  execution_mode: 'trusted_in_process' | 'isolated_process';
   enabled: boolean;
   last_error: string;
   permissions?: string[];
