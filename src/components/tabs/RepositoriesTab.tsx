@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type {
-  PluginInfo,
+import type { LogEntry, PluginInfo,
   RepoBranches,
   RepoDiff,
   RepoFileContent,
@@ -10,6 +9,7 @@ import type {
   RepoSyncResult,
   SimpleGitResult,
 } from '../../types';
+import { nowStr, withFixHint } from '../../utils/logHelpers';
 import {
   execCapability,
   putRepoSettings,
@@ -35,6 +35,7 @@ interface RepositoriesTabProps {
   plugins: PluginInfo[];
   refresh: () => Promise<void>;
   setActiveTab: (t: 'plugins') => void;
+  addLog: (entry: LogEntry) => void;
 }
 
 const PATH_STORAGE_KEY = 'drmAIcu.repos.defaultPath';
@@ -64,7 +65,7 @@ function storeNotice(n: Notice) {
   } catch { /* домашний режим без sessionStorage — просто не сохраняем */ }
 }
 
-export default function RepositoriesTab({ plugins, refresh, setActiveTab }: RepositoriesTabProps) {
+export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog }: RepositoriesTabProps) {
   const [section, setSection] = useState<Section>('overview');
   const [notice, setNoticeState] = useState<Notice>(() => loadStickyNotice());
   // Липкое уведомление: каждая установка <state> и снятие синхронно пишутся в
@@ -73,6 +74,18 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab }: Repo
     setNoticeState(n);
     storeNotice(n);
   }, []);
+  // Ошибки не должны «мигать и исчезать»: любая ошибка вкладки (включая ошибки
+  // синхронизации) остаётся в липкой плашке, дополучает путь исправления
+  // (withFixHint) и пишется во вкладку «Логи» (addLog → POST /api/logs).
+  const setNoticeLogged = useCallback((n: Notice) => {
+    if (n && n.kind === 'err') {
+      const msg = withFixHint(n.text);
+      setNotice({ kind: 'err', text: msg });
+      addLog({ time: nowStr(), level: 'error', message: msg, source: 'Репозитории' });
+      return;
+    }
+    setNotice(n);
+  }, [addLog, setNotice]);
   const [pathInput, setPathInput] = useState<string>(() => localStorage.getItem(PATH_STORAGE_KEY) || '');
   const repoPath = pathInput.trim().replace(/\/+$/, '');
 
@@ -81,14 +94,17 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab }: Repo
 
   const [status, setStatus] = useState<RepoStatus | null>(null);
 
-  const openRepo = useCallback(async (p: string) => {
+  const openRepo = useCallback(async (p: string, opts?: { silent?: boolean }) => {
+    // silent: обновить только статус, НЕ трогая плашку — иначе перезагрузка статуса
+    // после синхронизации мгновенно затирала только что показанную ошибку.
+    const silent = opts?.silent === true;
     const clean = p.trim().replace(/\/+$/, '');
-    if (!clean) { setNotice({ kind: 'err', text: 'укажите путь к репозиторию' }); return; }
+    if (!clean) { if (!silent) setNoticeLogged({ kind: 'err', text: 'укажите путь к репозиторию' }); return; }
     const r = await reposStatus(clean);
     if (r.status === 'done' && r.result.ok) {
       localStorage.setItem(PATH_STORAGE_KEY, clean);
       setStatus(r.result);
-      setNotice({ kind: 'ok', text: `репозиторий открыт: ${clean} (ветка ${r.result.branch || '—'})` });
+      if (!silent) setNoticeLogged({ kind: 'ok', text: `репозиторий открыт: ${clean} (ветка ${r.result.branch || '—'})` });
     } else {
       setStatus(null);
       // Честная ошибка: если git вернул сбой (result.ok=false), показываем его stderr,
@@ -103,14 +119,17 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab }: Repo
       } else {
         err = 'не удалось открыть репозиторий — путь должен существовать и содержать каталог .git';
       }
-      setNotice({ kind: 'err', text: err });
+      if (!silent) setNoticeLogged({ kind: 'err', text: err });
     }
-  }, []);
+  }, [setNoticeLogged]);
 
   useEffect(() => {
     if (running && repoPath) openRepo(repoPath);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
+
+  // Тихая перезагрузка статуса после операций: плашку с результатом не затираем.
+  const reload = useCallback(() => { void openRepo(repoPath, { silent: true }); }, [openRepo, repoPath]);
 
   if (!running) return <PluginGate rp={rp} setActiveTab={setActiveTab} />;
 
@@ -153,13 +172,13 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab }: Repo
           Откройте локальный репозиторий: укажите полный путь к папке с <span className="font-mono text-gray-300">.git</span> и нажмите «Открыть».
         </div>
       ) : section === 'overview' ? (
-        <OverviewSection status={status} repoPath={repoPath} setNotice={setNotice} reload={() => openRepo(repoPath)} />
+        <OverviewSection status={status} repoPath={repoPath} setNotice={setNoticeLogged} reload={reload} />
       ) : section === 'history' ? (
         <HistorySection repoPath={repoPath} />
       ) : section === 'branches' ? (
-        <BranchesSection repoPath={repoPath} setNotice={setNotice} reload={() => openRepo(repoPath)} />
+        <BranchesSection repoPath={repoPath} setNotice={setNoticeLogged} reload={reload} />
       ) : (
-        <ChangesSection repoPath={repoPath} setNotice={setNotice} reload={() => openRepo(repoPath)} />
+        <ChangesSection repoPath={repoPath} setNotice={setNoticeLogged} reload={reload} />
       )}
     </div>
   );

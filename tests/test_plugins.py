@@ -442,3 +442,30 @@ def test_unload_removes_modules(env, manager):
     assert [m for m in sys.modules if m.startswith('_plugin_demo.')]
     unload('demo')
     assert not [m for m in sys.modules if m.startswith('_plugin_demo.')]
+
+# ------------------------------------------------------------------ recent_issues (вкладка Логи)
+
+def test_recent_issues_returns_plugin_errors_and_warnings(manager):
+    manager.activity.add('demo', 'info', 'loading')
+    manager.activity.add('demo', 'error', 'capability_failed', error='boom git')
+    manager.activity.add('demo', 'warn', 'slow_op')
+    manager.activity.add('demo', 'action', 'installed')  # не должен попасть
+
+    rows = manager.recent_issues()
+    assert all(r['level'] in ('error', 'warn') for r in rows)
+    levels = {r['level'] for r in rows}
+    assert levels == {'error', 'warn'}
+    err = [r for r in rows if r['level'] == 'error'][0]
+    assert 'demo: capability_failed' in err['message']
+    assert 'error=boom git' in err['message']
+    assert err['source'] == 'plugin/demo'
+    # формат совместим с логом ядра
+    assert set(err.keys()) == {'time', 'level', 'message', 'source'}
+    assert err['time'].count(':') == 2
+
+
+def test_recent_issues_updates_api_logs_contract():
+    """main.py /api/logs объединяет LOG ядра с manager.recent_issues — проверяем контракт кода."""
+    src = open(os.path.join(BASE, 'main.py'), encoding='utf-8').read()
+    assert "mgr.recent_issues(limit=60)" in src
+    assert "@app.post('/api/logs')" in src

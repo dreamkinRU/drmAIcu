@@ -18,7 +18,7 @@ from patch_engine import (
     resolve, rollback, safe_path, save_manifest, sha, sha_bytes, stats,
     test_apply, to_bytes, validate,
 )
-from core.plugins.routes import plugin_router, startup_plugins
+from core.plugins.routes import plugin_router, startup_plugins, get_manager
 
 app.include_router(plugin_router)
 startup_plugins()
@@ -377,7 +377,38 @@ def s_status():
 
 @app.get('/api/logs')
 def s_logs():
-    return JSONResponse({'logs': LOG[-100:]})
+    # Вкладка «Логи»: ядро (LOG) + ошибки/предупреждения плагинов из журналов
+    # активности (manager.recent_issues) — раньше ошибки плагинов туда не попадали.
+    merged = list(LOG[-100:])
+    try:
+        mgr = get_manager()
+        if mgr is not None:
+            merged.extend(mgr.recent_issues(limit=60))
+    except Exception:
+        pass  # логи ядра всё равно отдаём
+    return JSONResponse({'logs': merged})
+
+
+@app.post('/api/logs')
+async def s_log_add(payload: dict):
+    """Принять ошибку/событие от UI и сохранить в общий LOG.
+
+    Нужно, чтобы ошибки, увиденные на фронтенде (плашка «Репозитории/Плагины»),
+    остались во вкладке «Логи» даже после перезагрузки страницы.
+    Поле time приходит от клиента (dedupe по time+message на фронтенде).
+    """
+    msg = str(payload.get('message') or '')[:2000]
+    lvl = str(payload.get('level') or 'info').lower()
+    if lvl not in ('info', 'warn', 'error', 'success'):
+        lvl = 'info'
+    if not msg:
+        return JSONResponse({'success': False, 'error': 'пустое сообщение (message)'})
+    src = str(payload.get('source') or 'UI')[:60]
+    t = str(payload.get('time') or datetime.now().strftime('%H:%M:%S'))[:12]
+    LOG.append({'time': t, 'level': lvl, 'message': msg, 'source': src})
+    if len(LOG) > 500:
+        LOG.pop(0)
+    return JSONResponse({'success': True})
 
 
 _RES_CACHE = {'ts': 0.0, 'data': None}

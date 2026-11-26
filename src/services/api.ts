@@ -445,6 +445,21 @@ export async function fetchBackendLogs(): Promise<LogEntry[]> {
   }
 }
 
+/**
+ * Отправить событие/ошибку UI на бэкенд (POST /api/logs), чтобы она осталась
+ * во вкладке «Логи» даже после перезагрузки страницы. Fire-and-forget:
+ * при недоступном бэкенде запись остаётся только в памяти страницы.
+ */
+export async function postBackendLog(entry: LogEntry): Promise<void> {
+  try {
+    await fetch('/api/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ time: entry.time, level: entry.level, message: entry.message, source: entry.source }),
+    });
+  } catch { /* бэкенд недоступен — лог останется локальным */ }
+}
+
 // ============================================================================
 // Документация (MD-файлы)
 // ============================================================================
