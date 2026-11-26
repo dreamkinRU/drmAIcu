@@ -17,8 +17,7 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from api.shared import BASE
-from plugins.repos import git_service
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 _LOCK = threading.RLock()
 _ALLOWED_REMOTE_HOST = "github.com"
@@ -106,6 +105,8 @@ def _save_journal(data):
 
 
 def _repo_lock():
+    # Локальный импорт предотвращает цикл api -> routes_updates -> updater -> api.shared.
+    from plugins.repos import git_service
     return git_service.repo_operation_lock(BASE)
 
 
