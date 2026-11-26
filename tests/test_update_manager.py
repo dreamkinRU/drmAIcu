@@ -234,3 +234,24 @@ def test_update_api_allows_local_read_without_origin():
         client=SimpleNamespace(host="::1"),
     )
     assert _check_local_browser_request(request, require_origin=False) is None
+
+
+def test_restart_required_completes_only_after_new_process(git_fixture, monkeypatch):
+    journal = {
+        "schema": 1,
+        "id": "a" * 32,
+        "state": "RESTART_REQUIRED",
+        "process_pid": 12345,
+        "restart_required": True,
+    }
+    updater._save_journal(journal)
+    monkeypatch.setattr(updater.os, "getpid", lambda: 54321)
+
+    state = updater.manager.state()["journal"]
+    assert state["state"] == "COMPLETED"
+    assert state["restart_verified_pid"] == 54321
+    assert state["restart_verified_at"]
+
+    with pytest.raises(updater.UpdateError) as error:
+        updater.manager.check()
+    assert error.value.code != "operation_incomplete"
