@@ -68,7 +68,7 @@ def _git_ok(args, timeout=30):
     if not result["ok"]:
         detail = (result["stderr"] or result["stdout"]).strip()
         raise UpdateError(detail[:3000] or "Git command failed", "git_failed", 409)
-    return result["stdout"].strip()
+    return result["stdout"].rstrip("\r\n")
 
 
 def _load_journal():
