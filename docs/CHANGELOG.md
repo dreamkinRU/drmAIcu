@@ -1,6 +1,15 @@
 # drmAIcu — История изменений
 
-## v.3.15.0 Model (Текущая) — 26.11.2026
+## v.3.16.0 Model (Текущая) — 26.11.2026
+
+### Sync одной кнопкой: без подтверждения WRITE (решение заказчика)
+
+- Кнопка «Синхронизировать» выполняет add -A → commit → pull --rebase → push сразу, без плашки «Требуется подтверждение WRITE» — как sync.bat, одним нажатием (решение заказчика от 26.11.2026).
+- Ядро: явный allowlist AUTO_CONFIRMED_CAPABILITIES в core/plugins/api.py — исключение только для (repos, repos.sync); остальные WRITE-операции (add/commit/push/pull/fetch/checkout/rebase) по-прежнему с подтверждением, разрешение repos.sync по-прежнему выдаётся/отзывается в Плагинах → Разрешения.
+- Preview diff остался: «Предпросмотр Sync» по-прежнему показывает полный diff; при обрезанном diff — чекбокс осознанного продолжения.
+- UI: тексты кнопок («Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)») и подсказок приведены к новой механике; plugin.json 1.2.1 → 1.3.0.
+- Тесты: test_sync_no_confirmation.py (новый: repos.sync — auto, allowlist не ослабляет остальные WRITE), обновлены test_repos_plugin/test_repos_last_sync/test_sync_refresh_hints/test_repos_ui_changes/test_repos_ui4_fixes.
+## v.3.15.0 Model — 26.11.2026
 
 ### Sync: честные подсказки после обновления (закрытие разрыва с sync.bat)
 
