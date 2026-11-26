@@ -192,22 +192,35 @@ def backup(path):
         return out
     name = os.path.relpath(path, BASE).replace(os.sep, '__').replace(':', '')
     ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-    out = []
-    # B61 FIX (P2-14): 1 timestamp-бэкап + _LATEST.bak (убраны _verified.bak),
-    # старые timestamp-бэкапы удаляются ротацией (_keep=10)
-    for suffix in ('_' + ts + '.bak', '_LATEST.bak'):
-        dst = os.path.join(BACKUP_DIR, name + suffix)
-        try:
-            shutil.copy2(path, dst)
-            out.append(dst)
-        except Exception:
-            # B27 FIX: all-or-nothing — частичный набор бэкапов равносилен отсутствию бэкапа
-            for x in out:
-                try:
-                    os.remove(x)
-                except OSError:
-                    pass
-            return []
+    timestamp_dst = None
+    # B61 FIX: timestamp может совпасть на Windows/при параллельном вызове.
+    # O_EXCL резервирует уникальное имя атомарно, затем copy2 записывает содержимое.
+    try:
+        attempt = 0
+        while True:
+            collision_suffix = '' if attempt == 0 else '_%02d' % attempt
+            candidate = os.path.join(BACKUP_DIR, name + '_' + ts + collision_suffix + '.bak')
+            try:
+                fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_BINARY', 0), 0o600)
+                os.close(fd)
+                timestamp_dst = candidate
+                break
+            except FileExistsError:
+                attempt += 1
+        shutil.copy2(path, timestamp_dst)
+        out.append(timestamp_dst)
+
+        latest_dst = os.path.join(BACKUP_DIR, name + '_LATEST.bak')
+        shutil.copy2(path, latest_dst)
+        out.append(latest_dst)
+    except Exception:
+        # B27 FIX: all-or-nothing — частичный набор бэкапов равносилен отсутствию бэкапа
+        for x in out + ([timestamp_dst] if timestamp_dst and timestamp_dst not in out else []):
+            try:
+                os.remove(x)
+            except OSError:
+                pass
+        return []
     _rotate_backups(name, keep=10)
     return out
 

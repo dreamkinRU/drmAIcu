@@ -1000,6 +1000,23 @@ def test_B61_backup_two_copies_and_no_verified(box):
         assert any(os.path.basename(b).endswith("_LATEST.bak") for b in backs)
 
 
+def test_B61_backup_names_remain_unique_when_clock_repeats(box, monkeypatch):
+    from datetime import datetime as RealDateTime
+
+    p = put(box, "same-clock.py", "x = 1\n")
+
+    class FrozenDateTime:
+        @classmethod
+        def now(cls):
+            return RealDateTime(2026, 11, 26, 12, 0, 0, 123456)
+
+    monkeypatch.setattr(engine, "datetime", FrozenDateTime)
+    paths = [engine.backup(str(p))[0] for _ in range(3)]
+    assert all(paths)
+    assert len(set(paths)) == 3
+    assert all(os.path.isfile(path) for path in paths)
+
+
 def test_B61_backup_rotation_keep10(box):
     p = put(box, "b.py", "y = 1\n")
     for _ in range(14):
