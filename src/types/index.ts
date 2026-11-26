@@ -156,7 +156,7 @@ export type TabId =
   | 'patches'
   | 'project'
   | 'plugins'
-  | 'repositories';
+  | 'repositories'\n  | 'updates';
 
 export type PluginStatus = 'installed' | 'disabled' | 'loading' | 'running' | 'error' | 'update_available' | 'incompatible';
 
