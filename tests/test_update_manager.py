@@ -33,6 +33,7 @@ def git_fixture(tmp_path, monkeypatch):
     subprocess.run(["git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main"], check=True, capture_output=True)
     subprocess.run(["git", "init", "-b", "main", str(seed)], check=True, capture_output=True)
     (seed / "app.txt").write_text("base\n", encoding="utf-8")
+    (seed / ".gitignore").write_text("data/updater/\n", encoding="utf-8")
     _commit(seed, "initial")
     _git(seed, "remote", "add", "origin", str(remote))
     _git(seed, "push", "-u", "origin", "main")
