@@ -91,9 +91,19 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab }: Repo
       setNotice({ kind: 'ok', text: `репозиторий открыт: ${clean} (ветка ${r.result.branch || '—'})` });
     } else {
       setStatus(null);
-      const err = r.status === 'error' ? r.error
-        : 'не удалось открыть репозиторий (неожиданный ответ gateway)';
-      setNotice({ kind: 'err', text: err + ' — путь должен существовать и содержать каталог .git' });
+      // Честная ошибка: если git вернул сбой (result.ok=false), показываем его stderr,
+      // а не заготовленный текст про неожиданный ответ gateway.
+      let err: string;
+      if (r.status === 'error') {
+        err = r.error;
+      } else if (r.status === 'confirmation_required') {
+        err = 'статус запросил подтверждение WRITE — проверьте разрешения плагина repos (READ должен быть auto)';
+      } else if (r.status === 'done' && !r.result.ok && (r.result as { error?: string }).error) {
+        err = `git status завершился с ошибкой: ${(r.result as { error?: string }).error}`;
+      } else {
+        err = 'не удалось открыть репозиторий — путь должен существовать и содержать каталог .git';
+      }
+      setNotice({ kind: 'err', text: err });
     }
   }, []);
 
