@@ -469,3 +469,31 @@ def test_recent_issues_updates_api_logs_contract():
     src = open(os.path.join(BASE, 'main.py'), encoding='utf-8').read()
     assert "mgr.recent_issues(limit=60)" in src
     assert "@app.post('/api/logs')" in src
+
+
+
+def test_gateway_enforces_minimum_write_confirmation_even_if_plugin_weakens_policy(manager):
+    manager.install('builtin:demo')
+    manager.enable('demo')
+    manager.permissions.grant('demo', 'demo.storage.write')
+    cap = manager._apis['demo']._get_cap('demo.write_store')
+    cap.policy = 'auto'  # simulate a plugin attempting to weaken the declared policy
+    result = manager.exec('demo', 'demo.write_store', {'item': 'guarded'})
+    assert result['status'] == 'confirmation_required'
+    assert result['confirmation']['policy'] == 'confirm'
+    assert manager._apis['demo'].capabilities()[1]['policy'] == 'confirm'
+
+
+def test_confirmation_token_is_bound_to_full_capability_context(manager):
+    manager.install('builtin:demo')
+    manager.enable('demo')
+    manager.permissions.grant('demo', 'demo.storage.write')
+    manager.permissions.grant('demo', 'demo.storage.merge')
+    pending = manager.exec('demo', 'demo.write_store', {'item': 'x'})
+    token = pending['confirmation']['id']
+    from core.plugins.api import GatewayBlocked
+    with pytest.raises(GatewayBlocked) as exc:
+        manager.exec('demo', 'demo.merge', {}, confirmation_token=token)
+    assert exc.value.code == 'confirmation_invalid'
+    # A failed context check must not consume a legitimate confirmation.
+    assert manager.confirm(token, True)['result'] == {'count': 1}

@@ -113,8 +113,13 @@ export const reposFetch = (path: string, token?: string) =>
 export const reposCheckout = (path: string, branch: string, create: boolean, token?: string) =>
   execCapability<SimpleGitResult>('repos.checkout', { path, branch, create }, token);
 
-export const reposSync = (path: string, message: string, token?: string) =>
-  execCapability<RepoSyncResult>('repos.sync', { path, message }, token);
+export const reposSyncPreview = (path: string) =>
+  execCapability<{ ok: boolean; snapshot: string; files: string[]; branch: string; head: string | null; diff_stat: string }>(
+    'repos.sync_preview', { path },
+  );
+
+export const reposSync = (path: string, message: string, token?: string, expectedSnapshot?: string, expectedFiles?: string[]) =>
+  execCapability<RepoSyncResult>('repos.sync', { path, message, expected_snapshot: expectedSnapshot, expected_files: expectedFiles }, token);
 
 /** PUT настроек плагина (путь репозитория по умолчанию). */
 export async function putRepoSettings(
@@ -132,3 +137,16 @@ export async function putRepoSettings(
     return { ok: false, error: 'backend недоступен' };
   }
 }
+
+
+/** Состояние незавершённого rebase и конфликтующие файлы. */
+export const reposRebaseState = (path: string) =>
+  execCapability<{ ok: boolean; active: boolean; conflicts: string[] }>('repos.rebase_state', { path });
+
+/** Продолжить rebase после ручного разрешения конфликтов. */
+export const reposRebaseContinue = (path: string, token?: string) =>
+  execCapability<SimpleGitResult>('repos.rebase_continue', { path }, token);
+
+/** Отменить незавершённый rebase. */
+export const reposRebaseAbort = (path: string, token?: string) =>
+  execCapability<SimpleGitResult>('repos.rebase_abort', { path }, token);

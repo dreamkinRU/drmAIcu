@@ -62,8 +62,27 @@ def initialize(ctx):
         return repos_service.repo_checkout(_sc(params, 'path'), _sc(params, 'branch'),
                                            create=bool((params or {}).get('create')))
 
+    def _sync_preview(params):
+        return repos_service.repo_sync_preview(_sc(params, 'path'))
+
     def _sync(params):
-        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False))
+        expected_snapshot = (params or {}).get('expected_snapshot')
+        expected_files = (params or {}).get('expected_files')
+        if not isinstance(expected_snapshot, str) or not isinstance(expected_files, list):
+            return {'ok': False,
+                    'error': 'перед Sync требуется получить предпросмотр и передать его snapshot и список файлов'}
+        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False),
+                                      expected_snapshot=expected_snapshot,
+                                      expected_files=expected_files)
+
+    def _rebase_state(params):
+        return repos_service.repo_rebase_state(_sc(params, 'path'))
+
+    def _rebase_continue(params):
+        return repos_service.repo_rebase_continue(_sc(params, 'path'))
+
+    def _rebase_abort(params):
+        return repos_service.repo_rebase_abort(_sc(params, 'path'))
 
     reg = ctx.register_capability
     reg('repos.diagnostics', 'repos.read', _diagnostics, 'auto',
@@ -92,8 +111,16 @@ def initialize(ctx):
         'git fetch --all --prune (WRITE, подтверждение)')
     reg('repos.checkout', 'repos.write', _checkout, 'confirm',
         'Переключение/создание ветки (WRITE, подтверждение)')
+    reg('repos.sync_preview', 'repos.read', _sync_preview, 'auto',
+        'Предпросмотр Sync: точный список изменённых файлов и контрольный снимок рабочего дерева')
     reg('repos.sync', 'repos.sync', _sync, 'confirm',
         'Кнопка «Синхронизировать»: add -A -> commit -> pull --rebase -> push (одно подтверждение на весь пакет, замена sync.bat)')
+    reg('repos.rebase_state', 'repos.read', _rebase_state, 'auto',
+        'Состояние rebase и список конфликтующих файлов')
+    reg('repos.rebase_continue', 'repos.write', _rebase_continue, 'confirm',
+        'Продолжить rebase после разрешения всех конфликтов')
+    reg('repos.rebase_abort', 'repos.write', _rebase_abort, 'confirm',
+        'Отменить активный rebase и вернуть состояние до pull --rebase')
     return True
 
 

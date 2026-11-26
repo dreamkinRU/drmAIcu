@@ -93,23 +93,39 @@ class ConfirmationManager:
         items.sort(key=lambda p: p.get('created', 0))
         return items
 
-    def consume(self, cid, params=None):
-        """Валидация и изъятие подтверждения (single-use). Возвращает item."""
+    def consume(self, cid, params=None, plugin_id=None, capability=None,
+                permission=None, policy=None):
+        """Проверить полный контекст и одноразово изъять подтверждение."""
         with self._lock:
             item = self._pending.get(cid)
             if item is None:
                 raise ConfirmationError('unknown or already used confirmation')
-            if self._now() - item.get('created', 0) > self.ttl:
+            if self._now() - item.get('created', 0) >= self.ttl:
                 self._pending.pop(cid, None)
                 self._save()
                 raise ConfirmationError('confirmation expired')
+
+            expected = {
+                'plugin': plugin_id,
+                'capability': capability,
+                'permission': permission,
+                'policy': policy,
+            }
+            for key, value in expected.items():
+                if value is not None and item.get(key) != value:
+                    raise ConfirmationError('confirmation context mismatch: %s' % key)
+
             if params is not None:
-                given = self._hash_params_safe(item['plugin'], item['capability'], params)
-                if given != item['params_hash']:
+                try:
+                    given = self.params_hash(item['plugin'], item['capability'], params)
+                except (TypeError, ValueError, KeyError) as e:
+                    raise ConfirmationError('confirmation parameters are invalid') from e
+                if given != item.get('params_hash'):
                     raise ConfirmationError('confirmation does not match provided params')
+
             self._pending.pop(cid, None)
             self._save()
-            return item
+            return dict(item)
 
     def _hash_params_safe(self, plugin_id, capability, params):
         return self.params_hash(plugin_id, capability, params)

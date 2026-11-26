@@ -10,7 +10,7 @@ import traceback
 
 from .confirmations import ConfirmationError
 from .models import ConfirmationPolicy
-from .permissions import PermissionDenied
+from .permissions import PermissionDenied, permission_level
 
 
 class GatewayBlocked(Exception):
@@ -91,14 +91,41 @@ class PluginAPI:
 
     def register_capability(self, name, permission, handler, confirmation='auto', description=''):
         ConfirmationPolicy(confirmation)
+        try:
+            permission_level(permission)
+        except ValueError as e:
+            raise ValueError('capability uses an unknown permission: %s' % permission) from e
+        rec = self._manager.registry.get(self._plugin_id)
+        if rec is None or permission not in rec.permissions:
+            raise ValueError('capability permission is not declared in plugin manifest: %s' % permission)
         with self._caps_lock:
+            if name in self._caps:
+                raise ValueError('capability already registered: %s' % name)
             self._caps[name] = Capability(name, permission, handler, confirmation, description or '')
+
+    def _effective_policy(self, cap):
+        """Плагин может ужесточить, но не ослабить политику ядра."""
+        try:
+            level = permission_level(cap.permission)
+        except ValueError as e:
+            raise GatewayBlocked('invalid_permission', str(e)) from e
+        minimum = {
+            'read': ConfirmationPolicy.AUTO.value,
+            'write': ConfirmationPolicy.CONFIRM.value,
+            'critical': ConfirmationPolicy.CRITICAL.value,
+        }[level]
+        rank = {
+            ConfirmationPolicy.AUTO.value: 0,
+            ConfirmationPolicy.CONFIRM.value: 1,
+            ConfirmationPolicy.CRITICAL.value: 2,
+        }
+        return max((cap.policy, minimum), key=lambda value: rank[value])
 
     def capabilities(self):
         with self._caps_lock:
-            return [dict(name=c.name, permission=c.permission, policy=c.policy,
-                         description=c.description)
-                    for c in self._caps.values()]
+            caps = list(self._caps.values())
+        return [dict(name=c.name, permission=c.permission, policy=self._effective_policy(c),
+                     description=c.description) for c in caps]
 
     def _get_cap(self, name):
         with self._caps_lock:
@@ -112,23 +139,29 @@ class PluginAPI:
         rec = self._manager.registry.get(self._plugin_id)
         if rec is None or rec.status != 'running':
             raise GatewayBlocked('plugin_not_running', 'plugin %s is not running' % self._plugin_id)
+        policy = self._effective_policy(cap)
         if not self._manager.permissions.is_granted(self._plugin_id, cap.permission):
             raise PermissionDenied(cap.permission)
         params = params or {}
         if not isinstance(params, dict):
             raise GatewayBlocked('invalid_params', 'params must be an object')
 
-        if cap.policy in (ConfirmationPolicy.CONFIRM.value, ConfirmationPolicy.CRITICAL.value):
+        if policy in (ConfirmationPolicy.CONFIRM.value, ConfirmationPolicy.CRITICAL.value):
             if confirmation_token:
                 try:
-                    self._manager.confirmations.consume(confirmation_token, params=params)
+                    self._manager.confirmations.consume(
+                        confirmation_token, params=params, plugin_id=self._plugin_id,
+                        capability=name, permission=cap.permission, policy=policy)
                 except ConfirmationError as e:
                     raise GatewayBlocked('confirmation_invalid', str(e))
                 return self._invoke(cap, params)
             conf = self._manager.confirmations.create(
-                self._plugin_id, name, params, cap.permission, cap.policy)
-            self.log('warn', 'confirmation_required', capability=name, policy=cap.policy)
+                self._plugin_id, name, params, cap.permission, policy)
+            self.log('warn', 'confirmation_required', capability=name, policy=policy)
             raise PendingConfirmation(conf)
+
+        if confirmation_token:
+            raise GatewayBlocked('unexpected_confirmation', 'this capability does not require confirmation')
 
         return self._invoke(cap, params)
 

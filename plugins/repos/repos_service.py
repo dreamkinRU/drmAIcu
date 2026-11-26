@@ -8,7 +8,11 @@
 `git log --grep="Merge pull request #"`. Любая ошибка возвращается структурой,
 никогда не превращается в fake-успех.
 """
+import hashlib
 import os
+import re
+import stat
+import urllib.parse
 
 from . import git_service
 
@@ -96,6 +100,26 @@ def repo_branches(path):
     return {'ok': True, 'current': current, 'branches': branches}
 
 
+def _sanitize_remote_url(value):
+    """Удалить userinfo и чувствительные query-параметры из URL remote."""
+    raw = str(value or '')
+    try:
+        parsed = urllib.parse.urlsplit(raw)
+        if not parsed.scheme or not parsed.netloc:
+            return raw
+        host = parsed.hostname or ''
+        if parsed.port:
+            host += ':%d' % parsed.port
+        safe_query = [
+            (key, '***' if re.search(r'token|key|secret|password|auth', key, re.I) else val)
+            for key, val in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        ]
+        return urllib.parse.urlunsplit((parsed.scheme, host, parsed.path,
+                                        urllib.parse.urlencode(safe_query), parsed.fragment))
+    except (ValueError, TypeError):
+        return '[remote URL скрыт: некорректный формат]'
+
+
 def repo_remote(path):
     validate(path)
     r = _r(['remote', '-v'], path)
@@ -107,7 +131,7 @@ def repo_remote(path):
         parts = line.split()
         if len(parts) >= 2 and parts[0] not in seen:
             seen.add(parts[0])
-            remotes.append({'name': parts[0], 'url': parts[1]})
+            remotes.append({'name': parts[0], 'url': _sanitize_remote_url(parts[1])})
     return {'ok': True, 'remotes': remotes}
 
 
@@ -125,16 +149,36 @@ def read_file(path, rel, max_bytes=READ_FILE_MAX_BYTES):
     validate(path)
     if not rel or rel.startswith('/') or '..' in os.path.normpath(rel).split(os.sep) or '\\' in str(rel):
         return {'ok': False, 'error': 'недопустимый путь файла'}
-    full = os.path.normpath(os.path.join(path, rel))
-    if not (full == os.path.normpath(path) or full.startswith(os.path.normpath(path) + os.sep)):
-        return {'ok': False, 'error': 'путь вне репозитория'}
-    if not os.path.isfile(full):
-        return {'ok': False, 'error': 'файл не найден: %s' % rel}
-    size = os.path.getsize(full)
-    if size > max_bytes:
-        return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (size, max_bytes)}
-    with open(full, 'rb') as f:
-        data = f.read()
+    root = os.path.realpath(os.path.abspath(path))
+    full = os.path.abspath(os.path.join(root, rel))
+    fd = -1
+    try:
+        resolved = os.path.realpath(full, strict=True)
+        if os.path.commonpath((root, resolved)) != root:
+            return {'ok': False, 'error': 'путь вне репозитория (symlink traversal запрещён)'}
+        if os.path.islink(full) or not os.path.isfile(resolved):
+            return {'ok': False, 'error': 'файл не найден или является symlink: %s' % rel}
+        before = os.stat(resolved, follow_symlinks=False)
+        if not stat.S_ISREG(before.st_mode):
+            return {'ok': False, 'error': 'разрешено читать только обычные файлы'}
+        if before.st_size > max_bytes:
+            return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (before.st_size, max_bytes)}
+        flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+        fd = os.open(resolved, flags)
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            return {'ok': False, 'error': 'файл изменился во время проверки; повторите чтение'}
+        with os.fdopen(fd, 'rb') as f:
+            fd = -1
+            data = f.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            return {'ok': False, 'error': 'файл превысил лимит размера во время чтения'}
+        size = len(data)
+    except (OSError, ValueError) as e:
+        return {'ok': False, 'error': 'не удалось безопасно прочитать файл: %s' % e}
+    finally:
+        if fd >= 0:
+            os.close(fd)
     try:
         text = data.decode('utf-8')
         encoding = 'utf-8'
@@ -160,9 +204,20 @@ def upstream_of(path, branch):
     return ('origin', branch)
 
 
-def repo_add(path):
+def repo_add(path, files=None):
     validate(path)
-    r = _r(['add', '-A'], path)
+    args = ['add', '-A']
+    if files is not None:
+        if not isinstance(files, list) or not files:
+            return {'ok': False, 'error': 'список подтверждённых файлов пуст или имеет неверный формат'}
+        safe_paths = []
+        for rel in files:
+            rel = str(rel)
+            if not rel or os.path.isabs(rel) or '..' in rel.replace('\\\\', '/').split('/'):
+                return {'ok': False, 'error': 'недопустимый путь в списке подтверждённых файлов'}
+            safe_paths.append(':(literal)' + rel.replace('\\\\', '/'))
+        args += ['--'] + safe_paths
+    r = _r(args, path)
     if not r['ok']:
         return {'ok': False, 'error': r['stderr'].strip() or 'git add failed'}
     return {'ok': True, 'staged': True}
@@ -226,14 +281,103 @@ def repo_checkout(path, branch, create=False):
     if not branch or not str(branch).strip():
         return {'ok': False, 'error': 'требуется имя ветки'}
     clean = str(branch).strip().replace('remotes/origin/', '')
-    args = ['checkout'] + (['-b'] if create else []) + [clean]
+    if clean.startswith('-') or clean.startswith('remotes/'):
+        return {'ok': False, 'error': 'недопустимое имя ветки'}
+    check = _r(['check-ref-format', '--branch', clean], path)
+    if not check['ok']:
+        return {'ok': False, 'error': 'недопустимое имя ветки: %s' % clean}
+    args = ['checkout'] + (['-b'] if create else []) + ['--', clean]
     r = _r(args, path)
     if not r['ok']:
         return {'ok': False, 'error': (r['stderr'].strip() or 'git checkout failed')[-1500:]}
     return {'ok': True, 'branch': clean, 'created': bool(create)}
 
 
-def repo_sync(path, message):
+def repo_sync_preview(path, expected_files=None):
+    """Снимок изменённых файлов для подтверждения Sync."""
+    validate(path)
+    status = _r(['status', '--porcelain=v1', '-z', '--untracked-files=all'], path)
+    if not status['ok']:
+        return {'ok': False, 'error': status['stderr'].strip() or 'git status failed'}
+    branch = current_branch(path) or ''
+    head_result = _r(['rev-parse', 'HEAD'], path)
+    head = head_result.get('stdout', '').strip() if head_result.get('ok') else ''
+    raw_parts = status['stdout'].split('\0')
+    paths = []
+    index = 0
+    while index < len(raw_parts):
+        record = raw_parts[index]
+        index += 1
+        if len(record) < 4:
+            continue
+        code, rel = record[:2], record[3:]
+        if rel:
+            paths.append(rel)
+        if 'R' in code or 'C' in code:
+            if index < len(raw_parts) and raw_parts[index]:
+                paths.append(raw_parts[index])
+                index += 1
+    current_paths = sorted(set(paths))
+    if expected_files is not None:
+        expected_paths = sorted(set(str(item) for item in expected_files))
+        unexpected = sorted(set(current_paths) - set(expected_paths))
+        if unexpected:
+            return {'ok': False, 'snapshot_mismatch': True,
+                    'error': 'после подтверждения появились новые файлы: %s' % ', '.join(unexpected[:10])}
+        unique_paths = expected_paths
+    else:
+        unique_paths = current_paths
+    digest = hashlib.sha256()
+    digest.update(b'BRANCH\\x00')
+    digest.update(branch.encode('utf-8', errors='replace'))
+    digest.update(b'HEAD\\x00')
+    digest.update(head.encode('ascii', errors='ignore'))
+    upstream = _r(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], path)
+    digest.update((upstream.get('stdout', '') if upstream.get('ok') else '').encode('utf-8', errors='replace'))
+    remote_config = _r(['remote', '-v'], path)
+    digest.update((remote_config.get('stdout', '') if remote_config.get('ok') else '').encode('utf-8', errors='replace'))
+    root = os.path.realpath(os.path.abspath(path))
+    for rel in unique_paths:
+        if os.path.isabs(rel) or '..' in rel.replace('\\\\', '/').split('/'):
+            return {'ok': False, 'error': 'Git вернул небезопасный путь в status; Sync остановлен'}
+        full = os.path.abspath(os.path.join(root, rel))
+        try:
+            if os.path.commonpath((root, full)) != root:
+                return {'ok': False, 'error': 'изменённый файл находится вне репозитория'}
+            info = os.lstat(full)
+            digest.update(b'\\x00PATH\\x00')
+            digest.update(rel.encode('utf-8', errors='replace'))
+            digest.update(str(stat.S_IMODE(info.st_mode)).encode('ascii'))
+            if stat.S_ISLNK(info.st_mode):
+                digest.update(b'LINK:')
+                digest.update(os.readlink(full).encode('utf-8', errors='replace'))
+            elif stat.S_ISREG(info.st_mode):
+                digest.update(b'FILE:')
+                with open(full, 'rb') as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                        digest.update(chunk)
+            elif stat.S_ISDIR(info.st_mode):
+                nested_head = _r(['rev-parse', 'HEAD'], full)
+                digest.update(b'DIR:')
+                digest.update(nested_head.get('stdout', '').encode('utf-8', errors='replace'))
+                nested_status = _r(['status', '--porcelain=v1', '-z', '--untracked-files=all'], full)
+                digest.update(nested_status.get('stdout', '').encode('utf-8', errors='replace'))
+            else:
+                digest.update(b'OTHER:')
+        except FileNotFoundError:
+            digest.update(rel.encode('utf-8', errors='replace'))
+            digest.update(b'DELETED')
+        except (OSError, ValueError) as e:
+            return {'ok': False, 'error': 'не удалось зафиксировать снимок %s: %s' % (rel, e)}
+    diff = _r(['diff', '--stat', 'HEAD'], path)
+    if not diff['ok']:
+        diff = _r(['diff', '--stat'], path)
+    return {'ok': True, 'snapshot': digest.hexdigest(), 'files': unique_paths,
+            'branch': branch, 'head': head or None,
+            'diff_stat': (diff.get('stdout') or '')[-git_service.DIFF_MAX_CHARS:]}
+
+
+def repo_sync(path, message, expected_snapshot=None, expected_files=None):
     """Полная замена sync.bat: add -> commit -> pull --rebase -> push (+ merged PR check)."""
     validate(path)
     steps = []
@@ -243,6 +387,18 @@ def repo_sync(path, message):
 
     changes = st.get('changed', False)
     steps.append({'step': 'status', 'ok': True, 'changed': changes, 'branch': st.get('branch')})
+    if expected_snapshot is not None:
+        if (not isinstance(expected_files, list)
+                or any(not isinstance(item, str) or not item for item in expected_files)
+                or not re.fullmatch(r'[0-9a-f]{64}', str(expected_snapshot))):
+            return {'ok': False, 'error': 'некорректный snapshot или список подтверждённых файлов',
+                    'snapshot_mismatch': True, 'steps': steps}
+        current = repo_sync_preview(path)
+        if (not current.get('ok') or current.get('snapshot') != expected_snapshot
+                or sorted(current.get('files', [])) != sorted(expected_files or [])):
+            return {'ok': False,
+                    'error': 'рабочее дерево изменилось после предпросмотра; обновите список изменений и подтвердите Sync заново',
+                    'snapshot_mismatch': True, 'steps': steps}
 
     if changes:
         msg = (message or '').strip() if message else ''
@@ -250,10 +406,16 @@ def repo_sync(path, message):
             return {'ok': False,
                     'error': 'есть незакоммиченные изменения — требуется сообщение коммита (как в sync.bat: пустое сообщение отклоняется). Путь исправления: введите сообщение коммита в поле над кнопкой «Синхронизировать» и повторите — sync сам выполнит add -A → commit → pull --rebase → push',
                     'steps': steps}
-        ra = repo_add(path)
+        ra = repo_add(path, expected_files if expected_snapshot is not None else None)
         steps.append({'step': 'add', **ra})
         if not ra.get('ok'):
             return {'ok': False, 'error': ra.get('error', 'git add failed'), 'steps': steps}
+        if expected_snapshot is not None:
+            staged_snapshot = repo_sync_preview(path, expected_files=expected_files)
+            if not staged_snapshot.get('ok') or staged_snapshot.get('snapshot') != expected_snapshot:
+                return {'ok': False,
+                        'error': 'состав или содержимое файлов изменилось во время git add; коммит и push остановлены. Проверьте staged changes и повторите Sync',
+                        'snapshot_mismatch': True, 'steps': steps}
         rc = repo_commit(path, msg)
         steps.append({'step': 'commit', **{k: v for k, v in rc.items() if k in ('ok', 'sha', 'error')}})
         if not rc.get('ok'):
@@ -292,3 +454,48 @@ def validate(path):
 
 def diagnostics():
     return {'git': git_service.is_git_available(), 'version': git_service.git_version()}
+
+
+def repo_rebase_state(path):
+    """Диагностика активного rebase и конфликтующих файлов."""
+    validate(path)
+    merge = _r(['rev-parse', '--git-path', 'rebase-merge'], path)
+    apply = _r(['rev-parse', '--git-path', 'rebase-apply'], path)
+    candidates = []
+    for result in (merge, apply):
+        if result.get('ok') and result.get('stdout', '').strip():
+            candidate = result['stdout'].strip()
+            if not os.path.isabs(candidate):
+                candidate = os.path.join(path, candidate)
+            candidates.append(candidate)
+    active = any(os.path.isdir(p) for p in candidates)
+    if not active:
+        return {'ok': True, 'active': False, 'conflicts': []}
+    unmerged = _r(['diff', '--name-only', '--diff-filter=U'], path)
+    return {'ok': True, 'active': True,
+            'conflicts': unmerged.get('stdout', '').splitlines() if unmerged.get('ok') else []}
+
+
+def repo_rebase_continue(path):
+    validate(path)
+    state = repo_rebase_state(path)
+    if not state.get('active'):
+        return {'ok': False, 'error': 'активный rebase не найден'}
+    if state.get('conflicts'):
+        return {'ok': False, 'error': 'остались неразрешённые конфликты', 'conflicts': state['conflicts']}
+    result = _r(['-c', 'core.editor=:', 'rebase', '--continue'], path,
+                timeout=git_service.PUSH_TIMEOUT)
+    if not result['ok']:
+        return {'ok': False, 'error': (result['stderr'] or result['stdout'] or 'rebase --continue failed')[-1500:]}
+    return {'ok': True, 'output': (result['stdout'] or result['stderr'])[-1500:]}
+
+
+def repo_rebase_abort(path):
+    validate(path)
+    state = repo_rebase_state(path)
+    if not state.get('active'):
+        return {'ok': False, 'error': 'активный rebase не найден'}
+    result = _r(['rebase', '--abort'], path, timeout=git_service.PUSH_TIMEOUT)
+    if not result['ok']:
+        return {'ok': False, 'error': (result['stderr'] or result['stdout'] or 'rebase --abort failed')[-1500:]}
+    return {'ok': True, 'output': (result['stdout'] or result['stderr'])[-1500:]}

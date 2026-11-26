@@ -118,3 +118,49 @@ def test_changes_section_lists_repo_files():
         'Кнопка «Обновить» в разделе «Изменения» не подключена. Путь исправления: '
         'ChangesSection должен вызывать load() + reload() (RepositoriesTab.tsx).'
     )
+
+
+
+def test_checkout_requires_explicit_confirmation_and_checks_result():
+    src = _read(REPOS_TAB)
+    start = src.index('const doCheckout = async')
+    end = src.index('return (', start)
+    checkout = src[start:end]
+    assert 'setPending({' in checkout
+    assert 'run: t => { void doCheckout(branch, create, t); }' in checkout
+    assert 'await reposCheckout(repoPath, branch, create, r.confirmation.id)' not in checkout
+    assert "r.status === 'done' && r.result.ok" in checkout
+    assert "r.status === 'done')" in checkout and 'r.result.error' in checkout
+
+
+def test_confirmed_write_result_is_not_discarded():
+    src = _read(REPOS_TAB)
+    start = src.index('const runWrite = async')
+    end = src.index('const viewFile = async', start)
+    handler = src[start:end]
+    assert 'const r = await call(token);' in handler
+    assert 'run: t => { void runWrite(label, call, t); }' in handler
+    assert "r.status === 'done'" in handler and 'res.error' in handler
+    assert "r.status === 'error'" in handler
+
+
+def test_rebase_recovery_has_explicit_confirmed_actions():
+    src = _read(REPOS_TAB)
+    assert 'reposRebaseState' in src
+    assert 'reposRebaseContinue' in src and 'reposRebaseAbort' in src
+    assert 'rebase --continue' in src and 'rebase --abort' in src
+    assert 'rebaseState.conflicts.map' in src
+    assert 'disabled={rebaseState.conflicts.length > 0}' in src
+
+
+
+def test_sync_requires_preview_and_confirms_exact_file_list():
+    src = _read(REPOS_TAB)
+    assert 'reposSyncPreview(repoPath)' in src
+    assert 'preview.result.snapshot' in src
+    assert 'preview.result.files' in src
+    assert 'reposSync(repoPath, commitMsg, token, expectedSnapshot, previewFiles)' in src
+    assert 'Файлы: ${fileSummary}' in src
+    service = _read(os.path.join(os.path.dirname(REPOS_TAB), '..', '..', 'services', 'repos.ts'))
+    assert 'expected_snapshot: expectedSnapshot' in service
+    assert 'expected_files: expectedFiles' in service

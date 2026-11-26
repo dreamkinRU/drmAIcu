@@ -41,7 +41,12 @@ def make_ctx(manager_cls=None):
             self.secrets = SecretManager(os.path.join(tmp, 'secrets'))
             self.activity = ActivityJournal(os.path.join(tmp, 'activity'))
             self.events = EventBus()
-            self.registry = type('R', (), {'get': lambda self, pid: None})()
+            self.registry = type('R', (), {
+                'get': lambda self, pid: type('Rec', (), {
+                    'permissions': ['repos.read', 'repos.write', 'repos.sync'],
+                    'status': 'running',
+                })()
+            })()
             self.settings = type('S', (), {'merged': lambda self, pid, schema: {}})()
 
     module = load_entry('repos', PLUGIN_DIR, 'plugin.py')
@@ -67,12 +72,13 @@ def test_entry_registers_capabilities_with_policies():
     caps = {c['name']: c for c in ctx.capabilities()}
     # READ — auto
     for name in ('repos.status', 'repos.log', 'repos.branches', 'repos.remote',
-                 'repos.diff', 'repos.read_file', 'repos.diagnostics'):
+                 'repos.diff', 'repos.read_file', 'repos.diagnostics', 'repos.sync_preview',
+                 'repos.rebase_state'):
         assert caps[name]['policy'] == 'auto', name
         assert caps[name]['permission'] == 'repos.read'
     # WRITE — confirm
     for name in ('repos.add', 'repos.commit', 'repos.push', 'repos.pull',
-                 'repos.fetch', 'repos.checkout'):
+                 'repos.fetch', 'repos.checkout', 'repos.rebase_continue', 'repos.rebase_abort'):
         assert caps[name]['policy'] == 'confirm', name
         assert caps[name]['permission'] == 'repos.write'
     # Sync — отдельное разрешение, один пакет
@@ -246,7 +252,11 @@ def test_sync_exec_flow_through_manager(tmp_path):
         rows.append({'permission': row['permission'], 'granted': True})
     mgr.permissions_put('repos', rows)
 
-    params = {'path': repo, 'message': 'e2e sync через gateway'}
+    preview = mgr.exec('repos', 'repos.sync_preview', {'path': repo})
+    assert preview['status'] == 'done' and preview['result']['ok']
+    params = {'path': repo, 'message': 'e2e sync через gateway',
+              'expected_snapshot': preview['result']['snapshot'],
+              'expected_files': preview['result']['files']}
     out = mgr.exec('repos', 'repos.sync', params)
     assert out['status'] == 'confirmation_required', out
     cid = out['confirmation']['id']
@@ -267,3 +277,117 @@ def test_sync_exec_flow_through_manager(tmp_path):
     from core.plugins.api import GatewayBlocked
     with pytest.raises(GatewayBlocked):
         mgr.exec('repos', 'repos.sync', params, confirmation_token=cid)
+
+
+
+def test_read_file_rejects_symlink_outside_repository(tmp_path):
+    from plugins.repos import repos_service
+    repo = make_repo(tmp_path)
+    outside = tmp_path / 'outside-secret.txt'
+    outside.write_text('do not expose', encoding='utf-8')
+    link = os.path.join(repo, 'outside-link.txt')
+    try:
+        os.symlink(str(outside), link)
+    except (OSError, NotImplementedError):
+        pytest.skip('symlink creation is unavailable on this platform')
+    result = repos_service.read_file(repo, 'outside-link.txt')
+    assert result['ok'] is False
+    assert 'symlink' in result['error'] or 'вне репозитория' in result['error']
+
+
+def test_remote_url_masks_embedded_credentials(tmp_path):
+    from plugins.repos import repos_service
+    repo = make_repo(tmp_path)
+    subprocess.run(['git', '-C', repo, 'remote', 'add', 'origin',
+                    'https://alice:ghp_supersecret@github.com/example/project.git?access_token=secret'],
+                   check=True, capture_output=True)
+    result = repos_service.repo_remote(repo)
+    assert result['ok'] is True
+    url = result['remotes'][0]['url']
+    assert 'alice' not in url and 'ghp_supersecret' not in url and 'secret' not in url
+    assert 'github.com/example/project.git' in url
+
+
+def test_checkout_rejects_option_like_and_invalid_branch_names(tmp_path):
+    from plugins.repos import repos_service
+    repo = make_repo(tmp_path)
+    for name in ('--help', 'bad name', 'branch..name', 'branch.lock'):
+        result = repos_service.repo_checkout(repo, name, create=True)
+        assert result['ok'] is False, (name, result)
+
+
+def test_git_worktree_is_accepted_as_repository_root(tmp_path):
+    from plugins.repos import git_service
+    repo = make_repo(tmp_path)
+    worktree = str(tmp_path / 'linked-worktree')
+    subprocess.run(['git', '-C', repo, 'branch', 'feature-worktree'], check=True, capture_output=True)
+    subprocess.run(['git', '-C', repo, 'worktree', 'add', worktree, 'feature-worktree'],
+                   check=True, capture_output=True)
+    git_service.validate_repo_path(worktree)
+    from plugins.repos import repos_service
+    status = repos_service.repo_status(worktree)
+    assert status['ok'] and status['branch'] == 'feature-worktree'
+
+
+
+def test_sync_snapshot_detects_file_changes_before_commit(tmp_path):
+    from plugins.repos import repos_service
+    repo = make_repo(tmp_path)
+    tracked = os.path.join(repo, 'README.md')
+    with open(tracked, 'a', encoding='utf-8') as f:
+        f.write('previewed change\n')
+    preview = repos_service.repo_sync_preview(repo)
+    assert preview['ok'] and 'README.md' in preview['files']
+    with open(tracked, 'a', encoding='utf-8') as f:
+        f.write('unapproved change\n')
+    result = repos_service.repo_sync(repo, 'guarded sync', expected_snapshot=preview['snapshot'], expected_files=preview['files'])
+    assert result['ok'] is False and result.get('snapshot_mismatch') is True
+    status = subprocess.run(['git', 'status', '--porcelain'], cwd=repo,
+                            capture_output=True, text=True, check=True)
+    assert status.stdout.strip() != ''
+
+
+def test_sync_snapshot_is_stable_across_git_add(tmp_path):
+    from plugins.repos import repos_service
+    repo = make_repo(tmp_path)
+    with open(os.path.join(repo, 'new-file.txt'), 'w', encoding='utf-8') as f:
+        f.write('exact approved content\n')
+    preview = repos_service.repo_sync_preview(repo)
+    assert preview['ok'] and 'new-file.txt' in preview['files']
+    result = repos_service.repo_sync(repo, 'approved snapshot', expected_snapshot=preview['snapshot'], expected_files=preview['files'])
+    # A repository without a remote can fail at pull, but the snapshot must pass
+    # both pre-add and post-add checks (the failure must not be snapshot_mismatch).
+    assert result.get('snapshot_mismatch') is not True
+
+
+
+def test_rebase_recovery_reports_conflicts_and_requires_explicit_actions(tmp_path):
+    from plugins.repos import repos_service
+    remote = str(tmp_path / 'remote.git')
+    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote], check=True, capture_output=True)
+    local = make_repo(tmp_path)
+    subprocess.run(['git', '-C', local, 'remote', 'add', 'origin', remote], check=True, capture_output=True)
+    subprocess.run(['git', '-C', local, 'push', '-u', 'origin', 'main'], check=True, capture_output=True)
+    other = str(tmp_path / 'other')
+    subprocess.run(['git', 'clone', remote, other], check=True, capture_output=True)
+    env = dict(os.environ, GIT_AUTHOR_NAME='tester', GIT_AUTHOR_EMAIL='tester@example.com',
+               GIT_COMMITTER_NAME='tester', GIT_COMMITTER_EMAIL='tester@example.com')
+    with open(os.path.join(other, 'README.md'), 'w', encoding='utf-8') as f:
+        f.write('remote version\n')
+    subprocess.run(['git', '-C', other, 'commit', '-am', 'remote change'], check=True, capture_output=True, env=env)
+    subprocess.run(['git', '-C', other, 'push', 'origin', 'main'], check=True, capture_output=True)
+    with open(os.path.join(local, 'README.md'), 'w', encoding='utf-8') as f:
+        f.write('local version\n')
+    subprocess.run(['git', '-C', local, 'commit', '-am', 'local change'], check=True, capture_output=True, env=env)
+
+    pulled = repos_service.repo_pull(local, rebase=True)
+    assert pulled['ok'] is False and pulled.get('rebase_conflict') is True
+    state = repos_service.repo_rebase_state(local)
+    assert state['ok'] and state['active'] and 'README.md' in state['conflicts']
+    with open(os.path.join(local, 'README.md'), 'w', encoding='utf-8') as f:
+        f.write('resolved version\n')
+    subprocess.run(['git', '-C', local, 'add', 'README.md'], check=True, capture_output=True)
+    continued = repos_service.repo_rebase_continue(local)
+    assert continued['ok'], continued
+    final = repos_service.repo_rebase_state(local)
+    assert final['ok'] and final['active'] is False

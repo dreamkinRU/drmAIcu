@@ -26,6 +26,9 @@ import {
   reposReadFile,
   reposRemote,
   reposStatus,
+  reposRebaseState,
+  reposRebaseContinue,
+  reposRebaseAbort,
   reposSync,
   REPOS_PLUGIN_ID,
 } from '../../services/repos';
@@ -301,17 +304,46 @@ function OverviewSection({
   const [syncResult, setSyncResult] = useState<RepoSyncResult | null>(null);
   const [fileRel, setFileRel] = useState('');
   const [fileView, setFileView] = useState<RepoFileContent | null>(null);
+  const [rebaseState, setRebaseState] = useState<{ ok: boolean; active: boolean; conflicts: string[] } | null>(null);
 
-  const runSync = async (token?: string) => {
+  const refreshRebaseState = async () => {
+    const state = await reposRebaseState(repoPath);
+    if (state.status === 'done' && state.result.ok) setRebaseState(state.result);
+    else if (state.status === 'error') setNotice({ kind: 'err', text: state.error });
+  };
+
+  useEffect(() => { void refreshRebaseState(); }, [repoPath]);
+
+  const runSync = async (token?: string, expectedSnapshot?: string, previewFiles: string[] = []) => {
     setBusy(true);
-    const r = await reposSync(repoPath, commitMsg, token);
+    if (!token && !expectedSnapshot) {
+      const preview = await reposSyncPreview(repoPath);
+      if (preview.status !== 'done' || !preview.result.ok) {
+        setBusy(false);
+        setNotice({ kind: 'err', text: preview.status === 'error'
+          ? preview.error
+          : preview.status === 'done' ? preview.result.error || 'предпросмотр Sync не выполнен'
+          : 'не удалось получить предпросмотр Sync' });
+        return;
+      }
+      expectedSnapshot = preview.result.snapshot;
+      previewFiles = preview.result.files;
+      if (previewFiles.length > 0 && !commitMsg.trim()) {
+        setBusy(false);
+        setNotice({ kind: 'err', text: 'есть незакоммиченные изменения — введите сообщение коммита и повторите Sync' });
+        return;
+      }
+    }
+    const r = await reposSync(repoPath, commitMsg, token, expectedSnapshot, previewFiles);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      const cid = r.confirmation.id;
+      const fileSummary = previewFiles.length
+        ? previewFiles.slice(0, 12).join(', ') + (previewFiles.length > 12 ? ` и ещё ${previewFiles.length - 12}` : '')
+        : 'локальных изменений нет';
       setPending({
-        label: `Синхронизировать ${repoPath}: add -A → commit → pull --rebase → push (одно подтверждение на весь пакет)`,
-        cid,
-        run: t => runSync(t),
+        label: `Sync ${repoPath}: add -A → commit → pull --rebase → push. Файлы: ${fileSummary}`,
+        cid: r.confirmation.id,
+        run: t => { void runSync(t, expectedSnapshot, previewFiles); },
       });
       return;
     }
@@ -325,24 +357,30 @@ function OverviewSection({
         setNotice({ kind: 'err', text: r.result.error || 'синхронизация не завершена' });
       }
       reload();
+      void refreshRebaseState();
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
     }
   };
 
-  const runWrite = async (label: string, call: (token?: string) => ReturnType<typeof reposFetch>) => {
+  const runWrite = async (label: string, call: (token?: string) => ReturnType<typeof reposFetch>, token?: string) => {
     setBusy(true);
-    const r = await call();
+    const r = await call(token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      setPending({ label: `${label} ${repoPath} (WRITE — подтвердите)`, cid: r.confirmation.id, run: t => { void call(t); } });
+      setPending({
+        label: `${label} ${repoPath} (WRITE — подтвердите)`,
+        cid: r.confirmation.id,
+        run: t => { void runWrite(label, call, t); },
+      });
       return;
     }
     if (r.status === 'done') {
       const res = r.result as SimpleGitResult;
-      if (res.ok) setNotice({ kind: 'ok', text: `${label}: OK${res.output ? ' — ' + res.output.split('\n')[0] : ''}` });
+      if (res.ok) setNotice({ kind: 'ok', text: `${label}: OK${res.output ? ' — ' + res.output.split('\\n')[0] : ''}` });
       else setNotice({ kind: 'err', text: res.error || `${label}: ошибка` });
       reload();
+      void refreshRebaseState();
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
     }
@@ -372,7 +410,7 @@ function OverviewSection({
             className="flex-1 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-cyan-500/60"
           />
           <button
-            disabled={busy}
+            disabled={busy || !!pending}
             onClick={() => runSync()}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/70 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
           >
@@ -399,6 +437,25 @@ function OverviewSection({
           </div>
         )}
       </div>
+
+      {rebaseState?.active && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
+          <h3 className="font-semibold text-amber-200">⚠️ Незавершённый rebase</h3>
+          {rebaseState.conflicts.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400">Сначала разрешите конфликты в перечисленных файлах и сохраните их:</p>
+              {rebaseState.conflicts.map(file => <div key={file} className="text-xs font-mono text-amber-100">{file}</div>)}
+            </div>
+          ) : <p className="text-xs text-gray-400">Конфликтующих файлов не обнаружено. Можно продолжить rebase или отменить его.</p>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <OpBtn busy={busy} label="rebase --continue" disabled={rebaseState.conflicts.length > 0}
+              onClick={() => runWrite('rebase --continue', t => reposRebaseContinue(repoPath, t))} />
+            <OpBtn busy={busy} label="rebase --abort"
+              onClick={() => runWrite('rebase --abort', t => reposRebaseAbort(repoPath, t))} />
+            <OpBtn busy={busy} label="Обновить состояние" onClick={() => { void refreshRebaseState(); }} />
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">🛠 Отдельные операции (каждая с подтверждением WRITE)</h3>
@@ -516,6 +573,7 @@ function BranchesSection({
   const [branches, setBranches] = useState<RepoBranches | null>(null);
   const [newBranch, setNewBranch] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<{ label: string; cid: string; run: (token: string) => void } | null>(null);
 
   const load = useCallback(async () => {
     const r = await reposBranches(repoPath);
@@ -526,19 +584,24 @@ function BranchesSection({
 
   useEffect(() => { load(); }, [load]);
 
-  const doCheckout = async (branch: string, create: boolean) => {
+  const doCheckout = async (branch: string, create: boolean, token?: string) => {
     setBusy(true);
-    const r = await reposCheckout(repoPath, branch, create);
+    const r = await reposCheckout(repoPath, branch, create, token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      await reposCheckout(repoPath, branch, create, r.confirmation.id);
+      setPending({
+        label: `${create ? 'Создать и активировать' : 'Активировать'} ветку ${branch} в ${repoPath}`,
+        cid: r.confirmation.id,
+        run: t => { void doCheckout(branch, create, t); },
+      });
+      return;
+    }
+    if (r.status === 'done' && r.result.ok) {
       setNotice({ kind: 'ok', text: `ветка ${create ? 'создана и активирована' : 'активирована'}: ${branch}` });
-    } else if (r.status === 'done' && r.result.ok) {
-      setNotice({ kind: 'ok', text: `ветка активирована: ${branch}` });
+    } else if (r.status === 'done') {
+      setNotice({ kind: 'err', text: r.result.error || 'checkout не выполнен' });
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
-    } else {
-      setNotice({ kind: 'err', text: 'checkout не выполнен' });
     }
     load();
     reload();
@@ -546,6 +609,7 @@ function BranchesSection({
 
   return (
     <div className="space-y-4">
+      {pending && <ConfirmationBar pending={pending} busy={busy} clear={() => setPending(null)} />}
       <RepoInfoCard repoPath={repoPath} status={status} />
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">🌿 Ветки</h3>

@@ -12,7 +12,7 @@ import subprocess
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
     'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base', 'config',
-    'add', 'commit', 'switch',
+    'add', 'commit', 'switch', 'check-ref-format', 'rebase',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}
 
@@ -42,8 +42,19 @@ def git_version():
 def validate_repo_path(path):
     if not path or not os.path.isdir(path):
         raise GitCommandRejected('repo path does not exist: %s' % path)
-    if not os.path.isdir(os.path.join(path, '.git')):
+    candidate = os.path.realpath(os.path.abspath(path))
+    try:
+        proc = subprocess.run(
+            ['git', '-C', candidate, 'rev-parse', '--show-toplevel'],
+            timeout=DEFAULT_TIMEOUT, capture_output=True, text=True,
+            shell=False, encoding='utf-8', errors='replace')
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise GitCommandRejected('cannot inspect git repository: %s' % e) from e
+    if proc.returncode != 0:
         raise GitCommandRejected('not a git repository: %s' % path)
+    root = os.path.realpath(proc.stdout.strip())
+    if root != candidate:
+        raise GitCommandRejected('repo path must be the repository root: %s' % root)
 
 
 def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):
@@ -53,7 +64,11 @@ def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):
     if not args:
         raise GitCommandRejected('empty git command')
     head = str(args[0])
-    if head not in GIT_COMMANDS and head not in GIT_GLOBAL_FLAGS:
+    if head == '-c':
+        if len(args) < 3 or str(args[1]) != 'core.editor=:' or str(args[2]) != 'rebase':
+            raise GitCommandRejected('git global option is not allowed')
+        head = 'rebase'
+    elif head not in GIT_COMMANDS and head not in GIT_GLOBAL_FLAGS:
         raise GitCommandRejected('git command not allowed: %r' % head)
     if cwd is not None:
         validate_repo_path(cwd)
