@@ -638,6 +638,27 @@ def repo_sync(path, message, expected_snapshot=None):
                 parts = line.split('\t', 1)
                 pulled.append({'sha': parts[0], 'subject': parts[1] if len(parts) > 1 else ''})
 
+    # Честные подсказки «что делать после обновления»: sync.bat умел ставить
+    # npm-зависимости при изменении package-lock.json (шаг 2.7). Плагин команды
+    # не запускает (замороженная политика: WRITE только через гейтвей с
+    # подтверждением), но результат Sync честно перечисляет требуемые шаги —
+    # их показывает панель «✅ Актуально».
+    refresh_hints = []
+    pulled_files = []
+    if head_before and head_after and head_before != head_after:
+        df = _r(['diff', '--name-only', '-z', head_before, head_after], path)
+        if df.get('ok'):
+            pulled_files = [os.fsdecode(x) for x in df['stdout'].split('\0') if x]
+            hints = set()
+            for f in pulled_files:
+                lf = f.replace('\\', '/').lower()
+                if lf in ('package.json', 'package-lock.json'):
+                    hints.add('npm: обновились зависимости фронтенда (package.json/package-lock.json) — выполните npm install, иначе панель работает на старых модулях')
+                elif lf.startswith('src/'):
+                    hints.add('build: обновлялся фронтенд (src/) — на Vite dev (launcher.bat) достаточно перезапуска панели; на собранной версии выполните npm run build')
+                elif lf.endswith('.py'):
+                    hints.add('py: обновлялись Python-файлы — перезапустите панель (кнопка «Перезапуск» в подвале)')
+
     merged = last_merged_pr(path)
     steps.append({'step': 'merged_pr_check', 'ok': True, 'last_merged': merged})
 
@@ -650,7 +671,8 @@ def repo_sync(path, message, expected_snapshot=None):
     r = _r(['log', '-1', '--oneline'], path)
     return {'ok': True, 'steps': steps, 'head': r.get('stdout', '').strip(),
             'committed': changes, 'commit_sha': steps[-4]['sha'] if (changes and len(steps) >= 4) else None,
-            'pulled': pulled, 'pulled_count': len(pulled)}
+            'pulled': pulled, 'pulled_count': len(pulled),
+            'pulled_files': pulled_files, 'refresh_hints': refresh_hints}
 
 
 def last_merged_pr(path):

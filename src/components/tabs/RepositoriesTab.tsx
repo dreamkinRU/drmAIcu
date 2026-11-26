@@ -651,6 +651,15 @@ function OverviewSection({
                     ))}
                   </ul>
                 )}
+
+                {!(syncResult.refresh_hints || []).length ? null : (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 space-y-1">
+                    <p className="text-xs font-semibold text-amber-300">Требуется после обновления (это делал sync.bat автоматически, плагин команды не запускает):</p>
+                    {(syncResult.refresh_hints || []).map((h, i) => (
+                      <p key={i} className="text-xs text-amber-200/90">{h}</p>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="font-sans text-sm font-semibold text-red-300">
