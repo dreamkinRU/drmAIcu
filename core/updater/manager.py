@@ -271,7 +271,7 @@ class UpdateManager:
                 plan["blockers"].append("Нет входящих коммитов для обновления.")
             if any(line.startswith("1 ") and len(line.split(" ", 3)) > 2
                    and line.split(" ", 3)[2].startswith("S")
-                   and line.split(" ", 3)[2] != "N... " for line in before_status.splitlines()):
+                   for line in before_status.splitlines()):
                 plan["blockers"].append("Обнаружены изменения submodule; автоматическое резервирование для них не поддерживается.")
             plan["change_summary"] = _read_update_diff(old_head, remote_head)
             if any(name == "package.json" for name in plan["change_summary"]["files"]) and not plan["change_summary"]["npm_lock_changed"]:
