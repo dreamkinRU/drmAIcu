@@ -4,6 +4,7 @@
 
 - PATCHMASTER: TypeScript/JavaScript validator теперь различает PASS и FAIL/UNAVAILABLE; отсутствие Node.js, отсутствие инструмента, timeout и ошибки запуска не превращаются в успешную проверку.
 - PATCHMASTER: повреждённый crash journal и оставшийся journal.tmp сохраняются для диагностики и блокируют новые apply/rollback до ручного восстановления; неизвестный формат не удаляется автоматически.
+- PATCHMASTER: crash recovery проверяет наличие и SHA-256 backup перед восстановлением; отсутствующий или изменённый backup оставляет journal и recovery barrier активными, вместо ложного успешного завершения.
 - PATCHMASTER: гарантия уточнена — multi-file apply является crash-recoverable транзакцией с recovery barrier, но не атомарна для внешних читателей между отдельными os.replace.
 - Repos Plugin: весь Sync flow выполняется под межпоточной/межпроцессной advisory lock; staged Git tree фиксируется и сверяется перед commit и после него; при несовпадении push блокируется.
 - Repos Plugin: lock registry переведён на WeakValueDictionary; Git stdout/stderr очищаются от распространённых форм credentials перед выдачей в UI/API.

@@ -9,6 +9,7 @@
 ### Architecture hardening: PATCHMASTER, Repos Sync, Plugin API и Worker Runtime
 - TypeScript/JavaScript validation теперь fail-closed: PASS только после успешного запуска validator; отсутствие Node.js/скрипта, timeout и launch error возвращают UNAVAILABLE и блокируют запись.
 - Повреждённый crash journal и orphan journal.tmp блокируют новые apply/rollback и сохраняются для диагностики; multi-file transaction документирована как crash-recoverable, но не atomic visibility для внешних читателей.
+- Crash recovery проверяет наличие и SHA-256 backup перед восстановлением; missing/tampered backup не очищает journal и не выдаёт частичное восстановление за успех.
 - Repos Sync сериализован под advisory lock всего flow; staged tree сверяется перед commit и после commit; при mismatch push запрещён. Git output проходит credential redaction.
 - Plugin API проверяет browser Origin/Sec-Fetch-Site и loopback Host для mutating-запросов; это CSRF/DNS-rebinding mitigation, не user authentication.
 - PluginResourceGovernor ограничивает до 8 worker-процессов и 16 одновременных RPC; worker lifecycle и завершение process tree усилены. Hard CPU/RAM quotas и полноценная OS sandbox остаются вне этого изменения.
