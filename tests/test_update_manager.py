@@ -127,13 +127,13 @@ def test_recovery_journal_rejects_corrupt_json(git_fixture):
 def test_check_fingerprint_detects_index_only_change(git_fixture):
     work = git_fixture
     app = work / "app.txt"
-    app.write_text("index version A\\n", encoding="utf-8")
+    app.write_text("index version A\n", encoding="utf-8")
     _git(work, "add", "app.txt")
-    app.write_text("working tree version\\n", encoding="utf-8")
+    app.write_text("working tree version\n", encoding="utf-8")
     plan = updater.manager.check()["plan"]
 
     # Меняем только blob в индексе, сохраняя то же содержимое рабочего файла.
-    app.write_text("index version B\\n", encoding="utf-8")
+    app.write_text("index version B\n", encoding="utf-8")
     _git(work, "add", "app.txt")
     app.write_text("working tree version\\n", encoding="utf-8")
 
