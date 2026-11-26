@@ -9,6 +9,7 @@
   data/plugins/activity/*.jsonl      — журнал
 """
 import os
+import re
 import shutil
 import threading
 import time
@@ -320,6 +321,45 @@ class PluginManager:
             raise PluginInstallError(str(e))
         self.activity.add(pid, 'action', 'settings_updated', keys=sorted((updates or {}).keys()))
         return self.settings_get(pid)
+
+    # ------------------------------------------------------------------ secrets (write-only: значения не возвращаются)
+
+    _SECRET_KEY_RE = re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
+
+    def secrets_put(self, pid, updates):
+        """Записать секреты плагина. Возвращает только имена ключей, значения не читаются обратно."""
+        rec = self.registry.get(pid)
+        if rec is None:
+            raise KeyError(pid)
+        if not isinstance(updates, dict) or not updates:
+            raise ValueError('secrets payload must be a non-empty object')
+        clean = {}
+        for k, v in updates.items():
+            if not isinstance(k, str) or not self._SECRET_KEY_RE.match(k):
+                raise ValueError('invalid secret key: %r' % (k,))
+            if not isinstance(v, str) or not v.strip():
+                raise ValueError('secret value for %r must be a non-empty string' % (k,))
+            clean[k] = v
+        for k, v in clean.items():
+            self.secrets.set_secret(pid, k, v)
+        self.activity.add(pid, 'action', 'secret_set', keys=sorted(clean.keys()))
+        return self.secret_keys(pid)
+
+    def secret_delete(self, pid, key):
+        rec = self.registry.get(pid)
+        if rec is None:
+            raise KeyError(pid)
+        if not isinstance(key, str) or not self._SECRET_KEY_RE.match(key):
+            raise ValueError('invalid secret key: %r' % (key,))
+        self.secrets.remove_secret(pid, key)
+        self.activity.add(pid, 'action', 'secret_deleted', key=key)
+        return self.secret_keys(pid)
+
+    def secret_keys(self, pid):
+        rec = self.registry.get(pid)
+        if rec is None:
+            raise KeyError(pid)
+        return {'plugin': pid, 'secrets': sorted(self.secrets.keys(pid))}
 
     def activity_read(self, pid=None, limit=200, level=None, search=None):
         return self.activity.read(plugin_id=pid, limit=limit, level=level, search=search)

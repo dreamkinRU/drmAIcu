@@ -1,5 +1,17 @@
 # drmAIcu — История изменений
 
+## v.3.8.0 Model (Текущая) — 26.11.2026
+
+### GitHub App setup + Repository Manager UI (Этап 4)
+
+- **Секреты через REST (write-only)** — `PUT /api/plugins/{id}/secrets` (запись), `GET` возвращает только имена ключей, `DELETE /{id}/secrets/{key}`; формат ключа `[A-Za-z0-9_.-]{1,64}`, пустые значения и неверный ключ → HTTP 422; журнал фиксирует только имена (`secret_set`/`secret_deleted`).
+- **settings_schema плагина github** — `app_id`, `installation_id`, `organization`, `default_branch` (валидация типов, defaults); версия плагина → 1.1.0.
+- **Новая вкладка «🐙 GitHub»** — экран «Подключение»: форма настроек GitHub App (по settings_schema), textarea для Private Key (.pem) с записью секрет write-only, кнопки «Сохранить» / «Проверить подключение» (честная диагностика via `github.test_connection`) / «Удалить Private Key», бейджи health (`settings_configured` / `private_key_stored` / `auth_configured`).
+- **Repository Manager** — список репозиториев установки (`github.list_repositories`) с поиском и пагинацией; выбор репозитория открывает браузер: ветки (`github.list_branches`) с пометкой protected, дерево файлов (`github.get_tree`, recursive) с каталог-навигацией и breadcrumbs, просмотр файла (`github.get_file`, base64 → UTF-8).
+- **Создание ветки с подтверждением** — `github.create_branch` (WRITE) идёт через Gateway: UI показывает панель подтверждения с параметрами; «Подтвердить» дозывает exec с одноразовым `confirmation_token`, «Отклонить» — reject; повторное использование токена невозможно на уровне ядра.
+- **Gate-экран** — если плагин не установлен/остановлен, вкладка показывает статус и кнопку перехода в «Плагины».
+- Документация: `docs/PLUGIN_API_CONTRACT.md` §10/§10.1 дополнены secrets-эндпоинтами.
+
 ## v.3.7.0 Model (Текущая) — 26.11.2026
 
 ### Plugin System v1.0 + GitHub Plugin v1.0 (Этапы 0–1)

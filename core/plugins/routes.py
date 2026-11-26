@@ -168,6 +168,45 @@ async def settings_put(pid: str, request: Request):
         return err(str(e), 'invalid_settings', 422)
 
 
+@plugin_router.get('/{pid}/secrets')
+def secrets_get(pid: str):
+    """Только имена секретов; значения не возвращаются никогда (§8)."""
+    try:
+        return ok(**get_manager().secret_keys(pid))
+    except KeyError:
+        return err('plugin not found: %s' % pid, 'not_found', 404)
+
+
+@plugin_router.put('/{pid}/secrets')
+async def secrets_put(pid: str, request: Request):
+    """Запись секретов плагина. Только запись: значения не возвращаются никогда."""
+    try:
+        body = await _json(request)
+        updates = body.get('secrets')
+        if updates is None and isinstance(body.get('key'), str) and isinstance(body.get('value'), str):
+            updates = {body['key']: body['value']}
+        result = get_manager().secrets_put(pid, updates)
+        return ok(**result)
+    except KeyError:
+        return err('plugin not found: %s' % pid, 'not_found', 404)
+    except ValueError as e:
+        return err(str(e), 'invalid_secrets', 422)
+    except Exception as e:
+        return err('secrets write failed: %s' % e, 'secrets_failed', 500)
+
+
+@plugin_router.delete('/{pid}/secrets/{key}')
+def secret_delete(pid: str, key: str):
+    try:
+        return ok(**get_manager().secret_delete(pid, key))
+    except KeyError:
+        return err('plugin not found: %s' % pid, 'not_found', 404)
+    except ValueError as e:
+        return err(str(e), 'invalid_secrets', 422)
+    except Exception as e:
+        return err('secret delete failed: %s' % e, 'secrets_failed', 500)
+
+
 @plugin_router.get('/{pid}/capabilities')
 def capabilities(pid: str):
     try:
