@@ -56,12 +56,18 @@ def repo_sync_snapshot(path):
             digest.update(b'LINK\0')
             digest.update(os.readlink(full).encode('utf-8', errors='surrogatepass'))
         elif stat.S_ISREG(info.st_mode):
+            digest.update(('MODE:%s:' % stat.S_IMODE(info.st_mode)).encode('ascii'))
             digest.update(b'FILE\0')
             with open(full, 'rb') as stream:
                 for chunk in iter(lambda: stream.read(1024 * 1024), b''):
                     digest.update(chunk)
         elif stat.S_ISDIR(info.st_mode):
             digest.update(b'DIR\0')
+            if os.path.exists(os.path.join(full, '.git')):
+                sub_head = _r(['rev-parse', 'HEAD'], full)
+                sub_status = _r(['status', '--porcelain=v1', '-z'], full)
+                digest.update(sub_head.get('stdout', '').strip().encode('ascii', errors='ignore'))
+                digest.update(sub_status.get('stdout', '').encode('utf-8', errors='replace'))
         else:
             digest.update(('MODE:%s\0' % info.st_mode).encode('ascii'))
     return {'ok': True, 'snapshot': digest.hexdigest(), 'files': files}

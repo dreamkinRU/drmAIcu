@@ -34,7 +34,7 @@
 
 - `main.py` монтирует `plugin_router` две строки (`include_router`) — production-логика ядра не изменяется.
 - Repos Plugin никогда не применяет AI-патчи сам: изменения исходников только через PATCHMASTER (`patch_engine.apply_patch`), Repos Plugin анализирует `git diff` и выполняет push только после подтверждения (этап 5+).
-- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд, аргументы списком (без shell-строки), таймауты, проверка путей.
+- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд, аргументы списком (без shell-строки), таймауты, проверка путей. Sync получает snapshot изменённых файлов до подтверждения, сверяет его перед `git add -A` и повторно после staging; при расхождении commit/push не выполняются.
 
 ## Статусы и хранение
 

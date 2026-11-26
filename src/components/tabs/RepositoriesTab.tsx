@@ -327,6 +327,8 @@ function OverviewSection({
       reload();
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
+    } else {
+      setNotice({ kind: 'err', text: 'синхронизация: сервер вернул неожиданный статус' });
     }
   };
 

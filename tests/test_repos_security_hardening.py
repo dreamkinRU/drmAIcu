@@ -102,18 +102,18 @@ def test_worktree_is_accepted_as_repository(tmp_path):
     assert result['ok'] is True
     assert result['branch'] == 'feature-worktree'
 
-\n\ndef test_sync_refuses_worktree_changed_after_preview(tmp_path):
+def test_sync_refuses_worktree_changed_after_preview(tmp_path):
     from plugins.repos import repos_service
 
     repo = make_repo(str(tmp_path / 'repo'))
     file_path = os.path.join(repo, 'new.txt')
     with open(file_path, 'w', encoding='utf-8') as f:
-        f.write('approved content\\n')
+        f.write('approved content\n')
     preview = repos_service.repo_status(repo)
     assert preview['ok'] and preview['snapshot_files'] == ['new.txt']
 
     with open(file_path, 'w', encoding='utf-8') as f:
-        f.write('unapproved content\\n')
+        f.write('unapproved content\n')
     result = repos_service.repo_sync(repo, 'must not commit', preview['snapshot'])
     assert result['ok'] is False and result['snapshot_changed'] is True
     log = subprocess.run(['git', 'log', '-1', '--format=%s'], cwd=repo,
