@@ -88,7 +88,7 @@ export const initialProviders: Provider[] = [
 ];
 
 export const initialLogs: LogEntry[] = [
-  { time: '14:32:01', level: 'info', message: 'ЦУ v.3.6.1 Model запущена', source: 'main.py' },
+  { time: '14:32:01', level: 'info', message: 'ЦУ запущена', source: 'main.py' },
 ];
 
 export const initialCodeIssues: CodeIssue[] = [

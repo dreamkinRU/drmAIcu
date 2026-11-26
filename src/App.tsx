@@ -27,11 +27,14 @@ import PatchesTab from './components/tabs/PatchesTab';
 import PluginsTab from './components/tabs/PluginsTab';
 import RepositoriesTab from './components/tabs/RepositoriesTab';
 import { usePlugins } from './hooks/usePlugins';
-import { restartSystem as restartSystemApi } from './services/api';
+import { restartSystem as restartSystemApi, loadAppVersionApi } from './services/api';
 
 export default function App() {
   // === Хуки состояния ===
   const { logs, addLog, clearIssues } = useLogs();
+  // Версия оболочки — из /api/version (единый источник version.py), без хардкода в UI.
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  useEffect(() => { void loadAppVersionApi().then(v => setAppVersion(v)); }, []);
   const pluginCtl = usePlugins();
   const { codeIssues, fixCodeIssue, fixAll } = useCodeIssues();
   const {
@@ -199,6 +202,7 @@ export default function App() {
         projectStats={projectStats}
         ollamaStatus={ollamaStatus}
         ollamaModels={ollamaModels}
+        version={appVersion}
         setActiveTab={setActiveTab}
       />
 

@@ -12,6 +12,7 @@ interface HeaderProps {
   projectStats: any;
   ollamaStatus: 'checking' | 'online' | 'offline';
   ollamaModels: string[];
+  version: string | null;
   setActiveTab: (tab: TabId) => void;
 }
 
@@ -19,7 +20,7 @@ export default function Header(props: HeaderProps) {
   const {
     activeTab, agents, providers, patchStats, codeIssues,
     completedTasks, taskList, projectStats, ollamaStatus, ollamaModels,
-    setActiveTab,
+    version, setActiveTab,
   } = props;
 
   const onlineProviders = providers.filter(p => p.status === 'online').length;
@@ -44,7 +45,7 @@ export default function Header(props: HeaderProps) {
               </div>
               <div>
                 <h1 className="text-base font-bold gradient-text leading-none">drmAIcu</h1>
-                <p className="text-[10px] text-gray-500 leading-tight mt-0.5">v.3.6.1 Model</p>
+                <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{version ? `v.${version} Model` : '\u2026'}</p>
               </div>
             </div>
           </Tooltip>
