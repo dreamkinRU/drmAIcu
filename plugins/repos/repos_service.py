@@ -11,6 +11,7 @@
 import os
 import stat
 import hashlib
+import ntpath
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from . import git_service
@@ -24,6 +25,11 @@ def _r(args, path=None, timeout=git_service.DEFAULT_TIMEOUT):
 
 
 def repo_sync_snapshot(path):
+    with git_service.repo_operation_lock(path):
+        return _repo_sync_snapshot_locked(path)
+
+
+def _repo_sync_snapshot_locked(path):
     """Хэширует текущее содержимое изменённых/новых файлов для подтверждения Sync."""
     validate(path)
     commands = (
@@ -48,37 +54,64 @@ def repo_sync_snapshot(path):
     # Сырые URL участвуют только в хэше: в snapshot/ответ API они не возвращаются.
     digest.update(remotes.get('stdout', '').encode('utf-8', errors='replace'))
     files = sorted(names)
+    root = os.path.realpath(path)
     for rel in files:
-        full = os.path.join(path, rel)
+        if not isinstance(rel, str) or rel.startswith('/') or '\\' in rel or ntpath.splitdrive(rel)[0]:
+            return {'ok': False, 'error': 'unsafe path returned by Git status'}
+        parts = rel.split('/')
+        if any(part in ('', '.', '..') for part in parts):
+            return {'ok': False, 'error': 'unsafe path returned by Git status'}
         digest.update(rel.encode('utf-8', errors='surrogatepass'))
         digest.update(b'\0')
+        full = root
         try:
-            info = os.lstat(full)
+            for index, part in enumerate(parts):
+                full = os.path.join(full, part)
+                info = os.lstat(full)
+                reparse = bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400))
+                if stat.S_ISLNK(info.st_mode) or reparse:
+                    if index != len(parts) - 1:
+                        return {'ok': False, 'error': 'symlink/reparse parent in changed path'}
+                    digest.update(b'LINK\0')
+                    digest.update(os.readlink(full).encode('utf-8', errors='surrogatepass'))
+                    break
+            else:
+                if stat.S_ISREG(info.st_mode):
+                    flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+                    fd = os.open(full, flags)
+                    try:
+                        opened = os.fstat(fd)
+                        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                            return {'ok': False, 'error': 'changed file was replaced while building snapshot'}
+                        digest.update(('MODE:%s:' % stat.S_IMODE(opened.st_mode)).encode('ascii'))
+                        digest.update(b'FILE\0')
+                        while True:
+                            chunk = os.read(fd, 1024 * 1024)
+                            if not chunk:
+                                break
+                            digest.update(chunk)
+                    finally:
+                        os.close(fd)
+                elif stat.S_ISDIR(info.st_mode):
+                    digest.update(b'DIR\0')
+                    if os.path.exists(os.path.join(full, '.git')):
+                        sub_head = _r(['rev-parse', 'HEAD'], full)
+                        sub_status = _r(['status', '--porcelain=v1', '-z'], full)
+                        digest.update(sub_head.get('stdout', '').strip().encode('ascii', errors='ignore'))
+                        digest.update(sub_status.get('stdout', '').encode('utf-8', errors='replace'))
+                else:
+                    digest.update(('MODE:%s\0' % info.st_mode).encode('ascii'))
         except FileNotFoundError:
             digest.update(b'DELETED\0')
-            continue
-        if stat.S_ISLNK(info.st_mode):
-            digest.update(b'LINK\0')
-            digest.update(os.readlink(full).encode('utf-8', errors='surrogatepass'))
-        elif stat.S_ISREG(info.st_mode):
-            digest.update(('MODE:%s:' % stat.S_IMODE(info.st_mode)).encode('ascii'))
-            digest.update(b'FILE\0')
-            with open(full, 'rb') as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-                    digest.update(chunk)
-        elif stat.S_ISDIR(info.st_mode):
-            digest.update(b'DIR\0')
-            if os.path.exists(os.path.join(full, '.git')):
-                sub_head = _r(['rev-parse', 'HEAD'], full)
-                sub_status = _r(['status', '--porcelain=v1', '-z'], full)
-                digest.update(sub_head.get('stdout', '').strip().encode('ascii', errors='ignore'))
-                digest.update(sub_status.get('stdout', '').encode('utf-8', errors='replace'))
-        else:
-            digest.update(('MODE:%s\0' % info.st_mode).encode('ascii'))
     return {'ok': True, 'snapshot': digest.hexdigest(), 'files': files}
 
 
 def repo_status(path):
+    with git_service.repo_operation_lock(path):
+        return _repo_status_locked(path)
+
+
+def _repo_status_locked(path):
     """status --porcelain=v1 -b + ahead/behind/branch/upstream."""
     validate(path)
     r = _r(['status', '--porcelain=v1', '-b'], path)
@@ -183,36 +216,42 @@ def repo_diff(path, staged=False):
 
 
 def read_file(path, rel, max_bytes=READ_FILE_MAX_BYTES):
-    """Чтение файла репозитория с защитой от выхода за пределы каталога."""
+    """Чтение обычного файла без перехода через symlink/reparse components."""
     validate(path)
-    if not rel or rel.startswith('/') or '..' in os.path.normpath(rel).split(os.sep) or '\\' in str(rel):
+    if (not isinstance(rel, str) or not rel or rel.startswith('/') or '\\' in rel
+            or ntpath.splitdrive(rel)[0] or '\x00' in rel
+            or (os.name == 'nt' and ':' in rel)
+            or any(p in ('', '.', '..') for p in rel.split('/'))):
         return {'ok': False, 'error': 'недопустимый путь файла'}
-    full = os.path.normpath(os.path.join(path, rel))
+    if not isinstance(max_bytes, int) or max_bytes < 1:
+        return {'ok': False, 'error': 'недопустимый лимит размера файла'}
     root_real = os.path.realpath(path)
-    full_real = os.path.realpath(full)
+    full = root_real
     try:
-        inside = os.path.commonpath([root_real, full_real]) == root_real
-    except ValueError:
-        inside = False
-    if not inside:
-        return {'ok': False, 'error': 'путь вне репозитория (включая symbolic link)'}
-    if not os.path.isfile(full_real):
-        return {'ok': False, 'error': 'файл не найден: %s' % rel}
-    try:
+        parts = rel.split('/')
+        for index, part in enumerate(parts):
+            full = os.path.join(full, part)
+            info = os.lstat(full)
+            reparse = bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400))
+            if stat.S_ISLNK(info.st_mode) or reparse:
+                return {'ok': False, 'error': 'чтение через symbolic link/reparse point запрещено'}
+            if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+                return {'ok': False, 'error': 'родительский компонент пути не является каталогом'}
+        if not stat.S_ISREG(info.st_mode):
+            return {'ok': False, 'error': 'допускается чтение только обычных файлов'}
         flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
-        fd = os.open(full_real, flags)
+        fd = os.open(full, flags)
         try:
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode):
-                return {'ok': False, 'error': 'допускается чтение только обычных файлов'}
-            if info.st_size > max_bytes:
-                return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (info.st_size, max_bytes)}
-            with os.fdopen(fd, 'rb') as f:
-                fd = None
-                data = f.read(max_bytes + 1)
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                return {'ok': False, 'error': 'файл был заменён во время безопасного открытия'}
+            if opened.st_size > max_bytes:
+                return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (opened.st_size, max_bytes)}
+            data = os.read(fd, max_bytes + 1)
         finally:
-            if fd is not None:
-                os.close(fd)
+            os.close(fd)
+    except FileNotFoundError:
+        return {'ok': False, 'error': 'файл не найден: %s' % rel}
     except OSError as e:
         return {'ok': False, 'error': 'не удалось безопасно открыть файл: %s' % e}
     if len(data) > max_bytes:
