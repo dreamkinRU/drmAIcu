@@ -159,6 +159,11 @@ def test_new_check_cannot_overwrite_pending_restore(git_fixture):
     plan = updater.manager.check()["plan"]
     applied = updater.manager.apply(plan["id"])["journal"]
     backup_ref = applied["backup_ref"]
+    bundle = applied["backup_bundle"]
+    bundle_path = work / bundle["path"]
+    assert bundle_path.is_file()
+    assert bundle["size_bytes"] == bundle_path.stat().st_size
+    assert _git(work, "bundle", "verify", str(bundle_path))
 
     with pytest.raises(updater.UpdateError) as error:
         updater.manager.check()
