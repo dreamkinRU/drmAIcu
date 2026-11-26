@@ -241,7 +241,7 @@ def _read_update_diff(old_head, new_head):
     result = _run_git(["diff", "--name-only", "-z", old_head, new_head], 30)
     if not result["ok"]:
         raise UpdateError("Не удалось определить изменённые файлы обновления", "diff_failed")
-    files = sorted({name for name in result["stdout"].split("\\0") if name})
+    files = sorted({name for name in result["stdout"].split("\0") if name})
     return {
         "files": files,
         "python_changed": any(name.endswith(".py") for name in files),
