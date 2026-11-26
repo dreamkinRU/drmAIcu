@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 type ApiResult = { success: boolean; error?: string; code?: string; plan?: any; journal?: any };
 
-async function callUpdate(path: string, operationId?: string): Promise<ApiResult> {
+async function callUpdate(path: string, operationId?: string, manualConfirmation = false): Promise<ApiResult> {
   const response = await fetch(path, {
     method: path.endsWith('/state') ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json' },
-    ...(operationId ? { body: JSON.stringify({ operation_id: operationId }) } : {}),
+    ...(operationId ? { body: JSON.stringify({ operation_id: operationId, manual_confirmation: manualConfirmation }) } : {}),
   });
   const data = await response.json().catch(() => ({ success: false, error: 'Сервер вернул некорректный ответ' }));
   if (!response.ok || !data.success) {
@@ -32,11 +32,11 @@ export default function UpdateWizardTab() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const run = async (path: string, operationId?: string) => {
+  const run = async (path: string, operationId?: string, manualConfirmation = false) => {
     setBusy(true);
     setError('');
     try {
-      const result = await callUpdate(path, operationId);
+      const result = await callUpdate(path, operationId, manualConfirmation);
       setJournal(result.plan || result.journal || null);
       setConfirmed(false);
     } catch (e: any) {
@@ -157,6 +157,11 @@ export default function UpdateWizardTab() {
           <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-2">
             <p className="text-sm text-red-200">Требуется восстановление. Не удаляйте backup ref и не запускайте новую операцию обновления.</p>
             <button disabled={busy} onClick={() => run('/api/updates/recover', journal?.id)} className="px-4 py-2 rounded-lg text-sm border border-red-400/50 text-red-200 hover:bg-red-500/10 disabled:opacity-40">Повторить восстановление локальных изменений</button>
+            <button disabled={busy} onClick={() => {
+              if (window.confirm('Подтверждаете, что вручную разрешили конфликты и проверили восстановленные локальные файлы? Резервная копия останется сохранённой.')) {
+                void run('/api/updates/recover', journal?.id, true);
+              }
+            }} className="px-4 py-2 rounded-lg text-sm border border-amber-400/50 text-amber-200 hover:bg-amber-500/10 disabled:opacity-40">Я вручную восстановил и проверил локальные изменения</button>
           </div>
         )}
         {journal?.restart_required && state === 'COMPLETED' && (
