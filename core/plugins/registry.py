@@ -15,6 +15,10 @@ class PluginRegistry:
         self._now = now or (lambda: time.strftime('%Y-%m-%dT%H:%M:%S'))
         self._lock = threading.Lock()
         self._records = {}
+        # Деградация: если файл реестра удерживается другим процессом (WinError 5 —
+        # облачная синхронизация/антивирус), состояние ЖИВЁТ В ПАМЯТИ, сбой записи
+        # фиксируется в persist_error и виден в health — но плагин НЕ падает.
+        self.persist_error = ''
         self._load()
 
     def _load(self):
@@ -60,11 +64,21 @@ class PluginRegistry:
         # atomic_write_json: retry при WinError 5 (антивирус/облако держат файл)
         atomic_write_json(self.path, data)
 
+    def _safe_save(self):
+        """Запись best-effort: сбой диска не роняет вызванного (плагин остаётся в памяти)."""
+        try:
+            self._save()
+            self.persist_error = ''
+            return True
+        except OSError as exc:
+            self.persist_error = str(exc)
+            return False
+
     def upsert(self, record):
         """Идемпотентная регистрация: повторная установка не создаёт дублей."""
         with self._lock:
             self._records[record.id] = record
-            self._save()
+            self._safe_save()
 
     def get(self, plugin_id):
         return self._records.get(plugin_id)
@@ -80,10 +94,10 @@ class PluginRegistry:
             for k, v in fields.items():
                 if hasattr(rec, k):
                     setattr(rec, k, v)
-            self._save()
+            self._safe_save()
             return rec
 
     def remove(self, plugin_id):
         with self._lock:
             self._records.pop(plugin_id, None)
-            self._save()
+            self._safe_save()

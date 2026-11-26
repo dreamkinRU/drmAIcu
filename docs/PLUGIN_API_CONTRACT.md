@@ -140,7 +140,7 @@ RUNNING → STOP / DISABLE / ERROR / UNINSTALL
 
 | Метод | Endpoint | Назначение |
 |---|---|---|
-| GET | `/api/plugins` | Список плагинов |
+| GET | `/api/plugins` | Список плагинов + `data_warnings` (деградация записи состояния: `registry_persist_error` — файл удерживается облаком/антивирусом; плагины работают в памяти) |
 | GET | `/api/plugins/catalog` | Встроенный каталог |
 | GET | `/api/plugins/{id}` | Информация о плагине |
 | POST | `/api/plugins/install` | Установка (builtin/локальный каталог/архив) |
