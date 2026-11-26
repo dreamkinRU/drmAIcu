@@ -268,3 +268,37 @@ def test_sync_preview_shows_incoming_commits_from_remote(tmp_path):
     # snapshot стабилен (fetch не менял рабочее дерево) — Sync пройдёт по этому preview
     st = repos_service.repo_status(repo)
     assert st['ok'] and st['snapshot'] == prev['snapshot']
+
+
+def test_sync_result_reports_pulled_commits(tmp_path):
+    """Sync (без локальных изменений) возвращает честный итог: pulled_count и список
+    коммитов, полученных с remote, — чтобы UI мог показать «Актуально: локально = GitHub,
+    получено N коммитов», а не загадочное «выполнена без нового коммита»."""
+    remote = str(tmp_path / 'remote.git')
+    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote], check=True, capture_output=True)
+    repo = make_repo(tmp_path)
+    subprocess.run(['git', 'remote', 'add', 'origin', remote], cwd=repo, check=True, capture_output=True)
+    subprocess.run(['git', 'push', '-u', 'origin', 'main'], cwd=repo, check=True, capture_output=True)
+    other = str(tmp_path / 'other')
+    subprocess.run(['git', 'clone', remote, other], check=True, capture_output=True)
+    for name, msg in (('a.txt', 'pulled one'), ('b.txt', 'pulled two')):
+        subprocess.run(['git', '-C', other, 'config', 'commit.gpgsign', 'false'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'config', 'user.email', 'o@e.c'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'config', 'user.name', 'o'], check=True, capture_output=True)
+        with open(os.path.join(other, name), 'w') as f:
+            f.write('x\n')
+        subprocess.run(['git', '-C', other, 'add', '-A'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'commit', '-m', msg], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'push', 'origin', 'main'], check=True, capture_output=True)
+
+    from plugins.repos import repos_service
+    r = repos_service.repo_sync(repo, '')
+    assert r['ok'] is True, r
+    assert r['committed'] is False
+    assert r['pulled_count'] == 2, r
+    subjects = [c['subject'] for c in r['pulled']]
+    assert 'pulled one' in subjects and 'pulled two' in subjects, r['pulled']
+    assert all(c['sha'] for c in r['pulled'])
+    # повторный sync: pull больше нечего брать
+    r2 = repos_service.repo_sync(repo, '')
+    assert r2['ok'] is True and r2['pulled_count'] == 0, r2

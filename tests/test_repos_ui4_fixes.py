@@ -28,7 +28,7 @@ def _read(path):
 
 def test_sync_result_panel_has_always_visible_header():
     src = _read(REPOS_TAB)
-    assert 'Синхронизация выполнена' in src, \
+    assert 'Актуально: локальная копия = GitHub' in src, \
         'при успешном Sync панель результата должна явно называть итог (что произошло)'
     assert 'Синхронизация не завершена' in src, \
         'при неуспешном Sync панель результата должна явно называть итог'
@@ -131,3 +131,18 @@ def test_sync_preview_shows_incoming_commits_block():
     assert "'fetch', '--all', '--prune'" in svc, 'preview обновляет remote-tracking refs'
     assert "'rev-list', '--left-right', '--count'" in svc, 'точный ahead/behind'
     assert "'incoming'" in svc
+
+
+# ========================= Раздел 7: честное уведомление «Актуально» после Sync =========================
+
+def test_sync_success_panel_shows_uptodate_and_pulled():
+    """Успешный Sync всегда показывает понятный итог: «Актуально: локальная копия = GitHub»,
+    что отправлено (commit) и сколько коммитов получено с remote (pulled_count/pulled)."""
+    tab = _read(REPOS_TAB)
+    assert 'Актуально: локальная копия = GitHub' in tab
+    assert 'Получено с remote' in tab and 'pulled_count' in tab and 'pulled' in tab
+    assert 'новых коммитов с remote не пришло' in tab
+    types_src = _read(os.path.join('src', 'types', 'index.ts'))
+    assert 'pulled_count?: number' in types_src and 'pulled?: Array<{ sha: string; subject: string }>' in types_src
+    svc = _read(REPOS_SVC)
+    assert "'pulled': pulled, 'pulled_count': len(pulled)" in svc
