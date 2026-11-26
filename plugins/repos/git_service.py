@@ -11,12 +11,14 @@ import shutil
 import subprocess
 import threading
 import time
+import re
+import weakref
 from contextlib import contextmanager
 
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
     'checkout', 'rev-parse', 'rev-list', 'show-ref', 'ls-files', 'merge-base',
-    'add', 'commit', 'switch', 'check-ref-format', 'rebase',
+    'add', 'commit', 'switch', 'check-ref-format', 'rebase', 'write-tree',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}
 
@@ -24,7 +26,7 @@ DEFAULT_TIMEOUT = 30
 PUSH_TIMEOUT = 120
 REPO_LOCK_TIMEOUT = 30
 MUTATING_GIT_COMMANDS = {'add', 'branch', 'checkout', 'commit', 'fetch', 'pull', 'push', 'remote', 'rebase', 'switch'}
-_REPO_LOCKS = {}
+_REPO_LOCKS = weakref.WeakValueDictionary()
 _REPO_LOCKS_GUARD = threading.Lock()
 _REPO_LOCK_LOCAL = threading.local()
 
@@ -195,6 +197,22 @@ def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):
     return _run_git_unlocked(args, cwd=cwd, timeout=timeout)
 
 
+def _redact_git_output(value):
+    """Удаляет типовые credentials из диагностического вывода Git."""
+    text = str(value or '')
+    text = re.sub(r'(?i)(https?://)[^/@\s:]+:[^/@\s]+@', r'\1***@', text)
+    text = re.sub(r'(?i)(authorization\s*:\s*bearer\s+)[^\s]+', r'\1***', text)
+    text = re.sub(
+        r'(?i)([?&](?:access_token|token|password|passwd|secret|api_key|apikey|signature)=)[^&\s]+',
+        r'\1***', text,
+    )
+    text = re.sub(
+        r'(?i)\b(password|passwd|token|secret|api[_-]?key)\s*([=:]\s*)["\']?[^"\'\s,&]+',
+        r'\1\2***', text,
+    )
+    return text
+
+
 def _run_git_unlocked(args, cwd=None, timeout=DEFAULT_TIMEOUT):
     """-> {'ok': bool, 'code': int, 'stdout': str, 'stderr': str}"""
     if not is_git_available():
@@ -217,6 +235,6 @@ def _run_git_unlocked(args, cwd=None, timeout=DEFAULT_TIMEOUT):
     return {
         'ok': proc.returncode == 0,
         'code': proc.returncode,
-        'stdout': proc.stdout or '',
-        'stderr': proc.stderr or '',
+        'stdout': _redact_git_output(proc.stdout),
+        'stderr': _redact_git_output(proc.stderr),
     }

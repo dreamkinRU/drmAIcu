@@ -179,3 +179,7 @@ RUNNING → STOP / DISABLE / ERROR / UNINSTALL
 - Эта граница изолирует память Python и многие сбои плагина, но **не обеспечивает OS-level security containment**. Worker работает под той же учётной записью ОС и сохраняет доступ к ресурсам этой учётной записи. Нельзя считать, что файловая система или сеть заблокированы.
 - Установка архивов запрещает traversal, symbolic/hard links, специальные файлы, чрезмерный распакованный размер и чрезмерное число элементов. Локальные каталоги проверяются до и после staging-копирования.
 - Полноценная OS-песочница должна отдельно реализовать системные ограничения (например, Windows AppContainer/restricted token или Linux namespaces/seccomp) и иметь независимые тесты запрета доступа к файлам и сети.
+
+## 11. Browser-origin boundary
+
+Mutating requests to /api/plugins/* validate browser Origin, Sec-Fetch-Site, loopback host and the local UI ports (5173/8080). Cross-site browser mutations and non-loopback Host names are rejected. Requests without Origin remain supported for local CLI/API clients; this is a CSRF/DNS-rebinding mitigation, not user authentication or protection against another local process running as the same OS account.

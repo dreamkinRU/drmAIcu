@@ -1,4 +1,4 @@
-# Plugin System drmAIcu v1.1
+# Plugin System drmAIcu v1.2
 
 Архитектура утверждена: Dynamic Plugin System, Repos Plugin с интеграцией через локальный Git CLI, авторизация средствами настроенного Git (Credential Manager / SSH), установка из Built-in Catalog + Manual, Controlled Automation. Отдельная GitHub App-интеграция не используется. Контракт API — [PLUGIN_API_CONTRACT.md](PLUGIN_API_CONTRACT.md).
 
@@ -16,7 +16,7 @@
 | Capability Gateway | `core/plugins/api.py` | Разрешения + политики подтверждений |
 | Event System | `core/plugins/events.py` | Публикация/подписка событий |
 | Activity Journal | `core/plugins/events.py` | JSONL-журнал, redact секретов |
-| HTTP API | `core/plugins/routes.py` | REST-маршруты `/api/plugins/*` |
+| HTTP API | `core/plugins/routes.py` | REST-маршруты `/api/plugins/*`, локальный browser-origin guard для mutations |
 
 Оркестрация — `core/plugins/manager.py` (`PluginManager`). Данные — `data/plugins/` (реестр, права, настройки, состояние, секреты, журнал — в раздельных файлах, не смешиваются).
 
@@ -34,12 +34,18 @@ Python-плагины имеют два режима исполнения:
 - лимиты: 50 MiB распакованных данных, 5000 элементов, manifest не более 1 MiB;
 - локальный каталог плагина проверяется на symlink/reparse points и превышение лимитов до копирования и после staging-копии;
 - READ/WRITE/CRITICAL policy и одноразовые confirmation tokens продолжают применяться ядром к RPC-вызовам.
+- `PluginResourceGovernor` ограничивает число одновременно запущенных внешних worker-процессов (8) и одновременных RPC-вызовов (16). Это admission/concurrency control, а не hard CPU/RAM quota и не OS sandbox.
+- Worker имеет явные состояния `created → starting → running → stopping/stopped` или `failed`; завершение процесса очищает лимит worker. На POSIX завершается process group; на Windows выполняется best-effort `taskkill /T` с fallback на завершение процесса. Это не эквивалент Windows Job Object и не гарантирует kill-on-close для дочерних процессов, переживших родительский процесс.
 
 ## Интеграция с ядром
 
 - `main.py` монтирует `plugin_router` две строки (`include_router`) — production-логика ядра не изменяется.
 - Repos Plugin никогда не применяет AI-патчи сам: изменения исходников только через PATCHMASTER (`patch_engine.apply_patch`), Repos Plugin анализирует `git diff` и выполняет push только после подтверждения (этап 5+).
-- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд, аргументы списком (без shell-строки), таймауты, проверка путей. Перед WRITE-подтверждением Sync capability `repos.sync_preview` (READ/AUTO) показывает diff staged + unstaged + untracked файлов, список файлов и snapshot. Для бинарных/слишком больших файлов и обрезанного diff UI показывает предупреждение и требует явного подтверждения неполного preview. Preview не меняет index/worktree. Затем Sync получает snapshot изменённых файлов, сверяет его перед `git add -A` и повторно после staging; при расхождении commit/push не выполняются. Операции одного Git common-dir сериализуются межпоточной и межпроцессной блокировкой; snapshot учитывает рабочее содержимое, поэтому штатное обновление index командой `git add -A` не считается подменой подтверждённых файлов. `read_file` отклоняет symlink и Windows reparse points на всех компонентах пути.
+- Git CLI вызывается только через `plugins/repos/git_service.py`: allowlist команд, аргументы списком (без shell-строки), таймауты, проверка путей. Перед WRITE-подтверждением Sync capability `repos.sync_preview` (READ/AUTO) показывает diff staged + unstaged + untracked файлов, список файлов и snapshot. Для бинарных/слишком больших файлов и обрезанного diff UI показывает предупреждение и требует явного подтверждения неполного preview. Preview не меняет index/worktree. Затем Sync получает snapshot изменённых файлов, сверяет его перед `git add -A` и повторно после staging; при расхождении commit/push не выполняются. Весь Sync flow сериализуется межпоточной и межпроцессной блокировкой drmAIcu; staged tree фиксируется через `git write-tree`, сверяется перед commit и после него по `HEAD^{tree}`. При расхождении push запрещён. Блокировка advisory: сторонний Git CLI/IDE не обязан её соблюдать; если конкурентная запись успела повлиять на commit, commit может остаться локальным, но не отправляется. Snapshot учитывает рабочее содержимое; `read_file` отклоняет symlink и Windows reparse points на всех компонентах пути.
+
+## REST API security boundary
+
+Mutating-запросы из браузера проверяют `Origin`, `Sec-Fetch-Site`, loopback host и разрешённые локальные порты UI. Запросы без `Origin` допустимы для локальных CLI/API-клиентов. Поэтому этот guard снижает CSRF и DNS-rebinding риск в браузере, но не заменяет пользовательскую аутентификацию от другого локального процесса под той же учётной записью ОС.
 
 ## Статусы и хранение
 
