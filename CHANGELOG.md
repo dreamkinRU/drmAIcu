@@ -9,6 +9,7 @@
 - **Новая вкладка «🐙 GitHub»** — экран «Подключение»: форма настроек GitHub App (по settings_schema), textarea для Private Key (.pem) с записью секрет write-only, кнопки «Сохранить» / «Проверить подключение» (честная диагностика via `github.test_connection`) / «Удалить Private Key», бейджи health (`settings_configured` / `private_key_stored` / `auth_configured`).
 - **Repository Manager** — список репозиториев установки (`github.list_repositories`) с поиском и пагинацией; выбор репозитория открывает браузер: ветки (`github.list_branches`) с пометкой protected, дерево файлов (`github.get_tree`, recursive) с каталог-навигацией и breadcrumbs, просмотр файла (`github.get_file`, base64 → UTF-8).
 - **Создание ветки с подтверждением** — `github.create_branch` (WRITE) идёт через Gateway: UI показывает панель подтверждения с параметрами; «Подтвердить» дозывает exec с одноразовым `confirmation_token`, «Отклонить» — reject; повторное использование токена невозможно на уровне ядра.
+- **Деградированный режим плагина github** — при недоступных зависимостях клиента (`pyjwt`/`requests`, без них раньше было нечитаемое «initialize() returned False») плагин стартует с локальными capability, `test_connection`/`health` честно сообщают причину и подсказку (`pip install -r requirements.txt`); сетевые операции не регистрируются вовсе, fake-успеха нет (+2 теста).
 - **Gate-экран** — если плагин не установлен/остановлен, вкладка показывает статус и кнопку перехода в «Плагины».
 - Документация: `docs/PLUGIN_API_CONTRACT.md` §10/§10.1 дополнены secrets-эндпоинтами.
 

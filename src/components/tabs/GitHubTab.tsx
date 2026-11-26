@@ -259,6 +259,13 @@ function ConnectSection({
         </div>
       )}
 
+      {health && typeof health.client_error === 'string' && health.client_error && (
+        <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
+          ⚠ Клиент GitHub недоступен: <span className="font-mono">{health.client_error}</span>
+          {typeof health.hint === 'string' && health.hint ? <> — {health.hint}</> : null}
+        </div>
+      )}
+
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider">GitHub App</h3>
         {editable.length === 0 && <p className="text-xs text-gray-500">Схема настроек пуста.</p>}
