@@ -141,3 +141,11 @@ def test_check_fingerprint_detects_index_only_change(git_fixture):
         updater.manager.apply(plan["id"])
     assert error.value.code == "working_tree_changed"
     assert app.read_text(encoding="utf-8") == "working tree version\\n"
+
+
+def test_recovery_journal_rejects_orphan_temp_file(git_fixture):
+    with open(updater._JOURNAL_PATH + ".tmp", "w", encoding="utf-8") as stream:
+        stream.write('{"schema":1,"state":"APPLYING"}')
+    with pytest.raises(updater.UpdateError) as error:
+        updater.manager.state()
+    assert error.value.code == "journal_temp_orphan"
