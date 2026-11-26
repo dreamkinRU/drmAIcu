@@ -140,3 +140,84 @@ def test_git_helpers():
     assert git_service.validate_repo_path(BASE) is None
     with pytest.raises(git_service.GitCommandRejected):
         git_service.validate_repo_path('/tmp')
+
+
+# ---------- degraded mode (Этап 4 fix): клиент недоступен — плагин стартует честно ----------
+
+def _make_ctx():
+    from core.plugins.loader import load_entry
+    from core.plugins.api import PluginAPI
+
+    class FakeManager:
+        def __init__(self):
+            from core.plugins.events import ActivityJournal, EventBus
+            from core.plugins.secrets import SecretManager
+            import tempfile
+            tmp = tempfile.mkdtemp()
+            self.secrets = SecretManager(os.path.join(tmp, 'secrets'))
+            self.activity = ActivityJournal(os.path.join(tmp, 'activity'))
+            self.events = EventBus()
+            self.registry = type('R', (), {'get': lambda self, pid: None})()
+            self.settings = type('S', (), {'merged': lambda self, pid, schema: {}})()
+
+    module = load_entry('github', PLUGIN_DIR, 'plugin.py')
+    return module, PluginAPI(FakeManager(), 'github')
+
+
+def test_degraded_mode_starts_when_client_import_fails(monkeypatch):
+    """Отсутствует pyjwt/requests -> плагин стартует (True), но только с локальными capability."""
+    import plugins.github.plugin as gh_plugin
+
+    # имитируем недоступный модуль зависимости через сброс кэша импорта плагина
+    for mod in [m for m in list(sys.modules) if m.startswith('_plugin_github')]:
+        del sys.modules[mod]
+    saved = {m: sys.modules.get(m) for m in ('jwt', 'requests')}
+    for m in saved:
+        sys.modules[m] = None  # import поднимет ImportError, как в среде без зависимости
+    try:
+        # перезагружаем entry, чтобы `from .client import ...` выполнился при подменённых модулях
+        from core.plugins.loader import load_entry
+        from core.plugins.api import PluginAPI
+
+        class FakeManager:
+            def __init__(self):
+                from core.plugins.events import ActivityJournal, EventBus
+                from core.plugins.secrets import SecretManager
+                import tempfile
+                tmp = tempfile.mkdtemp()
+                self.secrets = SecretManager(os.path.join(tmp, 'secrets'))
+                self.activity = ActivityJournal(os.path.join(tmp, 'activity'))
+                self.events = EventBus()
+                self.registry = type('R', (), {'get': lambda self, pid: None})()
+                self.settings = type('S', (), {'merged': lambda self, pid, schema: {}})()
+
+        monkeypatch.setattr(gh_plugin, '_STATE', {'ctx': None, 'client': None, 'client_error': ''}, raising=False)
+        module = load_entry('github', PLUGIN_DIR, 'plugin.py')
+        ctx = PluginAPI(FakeManager(), 'github')
+        assert module.initialize(ctx) is True
+        caps = {c['name'] for c in ctx.capabilities()}
+        assert 'github.diagnostics' in caps and 'github.test_connection' in caps
+        # WRITE/READ сетевые операции не зарегистрированы — неизвестная capability, а не fake
+        assert 'github.list_repositories' not in caps
+        assert 'github.create_branch' not in caps
+
+        res = module.health()
+        assert res['auth_configured'] is False and 'client_error' in res and 'hint' in res
+    finally:
+        for m, v in saved.items():
+            if v is None:
+                sys.modules.pop(m, None)
+            else:
+                sys.modules[m] = v
+        # очищаем испорченные сессией entry-модули; следующий тест перезагрузит entry заново
+        for mod in [m for m in list(sys.modules) if m.startswith('_plugin_github')]:
+            del sys.modules[mod]
+
+
+def test_degraded_test_connection_reports_reason():
+    module, ctx = _make_ctx()
+    assert module.initialize(ctx) is True
+    module._STATE['client'] = None
+    module._STATE['client_error'] = 'No module named jwt'
+    res = module.health()
+    assert res['auth_configured'] is False and 'jwt' in res['client_error']
