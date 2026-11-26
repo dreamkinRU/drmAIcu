@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from core.updater import manager as updater
+from api.routes_updates import _check_local_browser_request
 
 
 def _git(path, *args):
@@ -186,3 +187,44 @@ def test_git_command_uses_fixed_protocol_allowlist_and_shell_false(monkeypatch):
     ]
     assert captured["kwargs"]["shell"] is False
     assert captured["kwargs"]["env"]["GIT_ALLOW_PROTOCOL"] == "https"
+
+
+def test_update_api_accepts_local_browser_origin():
+    from types import SimpleNamespace
+    request = SimpleNamespace(
+        headers={
+            "origin": "http://127.0.0.1:5173",
+            "host": "127.0.0.1:8080",
+            "sec-fetch-site": "same-origin",
+        },
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    assert _check_local_browser_request(request) is None
+
+
+def test_update_api_rejects_remote_origin_and_dns_rebinding_host():
+    from types import SimpleNamespace
+    remote_origin = SimpleNamespace(
+        headers={"origin": "https://attacker.example", "host": "127.0.0.1:8080"},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    with pytest.raises(updater.UpdateError) as error:
+        _check_local_browser_request(remote_origin)
+    assert error.value.code == "origin_rejected"
+
+    rebinding_host = SimpleNamespace(
+        headers={"origin": "http://localhost:5173", "host": "attacker.example"},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    with pytest.raises(updater.UpdateError) as error:
+        _check_local_browser_request(rebinding_host)
+    assert error.value.code == "host_rejected"
+
+
+def test_update_api_allows_local_read_without_origin():
+    from types import SimpleNamespace
+    request = SimpleNamespace(
+        headers={"host": "localhost:8080"},
+        client=SimpleNamespace(host="::1"),
+    )
+    assert _check_local_browser_request(request, require_origin=False) is None
