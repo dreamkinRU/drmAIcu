@@ -113,6 +113,13 @@ export default function Header(props: HeaderProps) {
               </button>
             </Tooltip>
 
+            <Tooltip text="Безопасное обновление drmAIcu в три контролируемых шага" position="bottom">
+              <button onClick={() => setActiveTab('updates')} className={navBtnClass('updates')}>
+                <span>⬆</span>
+                <span>Обновление</span>
+              </button>
+            </Tooltip>
+
             <Tooltip text="Документация и заметки Markdown" position="bottom">
               <button onClick={() => setActiveTab('md')} className={navBtnClass('md')}>
                 <span>📝</span>
