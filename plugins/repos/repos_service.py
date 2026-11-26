@@ -159,14 +159,20 @@ def _repo_status_locked(path):
 def repo_log(path, limit=30):
     validate(path)
     limit = max(1, min(int(limit or 30), LOG_LIMIT_MAX))
-    r = _r(['log', '-n', str(limit), '--pretty=format:%H%x1f%an%x1f%aI%x1f%s'], path)
+    # %x1e (RS) разделяет записи коммитов, %x1f (US) — поля внутри записи. Так формат
+    # выдерживает многострочный %b (тело коммита): строки тела не ломают разбиение,
+    # потому что границы записей ищутся только по %x1e, а не по началу строки.
+    r = _r(['log', '-n', str(limit), '--pretty=format:%x1e%H%x1f%an%x1f%aI%x1f%s%x1f%b'], path)
     if not r['ok']:
         return {'ok': False, 'error': r['stderr'].strip() or 'git log failed'}
     commits = []
-    for line in r['stdout'].splitlines():
-        parts = line.split('\x1f')
-        if len(parts) == 4:
-            commits.append({'sha': parts[0][:10], 'author': parts[1], 'date': parts[2], 'subject': parts[3]})
+    for rec in r['stdout'].split('\x1e'):
+        parts = rec.split('\x1f', 4)
+        if len(parts) == 5:
+            commits.append({
+                'sha': parts[0][:10], 'author': parts[1], 'date': parts[2],
+                'subject': parts[3], 'body': parts[4].strip(),
+            })
     return {'ok': True, 'commits': commits}
 
 

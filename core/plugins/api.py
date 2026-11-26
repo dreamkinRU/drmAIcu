@@ -155,7 +155,10 @@ class PluginAPI:
                 return self._invoke(cap, params)
             conf = self._manager.confirmations.create(
                 self._plugin_id, name, params, cap.permission, cap.policy)
-            self.log('warn', 'confirmation_required', capability=name, policy=cap.policy)
+            # Это НЕ ошибка: штатная механика подтверждения WRITE — ждём решения
+            # пользователя, поэтому уровень info, чтобы строка не попадала в
+            # фильтр «Ошибки и предупреждения» во вкладке Логи.
+            self.log('info', 'confirmation_required', capability=name, policy=cap.policy)
             raise PendingConfirmation(conf)
 
         return self._invoke(cap, params)
