@@ -24,6 +24,16 @@ export async function fetchPlugins(): Promise<PluginInfo[] | null> {
   }
 }
 
+export async function fetchPluginsWarnings(): Promise<{ registry_persist_error?: string } | null> {
+  try {
+    const res = await fetch('/api/plugins');
+    const data = await j<{ success: boolean; data_warnings?: { registry_persist_error?: string } }>(res);
+    return data?.success ? (data.data_warnings ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchPluginsCatalog(): Promise<PluginCatalogEntry[] | null> {
   try {
     const res = await fetch('/api/plugins/catalog');

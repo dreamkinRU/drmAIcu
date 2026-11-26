@@ -292,11 +292,22 @@ class PluginManager:
     def list_plugins(self):
         return [r.public(details=True) for r in self.registry.all()]
 
+    def data_warnings(self):
+        """Деградация данных состояния (не падение): файлы удерживаются другим процессом."""
+        w = {}
+        if getattr(self.registry, 'persist_error', ''):
+            w['registry_persist_error'] = self.registry.persist_error
+        return w
+
     def health(self, pid):
         rec = self.registry.get(pid)
         if rec is None:
             raise KeyError(pid)
         result = {'status': rec.status, 'enabled': rec.enabled, 'last_error': rec.last_error}
+        if getattr(self.registry, 'persist_error', ''):
+            # Файлы состояния удерживаются другим процессом (облако/антивирус): работа
+            # продолжается в памяти, но пользователь должен видеть деградацию честно.
+            result['registry_persist_error'] = self.registry.persist_error
         if rec.status == PluginStatus.RUNNING.value:
             worker = self._workers.get(pid)
             module = self._modules.get(pid)

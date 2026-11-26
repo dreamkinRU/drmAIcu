@@ -12,6 +12,7 @@ import { fetchPluginPermissions } from '../../services/plugins';
 type Section = 'installed' | 'catalog' | 'permissions' | 'activity';
 
 interface PluginsTabProps {
+  dataWarnings: { registry_persist_error?: string } | null;
   plugins: PluginInfo[];
   catalog: PluginCatalogEntry[];
   confirmations: PluginConfirmation[];
@@ -59,7 +60,7 @@ const SECTIONS: { id: Section; label: string }[] = [
 ];
 
 export default function PluginsTab(props: PluginsTabProps) {
-  const { plugins, catalog, confirmations, activity, loading, notice, setNotice: setNoticeRaw, addLog } = props;
+  const { plugins, catalog, confirmations, activity, dataWarnings, loading, notice, setNotice: setNoticeRaw, addLog } = props;
   // Ошибки вкладки «Плагины» тоже попадают во вкладку «Логи» (addLog → POST /api/logs),
   // а не только в короткую плашку, которая могла затереться следующим действием.
   const setNotice = useCallback((n: { kind: 'ok' | 'err'; text: string } | null) => {
@@ -81,6 +82,13 @@ export default function PluginsTab(props: PluginsTabProps) {
   }, [section, selectedPlugin]);
   return (
     <div className="space-y-4">
+      {dataWarnings?.registry_persist_error && (
+        <div className="rounded-lg bg-amber-500/10 border border-amber-500/50 p-3 text-xs text-amber-200 font-sans space-y-1">
+          <div className="font-semibold">⚠ Деградация данных плагинов: файл состояния удерживается другой программой</div>
+          <div className="text-amber-200/80 font-mono break-all">{dataWarnings.registry_persist_error}</div>
+          <div className="text-amber-200/70">Плагины продолжают работать в памяти; настройки/разрешения не сохраняются на диск до устранения блокировки. Панель сохранит состояние автоматически, когда файл освободится.</div>
+        </div>
+      )}
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h2 className="text-2xl font-bold">🔌 Плагины</h2>
         <div className="flex items-center gap-2 flex-wrap">

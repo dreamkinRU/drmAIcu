@@ -1,4 +1,4 @@
-"""Repos Plugin v1.2.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
+"""Repos Plugin v1.2.1 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
 
 Политика автоматизации (замороженная, §2): READ-операции со статусом/историей/
 ветками выполняются автоматически; любые изменения (add/commit/pull/push/fetch/
@@ -12,6 +12,33 @@ from . import git_service, repos_service
 
 _STATE = {'ctx': None}
 
+# Функции repos_service, вызываемые капабилити плагина. Проверяются при initialize():
+# частично прервавшаяся синхронизация (облачный клиент удерживал файл) может оставить
+# plugin.py новым, а repos_service.py старым — тогда плагин стартовал бы «наполовину»
+# и сыпал ошибкой capability_failed на каждый вызов. Теперь это ошибка старта.
+_REQUIRED_SERVICE_FUNCS = (
+    'diagnostics', 'read_file', 'validate',
+    'repo_status', 'repo_log', 'repo_branches', 'repo_remote', 'repo_diff',
+    'repo_add', 'repo_commit', 'repo_push', 'repo_pull', 'repo_fetch',
+    'repo_checkout', 'repo_sync_preview', 'repo_sync',
+    'repo_rebase_state', 'repo_rebase_continue', 'repo_rebase_abort',
+    'repo_patch_status',
+)
+
+_MIXED_VERSIONS_FIX_PATH = ('Путь исправления: поставьте синхронизацию облака на паузу '
+                            '(Mega/OneDrive/Dropbox), выполните git pull в папке проекта, '
+                            'удалите папки __pycache__ в plugins/repos и core/plugins, '
+                            'перезапустите панель (start.bat).')
+
+
+def _check_service_consistency():
+    missing = sorted(n for n in _REQUIRED_SERVICE_FUNCS if not hasattr(repos_service, n))
+    if missing:
+        raise RuntimeError(
+            'файлы плагина Репозитории разноверсионные (синхронизация завершилась частично): '
+            'в repos_service отсутствуют функции %s. %s' % (', '.join(missing), _MIXED_VERSIONS_FIX_PATH))
+
+
 
 def _sc(params, key, required=True, default=''):
     v = (params or {}).get(key, default)
@@ -22,6 +49,7 @@ def _sc(params, key, required=True, default=''):
 
 def initialize(ctx):
     _STATE['ctx'] = ctx
+    _check_service_consistency()
 
     def _diagnostics(params):
         return repos_service.diagnostics()

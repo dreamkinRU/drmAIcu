@@ -51,6 +51,22 @@ def make_ctx(manager_cls=None):
     return module, ctx
 
 
+def test_initialize_fails_fast_on_mixed_versions(monkeypatch):
+    """Частичная синхронизация (новый plugin.py + старый repos_service) — понятная ошибка старта,
+    а не capability_failed на каждый вызов (класс отказа: облако удерживало файл при git pull)."""
+    import types
+    module, ctx = make_ctx()
+    funcs = {n: (lambda *a, **k: None)
+             for n in module._REQUIRED_SERVICE_FUNCS if n != 'repo_rebase_state'}
+    monkeypatch.setattr(module, 'repos_service', types.SimpleNamespace(**funcs))
+    with pytest.raises(RuntimeError) as ei:
+        module.initialize(ctx)
+    msg = str(ei.value)
+    assert 'разноверсионные' in msg
+    assert 'repo_rebase_state' in msg
+    assert 'Путь исправления' in msg
+
+
 def test_manifest_valid():
     from core.plugins.models import validate_manifest
     with open(os.path.join(PLUGIN_DIR, 'plugin.json'), encoding='utf-8') as f:

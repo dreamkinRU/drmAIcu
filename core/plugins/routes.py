@@ -39,7 +39,9 @@ def err(message, code='error', status=400, **extra):
 
 @plugin_router.get('')
 def list_plugins():
-    return ok(plugins=get_manager().list_plugins(), api_version=PLUGIN_API_VERSION)
+    return ok(plugins=get_manager().list_plugins(),
+              data_warnings=get_manager().data_warnings(),
+              api_version=PLUGIN_API_VERSION)
 
 
 @plugin_router.get('/catalog')
