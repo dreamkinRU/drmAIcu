@@ -309,7 +309,7 @@ function OverviewSection({
     if (r.status === 'confirmation_required' && r.confirmation) {
       const cid = r.confirmation.id;
       setPending({
-        label: `Синхронизировать ${repoPath}: ${status.snapshot_files.length} файл(ов) — ${status.snapshot_files.slice(0, 8).join(', ')}${status.snapshot_files.length > 8 ? ` и ещё ${status.snapshot_files.length - 8}` : ''}. add -A → commit → pull --rebase → push`,
+        label: `Sync ${repoPath}: ${status.branch} → ${status.upstream || `origin/${status.branch}`}; ${status.snapshot_files.length} файл(ов) — ${status.snapshot_files.slice(0, 8).join(', ')}${status.snapshot_files.length > 8 ? ` и ещё ${status.snapshot_files.length - 8}` : ''}. add -A → commit → pull --rebase → push`,
         cid,
         run: t => runSync(t),
       });
@@ -346,7 +346,7 @@ function OverviewSection({
     }
     if (r.status === 'done') {
       const res = r.result as SimpleGitResult;
-      if (res.ok) setNotice({ kind: 'ok', text: `${label}: OK${res.output ? ' — ' + res.output.split('\\n')[0] : ''}` });
+      if (res.ok) setNotice({ kind: 'ok', text: `${label}: OK${res.output ? ' — ' + res.output.split('\n')[0] : ''}` });
       else setNotice({ kind: 'err', text: res.error || `${label}: ошибка` });
       reload();
     } else if (r.status === 'error') {

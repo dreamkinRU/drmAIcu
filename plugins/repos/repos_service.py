@@ -39,9 +39,14 @@ def repo_sync_snapshot(path):
         names.update(os.fsdecode(item) for item in result['stdout'].split('\0') if item)
     branch = _r(['rev-parse', '--abbrev-ref', 'HEAD'], path)
     head = _r(['rev-parse', 'HEAD'], path)
+    upstream = _r(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], path)
+    remotes = _r(['remote', '-v'], path)
     digest = hashlib.sha256()
     digest.update((branch.get('stdout', '').strip() + '\0').encode('utf-8'))
     digest.update((head.get('stdout', '').strip() + '\0').encode('ascii', errors='ignore'))
+    digest.update((upstream.get('stdout', '').strip() + '\0').encode('utf-8'))
+    # Сырые URL участвуют только в хэше: в snapshot/ответ API они не возвращаются.
+    digest.update(remotes.get('stdout', '').encode('utf-8', errors='replace'))
     files = sorted(names)
     for rel in files:
         full = os.path.join(path, rel)

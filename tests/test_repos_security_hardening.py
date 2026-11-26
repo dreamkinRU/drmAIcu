@@ -122,3 +122,25 @@ def test_sync_refuses_worktree_changed_after_preview(tmp_path):
     status = subprocess.run(['git', 'status', '--porcelain'], cwd=repo,
                             capture_output=True, text=True, check=True)
     assert status.stdout.strip()
+
+
+def test_sync_snapshot_binds_remote_and_upstream(tmp_path):
+    from plugins.repos import repos_service
+
+    repo = make_repo(str(tmp_path / 'repo'))
+    remote_a = str(tmp_path / 'remote-a.git')
+    remote_b = str(tmp_path / 'remote-b.git')
+    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote_a],
+                   check=True, capture_output=True)
+    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote_b],
+                   check=True, capture_output=True)
+    subprocess.run(['git', 'remote', 'add', 'origin', remote_a],
+                   cwd=repo, check=True, capture_output=True)
+    subprocess.run(['git', 'push', '-u', 'origin', 'main'],
+                   cwd=repo, check=True, capture_output=True)
+
+    preview = repos_service.repo_status(repo)
+    subprocess.run(['git', 'remote', 'set-url', 'origin', remote_b],
+                   cwd=repo, check=True, capture_output=True)
+    result = repos_service.repo_sync(repo, 'must not push elsewhere', preview['snapshot'])
+    assert result['ok'] is False and result['snapshot_changed'] is True
