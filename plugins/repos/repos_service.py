@@ -221,9 +221,35 @@ def repo_sync_preview(path):
 
 
 def _repo_sync_preview_locked(path):
+    # Обновляем remote-tracking refs, чтобы ahead/behind и список входящих
+    # коммитов были актуальными. Fetch меняет только .git refs, не рабочее
+    # дерево; при отсутствии сети/доступа preview продолжается с устаревшими
+    # данными (fetch_ok=False — честная пометка в UI).
+    fetch_r = _r(['fetch', '--all', '--prune'], path, timeout=git_service.PUSH_TIMEOUT)
+    fetch_ok = bool(fetch_r.get('ok'))
+    fetch_error = '' if fetch_ok else (fetch_r.get('stderr', '').strip() or 'git fetch failed')[-500:]
+
     status = _repo_status_locked(path)
     if not status.get('ok'):
         return status
+
+    # ahead/behind точно по upstream (status -b может быть неточен без fetch)
+    ahead = status.get('ahead', 0)
+    behind = status.get('behind', 0)
+    incoming = []
+    upstream = status.get('upstream') or ''
+    if upstream:
+        count = _r(['rev-list', '--left-right', '--count', 'HEAD...%s' % upstream], path)
+        if count.get('ok'):
+            parts = count.get('stdout', '').split()
+            if len(parts) == 2 and all(p.isdigit() for p in parts):
+                ahead, behind = int(parts[0]), int(parts[1])
+        incoming_r = _r(['log', '--pretty=format:%h%x09%s', '-n', '20', 'HEAD..%s' % upstream], path)
+        if incoming_r.get('ok'):
+            for line in incoming_r.get('stdout', '').splitlines():
+                if line.strip():
+                    sha, _, subj = line.partition('\t')
+                    incoming.append({'sha': sha.strip(), 'subject': subj.strip()})
 
     tracked = _r([
         'diff', '--no-ext-diff', '--no-textconv', '--no-color',
@@ -320,6 +346,11 @@ def _repo_sync_preview_locked(path):
         'snapshot': status['snapshot'],
         'snapshot_files': status['snapshot_files'],
         'changed': status.get('changed', False),
+        'fetch_ok': fetch_ok,
+        'fetch_error': fetch_error,
+        'ahead': ahead,
+        'behind': behind,
+        'incoming': incoming,
         'stat': stat_result.get('stdout', '').strip() if stat_result.get('ok') else '',
         'diff': diff_text,
         'truncated': truncated,

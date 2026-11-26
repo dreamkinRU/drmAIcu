@@ -15,7 +15,7 @@ from contextlib import contextmanager
 
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
-    'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base',
+    'checkout', 'rev-parse', 'rev-list', 'show-ref', 'ls-files', 'merge-base',
     'add', 'commit', 'switch', 'check-ref-format', 'rebase',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}

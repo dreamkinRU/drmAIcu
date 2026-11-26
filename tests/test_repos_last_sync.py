@@ -230,3 +230,41 @@ def make_repo_path(tmp):
     g('add', '-A')
     g('commit', '-m', 'init')
     return repo
+
+
+def test_sync_preview_shows_incoming_commits_from_remote(tmp_path):
+    """Preview Sync показывает, что ПРИДЁТ с remote (behind + список входящих
+    коммитов), даже когда локальных изменений нет — именно это было невидимо
+    раньше: sync.bat «синхронизировал» pull-ом, а preview говорил «0 файлов»."""
+    remote = str(tmp_path / 'remote.git')
+    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote], check=True, capture_output=True)
+    repo = make_repo(tmp_path)
+    subprocess.run(['git', 'remote', 'add', 'origin', remote], cwd=repo, check=True, capture_output=True)
+    subprocess.run(['git', 'push', '-u', 'origin', 'main'], cwd=repo, check=True, capture_output=True)
+    # competitor: 2 коммита прямо в remote (как мерж чужого PR)
+    other = str(tmp_path / 'other')
+    subprocess.run(['git', 'clone', remote, other], check=True, capture_output=True)
+    for name, msg in (('a.txt', 'incoming one'), ('b.txt', 'incoming two')):
+        subprocess.run(['git', '-C', other, 'config', 'commit.gpgsign', 'false'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'config', 'user.email', 'o@e.c'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'config', 'user.name', 'o'], check=True, capture_output=True)
+        with open(os.path.join(other, name), 'w') as f:
+            f.write('x\n')
+        subprocess.run(['git', '-C', other, 'add', '-A'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'commit', '-m', msg], check=True, capture_output=True)
+        subprocess.run(['git', '-C', other, 'push', 'origin', 'main'], check=True, capture_output=True)
+
+    from plugins.repos import repos_service
+    prev = repos_service.repo_sync_preview(repo)
+    assert prev['ok'] is True, prev
+    assert prev['changed'] is False
+    assert prev['fetch_ok'] is True, prev
+    assert prev['behind'] == 2, prev
+    assert prev['ahead'] == 0
+    subjects = [c['subject'] for c in prev['incoming']]
+    assert 'incoming one' in subjects and 'incoming two' in subjects, prev['incoming']
+    assert all(c['sha'] for c in prev['incoming'])
+
+    # snapshot стабилен (fetch не менял рабочее дерево) — Sync пройдёт по этому preview
+    st = repos_service.repo_status(repo)
+    assert st['ok'] and st['snapshot'] == prev['snapshot']
