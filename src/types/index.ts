@@ -354,6 +354,18 @@ export interface RepoSyncResult {
   push_rejected?: boolean;
 }
 
+/** PATCHMASTER-мост (только чтение): журнал патчей и их статус синхронизации. */
+export interface RepoPatchStatus {
+  ok: boolean;
+  path?: string;
+  engine_blocked?: boolean;
+  applied: Array<{ patch_id: string; target_file: string; files: string[]; applied_at: string }>;
+  in_progress?: { patch_id: string; files: string[] } | null;
+  unsynced_files: string[];
+  changed?: boolean;
+  error?: string;
+}
+
 /** Последний результат Sync для репозитория (персистентно в state плагина repos). */
 export interface RepoLastSyncInfo {
   found: boolean;

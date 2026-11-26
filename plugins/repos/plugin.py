@@ -104,6 +104,11 @@ def initialize(ctx):
         return {'found': True, 'path': rec.get('path'),
                 'finished_at': rec.get('finished_at'), 'result': rec.get('result')}
 
+    def _patch_status(params):
+        # Этап 5: мост к PATCHMASTER — только ЧТЕНИЕ журнала патчей и статуса
+        # их синхронизации. Запись файлов остаётся у patch_engine (apply_patch).
+        return repos_service.repo_patch_status(_sc(params, 'path'))
+
     def _rebase_state(params):
         return repos_service.repo_rebase_state(_sc(params, 'path'))
 
@@ -150,6 +155,8 @@ def initialize(ctx):
         'git rebase --continue после разрешения конфликтов (WRITE, подтверждение)')
     reg('repos.rebase_abort', 'repos.write', _rebase_abort, 'confirm',
         'git rebase --abort — отмена незавершённого rebase (WRITE, подтверждение)')
+    reg('repos.patch_status', 'repos.read', _patch_status, 'auto',
+        'PATCHMASTER-мост (только чтение): последние применённые патчи, crash-журнал транзакции и файлы патчей, ещё не закоммиченные в Sync')
     reg('repos.last_sync', 'repos.read', _last_sync, 'auto',
         'Последний результат Sync для репозитория (персистентно в state плагина — переживает обновление страницы)')
     return True

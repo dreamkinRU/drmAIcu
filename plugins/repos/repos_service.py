@@ -214,6 +214,68 @@ def repo_remote(path):
     return {'ok': True, 'remotes': remotes}
 
 
+def repo_patch_status(path):
+    """Мост к PATCHMASTER (только чтение, Этап 5): последние применённые патчи,
+    незавершённая транзакция (crash-журнал) и файлы патчей, ещё не попавшие в
+    коммит/Sync. PATCHMASTER остаётся единственным писателем исходников —
+    Repos Plugin файлы не пишет и apply_patch не вызывает."""
+    with git_service.repo_operation_lock(path):
+        return _repo_patch_status_locked(path)
+
+
+def _repo_patch_status_locked(path):
+    validate(path)
+    try:
+        import patch_engine as pe
+    except Exception as e:
+        return {'ok': False,
+                'error': 'PATCHMASTER недоступен: %s. Путь исправления: проверьте наличие patch_engine.py в корне проекта и перезапустите панель.' % e}
+    man = pe.load_manifest()
+    journal = pe.load_journal()
+
+    applied = []
+    for rec in (man.get('applied') or [])[-10:]:
+        if not isinstance(rec, dict):
+            continue
+        applied.append({
+            'patch_id': str(rec.get('patch_id', '')),
+            'target_file': str(rec.get('target_file', '')),
+            'files': [str(op.get('target_file', '')) for op in (rec.get('operations') or [])
+                      if isinstance(op, dict) and op.get('target_file')],
+            'applied_at': str(rec.get('applied_at', '')),
+        })
+
+    in_progress = None
+    if isinstance(journal, dict) and journal.get('op') == 'apply':
+        in_progress = {'patch_id': str(journal.get('patch_id', '')),
+                       'files': [str(st.get('tgt', '')) for st in (journal.get('steps') or [])
+                                 if isinstance(st, dict) and st.get('tgt')]}
+
+    engine_blocked = bool(getattr(pe, 'MANIFEST_LOCK', ''))
+
+    # Файлы патчей, ещё не закоммиченные в ЭТОМ репозитории (только если
+    # path — корень drmAIcu: патчи применяются к самому проекту).
+    unsynced = []
+    changed = None
+    if os.path.realpath(path) == os.path.realpath(pe.BASE):
+        st = _repo_status_locked(path)
+        if st.get('ok'):
+            changed = bool(st.get('changed'))
+            patch_files = set()
+            for rec in applied:
+                patch_files.update(rec['files'])
+            if patch_files:
+                status_files = set(st.get('snapshot_files') or [])
+                unsynced = sorted(patch_files & status_files)
+
+    return {'ok': True, 'path': path,
+            'engine_blocked': engine_blocked,
+            'applied': applied,
+            'in_progress': in_progress,
+            'unsynced_files': unsynced,
+            'changed': changed}
+
+
 def repo_sync_preview(path):
     """Возвращает полный review diff и snapshot, не изменяя Git index/worktree."""
     with git_service.repo_operation_lock(path):

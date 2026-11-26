@@ -8,6 +8,7 @@ import type { LogEntry, PluginInfo,
   RepoRemote,
   RepoLog,
   RepoStatus,
+  RepoPatchStatus,
   RepoSyncResult,
   RepoSyncPreview,
   SimpleGitResult,
@@ -23,6 +24,7 @@ import {
   reposDiff,
   reposFetch,
   reposLastSync,
+  reposPatchStatus,
   reposLog,
   reposPull,
   reposPush,
@@ -295,6 +297,7 @@ function OverviewSection({
   const [pending, setPending] = useState<{ label: string; cid: string; run: (token: string) => void } | null>(null);
   const [syncResult, setSyncResult] = useState<RepoSyncResult | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [patchStatus, setPatchStatus] = useState<RepoPatchStatus | null>(null);
   const [syncPreview, setSyncPreview] = useState<RepoSyncPreview | null>(null);
   const [previewAcknowledged, setPreviewAcknowledged] = useState(false);
   const [rebaseState, setRebaseState] = useState<{ ok: boolean; active: boolean; conflicts: string[] } | null>(null);
@@ -324,6 +327,15 @@ function OverviewSection({
   }, [repoPath]);
 
   useEffect(() => { void refreshLastSync(); }, [refreshLastSync]);
+
+  // Этап 5: PATCHMASTER-мост — патчи применены движком, но ещё не закоммичены?
+  // Баннер подсказывает путь исправления (Sync). Плагин только читает журнал.
+  const refreshPatchStatus = useCallback(async () => {
+    const r = await reposPatchStatus(repoPath);
+    setPatchStatus(r.status === 'done' && r.result?.ok ? r.result : null);
+  }, [repoPath]);
+
+  useEffect(() => { void refreshPatchStatus(); }, [refreshPatchStatus]);
 
   const prepareSync = async () => {
     setBusy(true);
@@ -362,6 +374,7 @@ function OverviewSection({
     if (r.status === 'done') {
       setSyncResult(r.result);
       setLastSyncAt(new Date().toISOString());
+      void refreshPatchStatus();
       setSyncPreview(null);
       setPreviewAcknowledged(false);
       if (r.result.ok) {
@@ -442,6 +455,31 @@ function OverviewSection({
             <OpBtn busy={busy} label="rebase --abort"
               onClick={() => { void runWrite('rebase --abort', t => reposRebaseAbort(repoPath, t)); void refreshRebaseState(); }} />
           </div>
+        </div>
+      )}
+
+      {patchStatus?.in_progress && (
+        <div className="rounded-xl border border-red-500/60 bg-red-500/10 p-4 space-y-1">
+          <h3 className="font-semibold text-red-200">🛑 PATCHMASTER: незавершённая транзакция патча {patchStatus.in_progress.patch_id || '—'}</h3>
+          <div className="space-y-0.5">
+            {patchStatus.in_progress.files.map(f => <div key={f} className="text-xs font-mono text-red-100">{f}</div>)}
+          </div>
+          <p className="text-xs text-gray-400">Путь исправления: перезапустите панель — ядро выполнит recover_journal() и восстановит безопасное состояние файлов. Не редактируйте перечисленные файлы до восстановления.</p>
+        </div>
+      )}
+      {patchStatus?.engine_blocked && !patchStatus.in_progress && (
+        <div className="rounded-xl border border-red-500/60 bg-red-500/10 p-4 space-y-1">
+          <h3 className="font-semibold text-red-200">🛑 PATCHMASTER заблокирован: повреждён patch_manifest.json</h3>
+          <p className="text-xs text-gray-400">Применение любых патчей запрещено движком (B52 FIX). Путь исправления: восстановите patch_manifest.json из копии patch_manifest.json.corrupt (создаётся автоматически) или из резервной копии, затем перезапустите панель.</p>
+        </div>
+      )}
+      {patchStatus && patchStatus.unsynced_files.length > 0 && (
+        <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 space-y-1">
+          <h3 className="font-semibold text-amber-200">🩹 PATCHMASTER: патчи применены, но ещё не закоммичены ({patchStatus.unsynced_files.length})</h3>
+          <div className="space-y-0.5">
+            {patchStatus.unsynced_files.map(f => <div key={f} className="text-xs font-mono text-amber-100">{f}</div>)}
+          </div>
+          <p className="text-xs text-gray-400">Путь исправления: Предпросмотр Sync → сообщение коммита → Синхронизировать (add -A → commit → pull --rebase → push).{patchStatus.applied.length > 0 ? ' Последний патч: ' + patchStatus.applied[patchStatus.applied.length - 1].patch_id + '.' : ''}</p>
         </div>
       )}
 
