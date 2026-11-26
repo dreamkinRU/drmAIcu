@@ -6,6 +6,7 @@ commit, push, rebase или reset. Локальные изменения сох�
 refs/drmaicu/update-backups/<id> и восстанавливаются через stash apply --index.
 """
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -105,6 +106,42 @@ def _status():
     return _git_ok(["status", "--porcelain=v2", "--branch", "--untracked-files=all"])
 
 
+def _worktree_status():
+    return _git_ok(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+
+
+def _status_fingerprint():
+    """Отпечаток содержимого, а не только списка изменённых путей."""
+    digest = hashlib.sha256()
+    status = _worktree_status()
+    diff = _git_ok(["diff", "--binary", "HEAD"])
+    digest.update(status.encode("utf-8", errors="surrogatepass"))
+    digest.update(diff.encode("utf-8", errors="surrogatepass"))
+    raw_paths = _git_ok(["ls-files", "--others", "--exclude-standard", "-z"])
+    files = [item for item in raw_paths.split("\\0") if item]
+    root = os.path.realpath(BASE)
+    for rel in sorted(files):
+        if os.path.isabs(rel) or any(part in ("", ".", "..") for part in rel.replace("\\\\", "/").split("/")):
+            raise UpdateError("Обнаружен небезопасный путь untracked-файла", "unsafe_untracked_path")
+        full = os.path.join(root, rel)
+        real = os.path.realpath(os.path.dirname(full))
+        if os.path.commonpath([root, real]) != root:
+            raise UpdateError("Untracked-файл выходит за пределы репозитория", "unsafe_untracked_path")
+        info = os.lstat(full)
+        digest.update(rel.encode("utf-8", errors="surrogatepass"))
+        if os.path.islink(full):
+            digest.update(b"LINK")
+            digest.update(os.readlink(full).encode("utf-8", errors="surrogatepass"))
+        elif os.path.isfile(full):
+            digest.update(b"FILE")
+            with open(full, "rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        else:
+            digest.update(("MODE:%s" % info.st_mode).encode("ascii"))
+    return {"status": status, "digest": digest.hexdigest()}
+
+
 def _branch_and_upstream():
     branch = _git_ok(["symbolic-ref", "--quiet", "--short", "HEAD"])
     upstream = _git_ok(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
@@ -183,6 +220,7 @@ class UpdateManager:
             branch, upstream, remote, remote_branch = _branch_and_upstream()
             _validate_official_remote(remote)
             before_status = _status()
+            fingerprint = _status_fingerprint()
             old_head = _git_ok(["rev-parse", "HEAD"])
             _git_ok(["fetch", "--no-tags", remote, remote_branch], _TIMEOUT)
             remote_ref = "refs/remotes/%s/%s" % (remote, remote_branch)
@@ -212,7 +250,7 @@ class UpdateManager:
                 "behind": behind,
                 "local_changes": bool(_changed_files(before_status)),
                 "local_files": _changed_files(before_status),
-                "status_fingerprint": before_status,
+                "status_fingerprint": fingerprint,
                 "incoming_commits": incoming,
                 "blockers": [],
             }
@@ -233,9 +271,9 @@ class UpdateManager:
                 raise UpdateError("Обновление заблокировано: " + " ".join(journal["blockers"]), "update_blocked")
             if _git_ok(["rev-parse", "HEAD"]) != journal.get("old_head"):
                 raise UpdateError("HEAD изменился после проверки. Повторите шаг 1.", "plan_stale")
-            current_status = _status()
+            current_status = _status_fingerprint()
             if current_status != journal.get("status_fingerprint"):
-                raise UpdateError("Рабочее дерево изменилось после проверки. Повторите шаг 1.", "working_tree_changed")
+                raise UpdateError("Рабочее дерево или содержимое локальных файлов изменилось после проверки. Повторите шаг 1.", "working_tree_changed")
 
             journal["state"] = "APPLYING"
             journal["backup_ref"] = None
@@ -244,15 +282,19 @@ class UpdateManager:
                 if journal.get("local_changes"):
                     backup_id = journal["id"]
                     message = "drmAIcu-update-backup:" + backup_id
+                    previous_stash = _run_git(["rev-parse", "--verify", "refs/stash"])
                     _git_ok(["stash", "push", "--include-untracked", "--message", message], _TIMEOUT)
                     stash_oid = _git_ok(["rev-parse", "--verify", "refs/stash"])
+                    if previous_stash.get("ok") and previous_stash["stdout"].strip() == stash_oid:
+                        raise UpdateError("Git не создал новую резервную копию локальных изменений", "backup_missing")
                     backup_ref = "refs/drmaicu/update-backups/" + backup_id
-                    _git_ok(["update-ref", backup_ref, stash_oid])
-                    _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
-                    if _status().strip():
-                        raise UpdateError("После резервирования рабочее дерево не стало чистым", "backup_incomplete")
                     journal["backup_ref"] = backup_ref
                     journal["backup_oid"] = stash_oid
+                    _save_journal(journal)
+                    _git_ok(["update-ref", backup_ref, stash_oid])
+                    _git_ok(["cat-file", "-e", backup_ref + "^{commit}"])
+                    if _worktree_status():
+                        raise UpdateError("После резервирования рабочее дерево не стало чистым", "backup_incomplete")
                     journal["backup_verified"] = True
                     _save_journal(journal)
                 _git_ok(["merge", "--ff-only", journal["remote_head"]], _TIMEOUT)
@@ -279,7 +321,7 @@ class UpdateManager:
             _save_journal(journal)
             try:
                 if journal.get("backup_ref"):
-                    if _status().strip():
+                    if _worktree_status():
                         raise UpdateError(
                             "После обновления появились новые локальные изменения. "
                             "Автоматическое восстановление остановлено, резервная копия сохранена.",
@@ -294,8 +336,10 @@ class UpdateManager:
                             "restore_conflict",
                         )
                     journal["local_changes_restored"] = True
+                    _save_journal(journal)
                 else:
                     journal["local_changes_restored"] = True
+                    _save_journal(journal)
 
                 summary = journal.get("change_summary") or {}
                 commands = []
@@ -347,18 +391,19 @@ class UpdateManager:
             backup_ref = journal.get("backup_ref")
             if not backup_ref:
                 raise UpdateError("Резервная копия для восстановления не найдена.", "backup_missing")
-            if _status().strip():
+            if _worktree_status():
                 raise UpdateError(
                     "Рабочее дерево не чистое. Сначала сохраните или устраните новые изменения вручную.",
                     "working_tree_dirty",
                 )
-            result = _run_git(["stash", "apply", "--index", backup_ref], _TIMEOUT)
-            if not result["ok"]:
-                journal["state"] = "RECOVERY_REQUIRED"
-                journal["error"] = (result["stderr"] or result["stdout"]).strip()[:3000]
-                _save_journal(journal)
-                raise UpdateError(journal["error"], "restore_conflict")
-            journal["local_changes_restored"] = True
+            if not journal.get("local_changes_restored"):
+                result = _run_git(["stash", "apply", "--index", backup_ref], _TIMEOUT)
+                if not result["ok"]:
+                    journal["state"] = "RECOVERY_REQUIRED"
+                    journal["error"] = (result["stderr"] or result["stdout"]).strip()[:3000]
+                    _save_journal(journal)
+                    raise UpdateError(journal["error"], "restore_conflict")
+                journal["local_changes_restored"] = True
             journal["state"] = "CODE_UPDATED"
             journal.pop("error", None)
             _save_journal(journal)
