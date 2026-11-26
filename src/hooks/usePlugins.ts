@@ -1,0 +1,96 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  PluginActivityEntry,
+  PluginCatalogEntry,
+  PluginConfirmation,
+  PluginInfo,
+} from '../types';
+import {
+  decideConfirmation,
+  fetchConfirmations,
+  fetchPluginActivity,
+  fetchPlugins,
+  fetchPluginsCatalog,
+  installPlugin,
+  pluginAction,
+  uninstallPlugin,
+  putPluginPermissions,
+} from '../services/plugins';
+
+export function usePlugins() {
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [catalog, setCatalog] = useState<PluginCatalogEntry[]>([]);
+  const [confirmations, setConfirmations] = useState<PluginConfirmation[]>([]);
+  const [activity, setActivity] = useState<PluginActivityEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [pl, cat, conf, act] = await Promise.all([
+      fetchPlugins(),
+      fetchPluginsCatalog(),
+      fetchConfirmations(),
+      fetchPluginActivity(),
+    ]);
+    if (pl) setPlugins(pl);
+    if (cat) setCatalog(cat);
+    if (conf) setConfirmations(conf);
+    if (act) setActivity(act);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const install = useCallback(async (source: string) => {
+    const r = await installPlugin(source);
+    setNotice(r.ok ? { kind: 'ok', text: 'Плагин установлен' } : { kind: 'err', text: r.error || 'Ошибка установки' });
+    await refresh();
+    return r.ok;
+  }, [refresh]);
+
+  const enable = useCallback(async (id: string) => {
+    const okA = await pluginAction(id, 'enable');
+    setNotice(okA ? { kind: 'ok', text: `${id}: запущен` } : { kind: 'err', text: `${id}: не удалось включить` });
+    await refresh();
+    return okA;
+  }, [refresh]);
+
+  const disable = useCallback(async (id: string) => {
+    const okA = await pluginAction(id, 'disable');
+    setNotice(okA ? { kind: 'ok', text: `${id}: остановлен` } : { kind: 'err', text: `${id}: не удалось отключить` });
+    await refresh();
+    return okA;
+  }, [refresh]);
+
+  const uninstall = useCallback(async (id: string) => {
+    const okA = await uninstallPlugin(id);
+    setNotice(okA ? { kind: 'ok', text: `${id}: удалён` } : { kind: 'err', text: `${id}: не удалось удалить` });
+    await refresh();
+    return okA;
+  }, [refresh]);
+
+  const grantAll = useCallback(async (id: string, rows: { permission: string; granted: boolean }[]) => {
+    const okA = await putPluginPermissions(id, rows);
+    setNotice(okA ? { kind: 'ok', text: `${id}: разрешения сохранены` } : { kind: 'err', text: `${id}: ошибка сохранения разрешений` });
+    await refresh();
+    return okA;
+  }, [refresh]);
+
+  const decide = useCallback(async (cid: string, approve: boolean) => {
+    const okA = await decideConfirmation(cid, approve);
+    setNotice(okA
+      ? { kind: 'ok', text: approve ? 'Подтверждено' : 'Отклонено' }
+      : { kind: 'err', text: 'Не удалось обработать подтверждение' });
+    await refresh();
+    return okA;
+  }, [refresh]);
+
+  return {
+    plugins, catalog, confirmations, activity, loading, notice,
+    refresh, install, enable, disable, uninstall, grantAll, decide, setNotice,
+  };
+}

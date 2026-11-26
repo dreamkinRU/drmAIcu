@@ -1,12 +1,13 @@
 # Архитектура drmAIcu
 
-**Версия 3.6.3 Model** · Обновлено: 26.11.2026 · Единый источник версии — `version.py` · PR #10–#25 и патчи 144–162
+**Версия 3.7.0 Model** · Обновлено: 26.11.2026 · Единый источник версии — `version.py` · PR #10–#25 и патчи 144–162
 
 ## Компоненты
 - **main.py**: UI-слой на NiceGUI/FastAPI (порт 8080): REST API, SSE-стриминг задач, опрос провайдеров, мониторинг RAM/VRAM, аналитик проекта, логи, рестарт. Движок патчей вынесен в отдельный модуль.
 - **patch_engine.py**: Чистое ядро движка патчей (без NiceGUI): `safe_path`, two-phase атомарные транзакции, `TX_LOCK`, `expected_sha`, манифест, бэкапы. Его импортируют и тесты, и UI.
 - **agent_engine.py (v2.3+)**: Асинхронный движок ИИ с поддержкой `run_task` и потокового `stream_task` для локальных (Ollama, Strata, LM Studio, Bionic) и облачных (Groq, OpenRouter, Together, Hugging Face, Gemini) провайдеров.
-- **src/App.tsx (v.3.6.3 Model)**: React-панель управления (порт 5173), работающая через Vite Proxy.
+- **src/App.tsx (v.3.7.0 Model)**: React-панель управления (порт 5173), работающая через Vite Proxy.
+- **core/plugins/**: Plugin System v1.0 — PluginManager (registry/loader/lifecycle/permissions/settings/secrets/events/confirmations), REST `/api/plugins/*` (`routes.py`), контракт `docs/PLUGIN_API_CONTRACT.md`. GitHub Plugin — `plugins/github/` (GitHub App JWT → Installation Token, allowlist Git CLI). Данные плагинов — `data/plugins/` (в .gitignore).
 - **launcher.bat (v2.0 Watchdog)**: Циклический лаунчер, мониторит порты 8080/5173, убивает зависшие окна, предотвращает повторное открытие браузера при рестарте (`BROWSER_OPENED`) и обеспечивает автоматический перезапуск по `restart.flag`.
 
 ## Поток данных
@@ -42,7 +43,7 @@
 ## Известные ограничения и долги
 - **CORS/host**: Закрыто в 3.5.3 — только localhost, `127.0.0.1`.
 - **`expected_sha` поддерживается движком, но не генерируется в UI**: Поле можно задать вручную в операции, но панель его автоматически не передаёт.
-- **Документация**: актуализирована в `v.3.6.3 Model` (26.11.2026) — отражены новые провайдеры, объединённая вкладка «Провайдеры», SSE-стриминг и обновлённый UI.
+- **Документация**: актуализирована в `v.3.7.0 Model` (26.11.2026) — отражены новые провайдеры, объединённая вкладка «Провайдеры», SSE-стриминг и обновлённый UI.
 - **Декомпозиция `main.py`**: Движок патчей вынесен в `patch_engine.py` (3.5.3); `App.tsx` остаётся основным контейнером состояния.
 - **CI**: Добавлен в `.github/workflows/ci.yml` (`pytest` + `tsc` + `vite build`).
 - **`sync.bat`**: отчёт о последнем merged PR требует установленного `gh` CLI — есть fallback на `git log` (PR #17, #19).

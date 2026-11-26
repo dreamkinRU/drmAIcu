@@ -18,6 +18,10 @@ from patch_engine import (
     resolve, rollback, safe_path, save_manifest, sha, sha_bytes, stats,
     test_apply, to_bytes, validate,
 )
+from core.plugins.routes import plugin_router, startup_plugins
+
+app.include_router(plugin_router)
+startup_plugins()
 from guards import is_critical_rel, is_doc_rel, validate_url
 BASE = _pe.BASE
 PATCH_DIR = _pe.PATCH_DIR

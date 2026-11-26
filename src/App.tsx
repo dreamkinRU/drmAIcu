@@ -24,11 +24,14 @@ import CodeTab from './components/tabs/CodeTab';
 import LogsTab from './components/tabs/LogsTab';
 import TasksTab from './components/tabs/TasksTab';
 import PatchesTab from './components/tabs/PatchesTab';
+import PluginsTab from './components/tabs/PluginsTab';
+import { usePlugins } from './hooks/usePlugins';
 import { restartSystem as restartSystemApi } from './services/api';
 
 export default function App() {
   // === Хуки состояния ===
   const { logs, addLog } = useLogs();
+  const pluginCtl = usePlugins();
   const { codeIssues, fixCodeIssue, fixAll } = useCodeIssues();
   const {
     taskList, newTaskText, setNewTaskText,
@@ -372,6 +375,25 @@ export default function App() {
         )}
 
         {activeTab === 'logs' && <LogsTab logs={logs} />}
+
+        {activeTab === 'plugins' && (
+          <PluginsTab
+            plugins={pluginCtl.plugins}
+            catalog={pluginCtl.catalog}
+            confirmations={pluginCtl.confirmations}
+            activity={pluginCtl.activity}
+            loading={pluginCtl.loading}
+            notice={pluginCtl.notice}
+            setNotice={pluginCtl.setNotice}
+            refresh={pluginCtl.refresh}
+            install={pluginCtl.install}
+            enable={pluginCtl.enable}
+            disable={pluginCtl.disable}
+            uninstall={pluginCtl.uninstall}
+            grantAll={pluginCtl.grantAll}
+            decide={pluginCtl.decide}
+          />
+        )}
 
         {activeTab === 'tasks' && (
           <TasksTab

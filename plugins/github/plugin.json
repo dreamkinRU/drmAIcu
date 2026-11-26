@@ -1,0 +1,26 @@
+{
+  "id": "github",
+  "name": "GitHub Integration",
+  "version": "1.0.0",
+  "description": "GitHub integration for drmAIcu: GitHub App auth, repositories, branches, commits, pull requests, issues, Actions, sync",
+  "author": "dreamkinRU",
+  "api_version": "1.0",
+  "entry_point": "plugin.py",
+  "permissions": [
+    "github.repositories.read",
+    "github.contents.read",
+    "github.contents.write",
+    "github.branches.read",
+    "github.branches.write",
+    "github.commits.read",
+    "github.commits.write",
+    "github.pull_requests.read",
+    "github.pull_requests.write",
+    "github.issues.read",
+    "github.issues.write",
+    "github.actions.read",
+    "github.actions.write",
+    "github.pull_requests.merge",
+    "github.repositories.delete"
+  ]
+}

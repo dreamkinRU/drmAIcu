@@ -154,4 +154,71 @@ export type TabId =
   | 'logs'
   | 'tasks'
   | 'patches'
-  | 'project';
+  | 'project'
+  | 'plugins';
+
+export type PluginStatus = 'installed' | 'disabled' | 'loading' | 'running' | 'error' | 'update_available' | 'incompatible';
+
+export interface PluginPermission {
+  permission: string;
+  level: 'read' | 'write' | 'critical';
+  granted: boolean;
+}
+
+export interface PluginCapabilities {
+  name: string;
+  permission: string;
+  policy: 'auto' | 'confirm' | 'critical';
+  description: string;
+}
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  api_version: string;
+  status: PluginStatus;
+  source: 'builtin' | 'installed';
+  enabled: boolean;
+  last_error: string;
+  permissions?: string[];
+  settings_schema?: Record<string, { type: string; title?: string; default?: unknown; enum?: unknown[] }>;
+  capabilities?: PluginCapabilities[];
+  installed_at?: string;
+}
+
+export interface PluginPermissionRow {
+  plugin: string;
+  permissions: PluginPermission[];
+  granted: string[];
+}
+
+export interface PluginConfirmation {
+  id: string;
+  plugin: string;
+  capability: string;
+  params: unknown;
+  permission: string;
+  policy: 'confirm' | 'critical';
+  created: number;
+  expires_in: number;
+}
+
+export interface PluginActivityEntry {
+  ts: string;
+  level: 'info' | 'warn' | 'error' | 'action';
+  plugin: string | null;
+  event: string;
+  details?: Record<string, unknown>;
+}
+
+export interface PluginCatalogEntry {
+  available: boolean;
+  errors: string[];
+  manifest?: PluginInfo;
+  installed?: boolean;
+  compatible?: boolean;
+  permissions?: PluginPermission[];
+}
