@@ -1,4 +1,4 @@
-"""Repos Plugin v1.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
+"""Repos Plugin v1.1.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
 
 Политика автоматизации (замороженная, §2): READ-операции со статусом/историей/
 ветками выполняются автоматически; любые изменения (add/commit/pull/push/fetch/
