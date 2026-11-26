@@ -1,6 +1,17 @@
 # drmAIcu — История изменений
 
-## v.3.13.1 Model (Текущая) — 26.11.2026
+## v.3.14.0 Model (Текущая) — 26.11.2026
+
+### Декомпозиция REST-слоя main.py в api/
+
+- main.py (67 КБ, ~40 эндпоинтов) разрезан на пакет api/ по образцу core/plugins/routes.py: routes_system (статус/версия/логи/ресурсы/md/рестарт), routes_agents (task/agents/pipelines/context), routes_providers (модели/ping/config), routes_patches (обёртка PATCHMASTER), routes_project (скан/очистка/архив/история); общие зависимости — api/shared.py (пути, settings.json, LOG/log(), load_cfg(), реестр движка get_engine/rebuild_engine).
+- main.py — точка сборки: CORS, монтаж plugin_router + 5 доменных роутеров, create_ui(), __main__ с recover_journal; поведение эндпоинтов перенесено 1:1, TestClient(main.app) в тестах работает как раньше.
+- /api/patches/verify-108: проверка endpoint_uses_unified теперь сканирует и api/routes_patches.py (после переноса строка уехала из main.py).
+- Исправлен неработавший паттерн classify_file для одноразовых скриптов: r'^(apply|fix|...)_.*\\.py$' (двойной бэкслеш в raw-строке, regex не совпадал никогда) → r'^(apply|fix|...)_.*\.py$'.
+- Версия 3.13.1 → 3.14.0 (version.py + package.json); README/ARCHITECTURE/HANDOFF/USER_GUIDE актуализированы, цифры тестов приведены к фактическим (300 passed, 1 skipped).
+
+
+## v.3.13.1 Model — 26.11.2026
 
 ### Resilience: разноверсионные файлы плагина после прервавшейся синхронизации
 
