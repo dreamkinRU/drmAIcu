@@ -81,14 +81,15 @@ def test_history_row_no_author_and_no_utc3_label():
     assert '{timeUtc3(c.date)} UTC+3' not in src, 'метка «UTC+3» убрана из строки (конвертация Europe/Moscow остаётся)'
 
 
-def test_history_merge_rows_filtered_and_lineage_tooltip():
+def test_history_merge_rows_filtered_and_lineage_modal():
     src = _read(REPOS_TAB)
-    assert "c.subject.startsWith('Merge ')" in src, 'мерж-коммиты не должны рисоваться отдельными строками'
-    assert 'rows.map(({ c, merge })' in src, 'lineage: обычному коммиту подставляется ближайший мерж'
-    assert 'title={fullTip}' in src, 'нет tooltip на строке коммита'
-    assert 'вошёл через мерж' in src, 'в tooltip должна попасть информация о мерже'
-    assert 'c.body' in src, 'в tooltip должен входить полный текст коммита (body)'
-
+    assert "c.subject.startsWith('Merge ')" in src, 'мердж-коммиты не должны рисоваться отдельными строками'
+    assert 'rows.map(({ c, merge })' in src, 'lineage: обычному коммиту подставляется ближайший мердж'
+    # 3.12.5: нативный title-tooltip заменён модальным окном деталей коммита
+    assert 'title={fullTip}' not in src, 'нативный tooltip (интерфейс «90-х») должен быть заменён модальным окном'
+    assert 'CommitModal' in src, 'строка коммита должна открывать модальное окно CommitModal'
+    assert 'вошёл в ветку через мердж' in src, 'в модалке должна быть информация о мердже'
+    assert 'commit.body' in src, 'в модалке должно быть полное тело коммита (body)'
 
 def test_repo_commit_type_has_body():
     src = _read(TYPES)

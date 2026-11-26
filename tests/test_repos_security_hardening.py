@@ -370,3 +370,29 @@ def test_sync_preview_rejects_worktree_change_during_diff_build(tmp_path, monkey
     preview = repos_service.repo_sync_preview(repo)
     assert preview['ok'] is False
     assert preview['snapshot_changed'] is True
+
+
+def test_register_capability_requires_manifest_declared_permission():
+    """Портировано из PR #41: capability нельзя регистрировать с permission вне manifest."""
+    from core.plugins.api import PluginAPI
+
+    rec = type('Rec', (), {'permissions': ['demo.read'], 'status': 'running'})
+    class FakeRegistry:
+        def get(self, pid):
+            return rec
+    manager = type('M', (), {'registry': FakeRegistry()})()
+    api = PluginAPI(manager, 'demo')
+    with pytest.raises(ValueError, match='not declared'):
+        api.register_capability('demo.write', 'demo.write', lambda p: None, 'confirm')
+    api.register_capability('demo.read_ok', 'demo.read', lambda p: None, 'auto')
+
+
+def test_register_capability_rejects_duplicate_name():
+    """Портировано из PR #41: повторная регистрация capability — ошибка, а не тихая замена."""
+    from core.plugins.api import PluginAPI
+
+    manager = type('M', (), {'registry': type('R', (), {'get': lambda self, pid: None})()})()
+    api = PluginAPI(manager, 'demo')
+    api.register_capability('demo.read', 'demo.read', lambda p: None, 'auto')
+    with pytest.raises(ValueError, match='already registered'):
+        api.register_capability('demo.read', 'demo.read', lambda p: None, 'auto')

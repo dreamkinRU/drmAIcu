@@ -90,12 +90,22 @@ class PluginAPI:
     # --- capabilities ---
 
     def register_capability(self, name, permission, handler, confirmation='auto', description=''):
-        """Регистрирует capability, не позволяя плагину ослабить политику ядра."""
+        """
+        Регистрирует capability: permission должен быть распознан и объявлен в manifest,
+        имя — уникальным, а политика не может ослабить минимум ядра по уровню permission.
+        """
         try:
             requested = ConfirmationPolicy(confirmation).value
             level = permission_level(permission)
         except ValueError as e:
             raise ValueError('invalid capability permission/policy: %s' % e)
+        # permission должен быть объявлен в manifest плагина; если записи registry ещё нет
+        # (юнит-тесты с фейковым менеджером) — проверка недоступна, исполнение всё равно
+        # блокируется в call() по статусу running.
+        registry = getattr(self._manager, 'registry', None) if self._manager is not None else None
+        rec = registry.get(self._plugin_id) if registry is not None else None
+        if rec is not None and permission not in rec.permissions:
+            raise ValueError('capability permission is not declared in plugin manifest: %s' % permission)
 
         minimum = {
             PermissionLevel.READ.value: ConfirmationPolicy.AUTO.value,
@@ -113,13 +123,33 @@ class PluginAPI:
                 (requested, minimum, permission)
             )
         with self._caps_lock:
+            if name in self._caps:
+                raise ValueError('capability already registered: %s' % name)
             self._caps[name] = Capability(name, permission, handler, requested, description or '')
+
+    def _effective_policy(self, cap):
+        """Фактическая политика = заявленная, но не слабее минимума ядра по уровню permission."""
+        try:
+            level = permission_level(cap.permission)
+        except ValueError as e:
+            raise GatewayBlocked('invalid_permission', str(e)) from e
+        minimum = {
+            PermissionLevel.READ.value: ConfirmationPolicy.AUTO.value,
+            PermissionLevel.WRITE.value: ConfirmationPolicy.CONFIRM.value,
+            PermissionLevel.CRITICAL.value: ConfirmationPolicy.CRITICAL.value,
+        }[level]
+        rank = {
+            ConfirmationPolicy.AUTO.value: 0,
+            ConfirmationPolicy.CONFIRM.value: 1,
+            ConfirmationPolicy.CRITICAL.value: 2,
+        }
+        return max((cap.policy, minimum), key=lambda value: rank[value])
 
     def capabilities(self):
         with self._caps_lock:
-            return [dict(name=c.name, permission=c.permission, policy=c.policy,
-                         description=c.description)
-                    for c in self._caps.values()]
+            caps = list(self._caps.values())
+        return [dict(name=c.name, permission=c.permission, policy=self._effective_policy(c),
+                     description=c.description) for c in caps]
 
     def _get_cap(self, name):
         with self._caps_lock:
@@ -138,8 +168,9 @@ class PluginAPI:
         params = params or {}
         if not isinstance(params, dict):
             raise GatewayBlocked('invalid_params', 'params must be an object')
+        policy = self._effective_policy(cap)
 
-        if cap.policy in (ConfirmationPolicy.CONFIRM.value, ConfirmationPolicy.CRITICAL.value):
+        if policy in (ConfirmationPolicy.CONFIRM.value, ConfirmationPolicy.CRITICAL.value):
             if confirmation_token:
                 try:
                     self._manager.confirmations.consume(
@@ -147,19 +178,23 @@ class PluginAPI:
                         plugin_id=self._plugin_id,
                         capability=name,
                         permission=cap.permission,
-                        policy=cap.policy,
+                        policy=policy,
                         params=params,
                     )
                 except ConfirmationError as e:
                     raise GatewayBlocked('confirmation_invalid', str(e))
                 return self._invoke(cap, params)
             conf = self._manager.confirmations.create(
-                self._plugin_id, name, params, cap.permission, cap.policy)
+                self._plugin_id, name, params, cap.permission, policy)
             # Это НЕ ошибка: штатная механика подтверждения WRITE — ждём решения
             # пользователя, поэтому уровень info, чтобы строка не попадала в
             # фильтр «Ошибки и предупреждения» во вкладке Логи.
-            self.log('info', 'confirmation_required', capability=name, policy=cap.policy)
+            self.log('info', 'confirmation_required', capability=name, policy=policy)
             raise PendingConfirmation(conf)
+
+        if confirmation_token:
+            raise GatewayBlocked('unexpected_confirmation',
+                                 'this capability does not require confirmation')
 
         return self._invoke(cap, params)
 

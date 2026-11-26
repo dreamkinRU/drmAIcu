@@ -68,6 +68,15 @@ def initialize(ctx):
     def _sync(params):
         return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False), _sc(params, 'snapshot'))
 
+    def _rebase_state(params):
+        return repos_service.repo_rebase_state(_sc(params, 'path'))
+
+    def _rebase_continue(params):
+        return repos_service.repo_rebase_continue(_sc(params, 'path'))
+
+    def _rebase_abort(params):
+        return repos_service.repo_rebase_abort(_sc(params, 'path'))
+
     reg = ctx.register_capability
     reg('repos.diagnostics', 'repos.read', _diagnostics, 'auto',
         'Доступность Git CLI и версия')
@@ -99,6 +108,12 @@ def initialize(ctx):
         'Полный предварительный diff Sync без изменения index/worktree')
     reg('repos.sync', 'repos.sync', _sync, 'confirm',
         'Кнопка «Синхронизировать»: add -A -> commit -> pull --rebase -> push (одно подтверждение на весь пакет, замена sync.bat)')
+    reg('repos.rebase_state', 'repos.read', _rebase_state, 'auto',
+        'Диагностика активного rebase и конфликтующих файлов (READ)')
+    reg('repos.rebase_continue', 'repos.write', _rebase_continue, 'confirm',
+        'git rebase --continue после разрешения конфликтов (WRITE, подтверждение)')
+    reg('repos.rebase_abort', 'repos.write', _rebase_abort, 'confirm',
+        'git rebase --abort — отмена незавершённого rebase (WRITE, подтверждение)')
     return True
 
 

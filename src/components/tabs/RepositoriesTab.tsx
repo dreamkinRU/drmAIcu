@@ -30,6 +30,9 @@ import {
   reposStatus,
   reposSync,
   reposSyncPreview,
+  reposRebaseState,
+  reposRebaseContinue,
+  reposRebaseAbort,
   REPOS_PLUGIN_ID,
 } from '../../services/repos';
 
@@ -292,8 +295,19 @@ function OverviewSection({
   const [syncResult, setSyncResult] = useState<RepoSyncResult | null>(null);
   const [syncPreview, setSyncPreview] = useState<RepoSyncPreview | null>(null);
   const [previewAcknowledged, setPreviewAcknowledged] = useState(false);
+  const [rebaseState, setRebaseState] = useState<{ ok: boolean; active: boolean; conflicts: string[] } | null>(null);
   const [fileRel, setFileRel] = useState('');
   const [fileView, setFileView] = useState<RepoFileContent | null>(null);
+
+  // Диагностика незавершённого rebase (после конфликта при pull --rebase): READ-запрос
+  // при открытии вкладки Обзор и после каждой операции — баннер предлагает rebase --continue/--abort.
+  const refreshRebaseState = useCallback(async () => {
+    const state = await reposRebaseState(repoPath);
+    if (state.status === 'done' && state.result.ok) setRebaseState(state.result);
+    else setRebaseState(null);
+  }, [repoPath]);
+
+  useEffect(() => { void refreshRebaseState(); }, [refreshRebaseState]);
 
   const prepareSync = async () => {
     setBusy(true);
@@ -396,6 +410,23 @@ function OverviewSection({
     <div className="space-y-4">
       {pending && <ConfirmationBar pending={pending} busy={busy} clear={() => setPending(null)} />}
 
+      {rebaseState?.active && (
+        <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 space-y-2">
+          <h3 className="font-semibold text-amber-200">⚠️ Незавершённый rebase</h3>
+          {rebaseState.conflicts.length > 0 ? (
+            <div className="space-y-0.5">
+              {rebaseState.conflicts.map(file => <div key={file} className="text-xs font-mono text-amber-100">{file}</div>)}
+              <p className="text-xs text-gray-400">Разрешите конфликты в файлах, нажмите «git add -A», затем «rebase --continue».</p>
+            </div>
+          ) : <p className="text-xs text-gray-400">Конфликтующих файлов не обнаружено. Можно продолжить rebase или отменить его.</p>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <OpBtn busy={busy} label="rebase --continue" disabled={rebaseState.conflicts.length > 0}
+              onClick={() => { void runWrite('rebase --continue', t => reposRebaseContinue(repoPath, t)); void refreshRebaseState(); }} />
+            <OpBtn busy={busy} label="rebase --abort"
+              onClick={() => { void runWrite('rebase --abort', t => reposRebaseAbort(repoPath, t)); void refreshRebaseState(); }} />
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">🔄 Синхронизация (замена sync.bat)</h3>
@@ -478,13 +509,26 @@ function OverviewSection({
             )}
 
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}
-                onClick={requestSyncConfirmation}
-                className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/60 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40"
-              >
-                Перейти к подтверждению WRITE
-              </button>
+              {/* Изменений нет → нет и WRITE-подтверждения за коммит; Sync выполнит только
+                  pull --rebase → push. Кнопка нейтральная и честно объясняет, что будет
+                  сделано и что всё равно потребуется одно подтверждение WRITE (spec §6). */}
+              {syncPreview.snapshot_files.length === 0 ? (
+                <button
+                  disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}
+                  onClick={requestSyncConfirmation}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 border border-gray-600 text-gray-200 hover:border-gray-400 disabled:opacity-40"
+                >
+                  Продолжить без коммита (pull --rebase → push, потребуется подтверждение)
+                </button>
+              ) : (
+                <button
+                  disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}
+                  onClick={requestSyncConfirmation}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/60 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40"
+                >
+                  Перейти к подтверждению WRITE
+                </button>
+              )}
               <button
                 disabled={busy || !!pending}
                 onClick={() => { setSyncPreview(null); setPreviewAcknowledged(false); }}
@@ -496,8 +540,15 @@ function OverviewSection({
           </div>
         )}
 
+        {/* Результат Sync показывается ВСЕГДА после попытки — и при успехе, и при ошибке.
+            Заголовок честно называет итог, шаги показывают, что именно произошло. */}
         {syncResult && (
           <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-3 text-xs font-mono space-y-1">
+            <div className={`font-sans text-sm font-semibold ${syncResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+              {syncResult.ok
+                ? (syncResult.committed ? '✅ Синхронизация выполнена: создан commit и выполнен push' : '✅ Синхронизация выполнена без нового коммита (pull --rebase → push)')
+                : '❌ Синхронизация не завершена — см. упавший шаг ниже'}
+            </div>
             {syncResult.steps.map((s, i) => (
               <div key={i}>
                 <span className={s.ok === false ? 'text-red-400' : 'text-emerald-400'}>{s.ok === false ? '✗' : '✓'}</span>{' '}
@@ -562,6 +613,9 @@ function timeUtc3(dateIso: string): string {
 function HistorySection({ repoPath }: { repoPath: string }) {
   const [log, setLog] = useState<RepoLog | null>(null);
   const [err, setErr] = useState('');
+  // Современная замена нативного title-tooltip: клик по строке открывает модальное окно
+  // с полными деталями коммита (sha, дата/время, тема, тело, мердж-происхождение).
+  const [selected, setSelected] = useState<{ c: RepoCommit; merge?: RepoCommit } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -590,19 +644,62 @@ function HistorySection({ repoPath }: { repoPath: string }) {
   if (!log) return <div className="text-sm text-gray-500">загрузка истории…</div>;
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-1.5">
-      {rows.map(({ c, merge }) => {
-        const tip = c.body ? `${c.subject}\n\n${c.body}` : c.subject;
-        const fullTip = merge ? `${tip}\n\n\u2014\nвошёл через мерж\n${merge.sha} ${merge.subject}` : tip;
-        return (
-          <div key={c.sha} className="flex items-center gap-3 text-sm" title={fullTip}>
-            <span className="font-mono text-cyan-300 text-xs">{c.sha}</span>
-            <span className="text-gray-300 flex-1 truncate">{c.subject}</span>
-            <span className="text-gray-500 text-xs shrink-0">{c.date.slice(0, 10)} · {timeUtc3(c.date)}</span>
-          </div>
-        );
-      })}
+      {rows.map(({ c, merge }) => (
+        <button
+          key={c.sha}
+          type="button"
+          onClick={() => setSelected({ c, merge })}
+          className="w-full flex items-center gap-3 text-sm text-left rounded-lg px-2 py-1 -mx-2 hover:bg-gray-800/60 transition-colors"
+        >
+          <span className="font-mono text-cyan-300 text-xs">{c.sha}</span>
+          <span className="text-gray-300 flex-1 truncate">{c.subject}</span>
+          <span className="text-gray-500 text-xs shrink-0">{c.date.slice(0, 10)} · {timeUtc3(c.date)}</span>
+        </button>
+      ))}
       {log.commits.length === 0 && <p className="text-sm text-gray-500">коммитов нет (репозиторий пуст)</p>}
       {log.commits.length > 0 && rows.length === 0 && <p className="text-sm text-gray-500">обычных коммитов нет — только мержи</p>}
+      {selected && <CommitModal commit={selected.c} merge={selected.merge} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+// Модальное окно деталей коммита: полная тема, тело сообщения, sha, дата и время
+// (UTC+3), мердж-происхождение («вошёл через мердж»). Заменяет нативный title-tooltip:
+// закрытие — крестик, клик по фону или Escape.
+function CommitModal({ commit, merge, onClose }: { commit: RepoCommit; merge?: RepoCommit; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl rounded-xl border border-gray-700 bg-gray-900 shadow-2xl p-5 space-y-3"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start gap-3">
+          <h3 className="text-base font-bold text-white break-words">{commit.subject}</h3>
+          <button onClick={onClose} className="px-2 py-1 rounded-lg text-sm border border-gray-700 text-gray-400 hover:border-gray-500 shrink-0">✕</button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="font-mono text-cyan-300">{commit.sha}</span>
+          <span className="text-gray-500">·</span>
+          <span className="text-gray-400">{commit.date.slice(0, 10)} · {timeUtc3(commit.date)} (UTC+3)</span>
+        </div>
+        {commit.body ? (
+          <pre className="max-h-72 overflow-auto rounded-lg border border-gray-800 bg-gray-950 p-3 text-xs text-gray-300 whitespace-pre-wrap break-words font-mono">{commit.body}</pre>
+        ) : (
+          <p className="text-xs text-gray-500">Тело сообщения коммита пусто — есть только заголовок.</p>
+        )}
+        {merge && (
+          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3 space-y-1">
+            <p className="text-xs font-semibold text-cyan-300">Этот коммит вошёл в ветку через мердж</p>
+            <p className="text-xs text-gray-300 font-mono break-words">{merge.sha} · {merge.date.slice(0, 10)} · {timeUtc3(merge.date)} (UTC+3)</p>
+            <p className="text-xs text-gray-400 break-words">{merge.subject}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

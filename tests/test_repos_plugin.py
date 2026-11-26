@@ -268,3 +268,45 @@ def test_sync_exec_flow_through_manager(tmp_path):
     from core.plugins.api import GatewayBlocked
     with pytest.raises(GatewayBlocked):
         mgr.exec('repos', 'repos.sync', params, confirmation_token=cid)
+
+
+def test_rebase_recovery_reports_conflicts_and_requires_explicit_actions(tmp_path):
+    """Портировано из PR #41: конфликт при pull --rebase диагностируется, recovery — явные WRITE-действия."""
+    from plugins.repos import repos_service
+    remote = str(tmp_path / 'remote.git')
+    subprocess.run(['git', 'init', '--bare', '-b', 'main', remote], check=True, capture_output=True)
+    local = make_repo(tmp_path)
+    # подпись коммитов в тестовом окружении недоступна — отключаем явно
+    subprocess.run(['git', '-C', local, 'config', 'commit.gpgsign', 'false'], check=True, capture_output=True)
+    subprocess.run(['git', '-C', local, 'remote', 'add', 'origin', remote], check=True, capture_output=True)
+    subprocess.run(['git', '-C', local, 'push', '-u', 'origin', 'main'], check=True, capture_output=True)
+    other = str(tmp_path / 'other')
+    subprocess.run(['git', 'clone', remote, other], check=True, capture_output=True)
+    subprocess.run(['git', '-C', other, 'config', 'commit.gpgsign', 'false'], check=True, capture_output=True)
+    env = dict(os.environ, GIT_AUTHOR_NAME='tester', GIT_AUTHOR_EMAIL='tester@example.com',
+               GIT_COMMITTER_NAME='tester', GIT_COMMITTER_EMAIL='tester@example.com')
+    with open(os.path.join(other, 'README.md'), 'w', encoding='utf-8') as f:
+        f.write('remote version\n')
+    subprocess.run(['git', '-C', other, 'commit', '-am', 'remote change'], check=True, capture_output=True, env=env)
+    subprocess.run(['git', '-C', other, 'push', 'origin', 'main'], check=True, capture_output=True)
+    with open(os.path.join(local, 'README.md'), 'w', encoding='utf-8') as f:
+        f.write('local version\n')
+    subprocess.run(['git', '-C', local, 'commit', '-am', 'local change'], check=True, capture_output=True, env=env)
+
+    pulled = repos_service.repo_pull(local, rebase=True)
+    assert pulled['ok'] is False and pulled.get('rebase_conflict') is True
+    state = repos_service.repo_rebase_state(local)
+    assert state['ok'] and state['active'] and 'README.md' in state['conflicts']
+    # продолжить с неразрешёнными конфликтами нельзя — ошибка с путём исправления
+    blocked = repos_service.repo_rebase_continue(local)
+    assert blocked['ok'] is False and blocked.get('conflicts')
+    with open(os.path.join(local, 'README.md'), 'w', encoding='utf-8') as f:
+        f.write('resolved version\n')
+    subprocess.run(['git', '-C', local, 'add', 'README.md'], check=True, capture_output=True)
+    continued = repos_service.repo_rebase_continue(local)
+    assert continued['ok'], continued
+    final = repos_service.repo_rebase_state(local)
+    assert final['ok'] and final['active'] is False
+    # rebase --abort вне rebase — честная ошибка, а не fake-успех
+    aborted = repos_service.repo_rebase_abort(local)
+    assert aborted['ok'] is False and 'rebase' in aborted['error']
