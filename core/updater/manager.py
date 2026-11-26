@@ -45,6 +45,8 @@ def _run_git(args, timeout=30):
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "Never"
+    env["GIT_ALLOW_PROTOCOL"] = "https"
+    argv[2:2] = ["-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never"]
     try:
         proc = subprocess.run(
             argv, cwd=BASE, capture_output=True, text=True, encoding="utf-8",
@@ -159,8 +161,13 @@ def _validate_official_remote(remote):
     url = _git_ok(["remote", "get-url", remote])
     parsed = urlparse(url)
     path = (parsed.path or "").rstrip("/")
+    try:
+        port = parsed.port
+    except ValueError:
+        port = -1
     if (parsed.scheme != "https" or parsed.hostname != _ALLOWED_REMOTE_HOST
-            or parsed.username or parsed.password
+            or port not in (None, 443) or parsed.username or parsed.password
+            or parsed.query or parsed.fragment
             or path.removesuffix(".git") != _ALLOWED_REMOTE_PATH):
         raise UpdateError(
             "Обновление разрешено только из официального HTTPS-репозитория "
@@ -262,6 +269,20 @@ class UpdateManager:
                 plan["blockers"].append("Локальная ветка содержит собственные коммиты (ahead=%s)." % ahead)
             if not behind:
                 plan["blockers"].append("Нет входящих коммитов для обновления.")
+            if any(line.startswith("1 ") and len(line.split(" ", 3)) > 2
+                   and line.split(" ", 3)[2].startswith("S")
+                   and line.split(" ", 3)[2] != "N... " for line in before_status.splitlines()):
+                plan["blockers"].append("Обнаружены изменения submodule; автоматическое резервирование для них не поддерживается.")
+            plan["change_summary"] = _read_update_diff(old_head, remote_head)
+            if any(name == "package.json" for name in plan["change_summary"]["files"]) and not plan["change_summary"]["npm_lock_changed"]:
+                plan["blockers"].append("package.json изменён без package-lock.json — зависимости нельзя обновить воспроизводимо.")
+            migrations = [
+                name for name in plan["change_summary"]["files"]
+                if name.endswith(".sql") or "/migrations/" in ("/" + name) or name.startswith("migrations/") or name.startswith("alembic/")
+            ]
+            plan["migration_files"] = migrations
+            if migrations:
+                plan["blockers"].append("Обнаружены файлы миграций БД; требуется отдельная проверка миграций до обновления.")
             journal = plan
             _save_journal(journal)
             return {"success": True, "plan": journal}
@@ -309,7 +330,7 @@ class UpdateManager:
                 if new_head != journal["remote_head"]:
                     raise UpdateError("HEAD после fast-forward не совпал с целевой версией", "head_mismatch")
                 journal["new_head"] = new_head
-                journal["change_summary"] = _read_update_diff(journal["old_head"], new_head)
+                journal["change_summary"] = journal.get("change_summary") or _read_update_diff(journal["old_head"], new_head)
                 journal["state"] = "CODE_UPDATED"
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
