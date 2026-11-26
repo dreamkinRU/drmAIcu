@@ -161,6 +161,8 @@ def test_sync_requires_preview_and_confirms_exact_file_list():
     assert 'preview.result.files' in src
     assert 'reposSync(repoPath, commitMsg, token, expectedSnapshot, previewFiles)' in src
     assert 'Файлы: ${fileSummary}' in src
+    assert "previewFiles.join(', ')" in src
+    assert "previewFiles.slice(0, 12)" not in src
     service = _read(os.path.join(os.path.dirname(REPOS_TAB), '..', '..', 'services', 'repos.ts'))
     assert 'expected_snapshot: expectedSnapshot' in service
     assert 'expected_files: expectedFiles' in service

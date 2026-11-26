@@ -339,7 +339,7 @@ function OverviewSection({
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
       const fileSummary = previewFiles.length
-        ? previewFiles.slice(0, 12).join(', ') + (previewFiles.length > 12 ? ` и ещё ${previewFiles.length - 12}` : '')
+        ? previewFiles.join(', ')
         : 'локальных изменений нет';
       setPending({
         label: `Sync ${repoPath}: add -A → commit → pull --rebase → push. Файлы: ${fileSummary}`,
