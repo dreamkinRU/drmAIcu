@@ -16,6 +16,13 @@ import {
   uninstallPlugin,
   putPluginPermissions,
 } from '../services/plugins';
+import { POLL_INTERVALS } from '../utils/constants';
+
+// ANTI-JITTER: обновляем состояние только если данные реально изменились —
+// иначе каждый опрос рендерит новый массив и перерисовывает всех потребителей.
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 export function usePlugins() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -32,16 +39,29 @@ export function usePlugins() {
       fetchConfirmations(),
       fetchPluginActivity(),
     ]);
-    if (pl) setPlugins(pl);
-    if (cat) setCatalog(cat);
-    if (conf) setConfirmations(conf);
-    if (act) setActivity(act);
+    let changed = false;
+    setPlugins(prev => {
+      if (pl && !sameJson(pl, prev)) { changed = true; return pl; }
+      return prev;
+    });
+    setCatalog(prev => {
+      if (cat && !sameJson(cat, prev)) { changed = true; return cat; }
+      return prev;
+    });
+    setConfirmations(prev => {
+      if (conf && !sameJson(conf, prev)) { changed = true; return conf; }
+      return prev;
+    });
+    setActivity(prev => {
+      if (act && !sameJson(act, prev)) { changed = true; return act; }
+      return prev;
+    });
     setLoading(false);
   }, []);
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 5000);
+    const t = setInterval(refresh, POLL_INTERVALS.PLUGINS);
     return () => clearInterval(t);
   }, [refresh]);
 

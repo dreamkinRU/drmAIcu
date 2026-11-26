@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TabId } from './types';
-import { agentStore, POLL_INTERVALS } from './utils/constants';
+import { agentStore } from './utils/constants';
 import { storage, STORAGE_KEYS } from './utils/storage';
 import { useLogs } from './hooks/useLogs';
 import { useCodeIssues } from './hooks/useCodeIssues';
@@ -100,7 +100,6 @@ export default function App() {
     if (!saved || saved === 'models') return 'console';
     return saved;
   });
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [restarting, setRestarting] = useState(false);
   const [providerFilter, setProviderFilter] = useState<'all' | 'online' | 'offline'>('all');
   const [newPatchPopup, setNewPatchPopup] = useState<any | null>(null);
@@ -123,11 +122,8 @@ export default function App() {
     }
   }, [patches, newPatchPopup]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
+  // ПРИМЕЧАНИЕ: секундный таймер часов удалён — он вызывал setstate раз в 1 c и
+  // перерисовывал всё дерево приложения (дрожание элементов страницы).
   useEffect(() => {
     if ('scrollRestoration' in history) {
       history.scrollRestoration = 'manual';

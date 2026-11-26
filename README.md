@@ -1,6 +1,6 @@
 # drmAIcu - Universal AI-Guardian
 
-**Версия 3.9.0 Model** · Обновлено: 26.11.2026 · Единый источник версии — `version.py` · Включает PR #10–#28 и патчи 144–162
+**Версия 3.10.0 Model** · Обновлено: 26.11.2026 · Единый источник версии — `version.py` · Включает PR #10–#28 и патчи 144–162
 
 ## Описание
 
@@ -8,7 +8,7 @@
 
 ## Возможности
 
-### 🤖 AI-движок и провайдеры (v.3.9.0 Model)
+### 🤖 AI-движок и провайдеры (v.3.10.0 Model)
 - ✅ **9 провайдеров**: локальные **Ollama**, **Strata** (`127.0.0.1:47831/v1`), **LM Studio** (`localhost:1234/v1`), **Bionic AI** (`localhost:1235/v1`) и облачные **Groq**, **OpenRouter**, **Together AI**, **Hugging Face**, **Gemini**
 - ✅ **Единая вкладка «Провайдеры» (Master–Detail)**: живой опрос статусов каждые 5 секунд, тумблеры вкл/выкл, настройка хоста/порта/API-ключа и выбор активной модели в одном окне
 - ✅ **Автоподгрузка и фильтрация моделей**: автоматическое скрытие `embed`-моделей из списков локальных серверов
@@ -60,11 +60,15 @@ python -m pytest tests -v
 
 ## Документация
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — архитектура системы, эндпоинты и механизмы безопасности
-- [USER_GUIDE.md](USER_GUIDE.md) — руководство пользователя и формат патчей
-- [NEW_FEATURES.md](NEW_FEATURES.md) — описание возможностей по версиям
-- [CHANGELOG.md](CHANGELOG.md) — полная история изменений
-- Формат патчей — см. раздел PATCHMASTER в [USER_GUIDE.md](USER_GUIDE.md) и живой пример `patch/143.json`
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — архитектура системы, эндпоинты и механизмы безопасности
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — руководство пользователя и формат патчей
+- [docs/NEW_FEATURES.md](docs/NEW_FEATURES.md) — описание возможностей по версиям
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — полная история изменений
+- Формат патчей — см. раздел PATCHMASTER в [docs/USER_GUIDE.md](docs/USER_GUIDE.md) и живой пример `patch/143.json`
+- [docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md) — описание системы плагинов
+- [docs/PLUGIN_API_CONTRACT.md](docs/PLUGIN_API_CONTRACT.md) — контракт Plugin API для разработчиков
+
+Вся документация собрана в `docs/`, в корне — только этот README.md.
 
 ## Лицензия
 

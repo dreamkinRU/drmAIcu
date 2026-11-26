@@ -140,16 +140,24 @@ export const initialTasks: Task[] = [
   { id: 4, text: 'Тестирование мульти-провайдеров', done: true, priority: 'low', category: 'general' },
 ];
 
+// Вся документация собрана в docs/ (в корне — только README.md).
 export const mdFiles: MDFile[] = [
-  { name: 'CHANGELOG.md', description: 'Полная история изменений' },
-  { name: 'USER_GUIDE.md', description: 'Руководство пользователя' },
-  { name: 'NEW_FEATURES.md', description: 'Описание новых функций' },
-  { name: 'ARCHITECTURE.md', description: 'Архитектура системы' },
+  { name: 'README.md', description: 'Обзор проекта' },
+  { name: 'docs/ARCHITECTURE.md', description: 'Архитектура системы' },
+  { name: 'docs/USER_GUIDE.md', description: 'Руководство пользователя' },
+  { name: 'docs/NEW_FEATURES.md', description: 'Описание новых функций' },
+  { name: 'docs/CHANGELOG.md', description: 'Полная история изменений' },
+  { name: 'docs/PLUGIN_SYSTEM.md', description: 'Описание системы плагинов' },
+  { name: 'docs/PLUGIN_API_CONTRACT.md', description: 'Контракт Plugin API для разработчиков' },
 ];
 
+// ANTI-JITTER: увеличены интервалы опроса — частые обновления перерисовывали
+// страницу и «дёргали» элементы/счётчики каждые 3–10 секунд.
 export const POLL_INTERVALS = {
-  OLLAMA: 5000,
-  LOGS: 3000,
-  MODELS: 10000,
-  PATCHES: 5000,
+  PLUGINS: 15000,
+  OLLAMA: 15000,
+  LOGS: 10000,
+  MODELS: 30000,
+  PATCHES: 15000,
+  RESOURCES: 10000,
 } as const;
