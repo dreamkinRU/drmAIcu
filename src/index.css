@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@plugin "@tailwindcss/typography";
+
 /* Скрываем горизонтальный скроллбар у меню вкладок, но сохраняем возможность прокрутки */
 .overflow-x-auto {
   scrollbar-width: none;

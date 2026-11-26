@@ -20,6 +20,25 @@ export const REPOS_PLUGIN_ID = 'repos';
  * READ (auto) выполняется сразу; WRITE (confirm) возвращает confirmation_required —
  * повторный вызов с confirmation_token исполняет подтверждённую операцию.
  */
+
+// Бэкенд возвращает сырой текст 'execution failed: permission not granted' без указания,
+// какое именно разрешение нужно. READ-разрешения (repos.read) выдаются автоматически при
+// установке плагина, WRITE-разрешения (repos.write, repos.sync) — только вручную.
+// Превращаем сырье в понятное сообщение с путём исправления.
+function permissionDeniedError<T>(capability: string): ExecOutcome<T> {
+  const perm = capability.endsWith('.sync') ? 'repos.sync' : 'repos.write';
+  return {
+    status: 'error',
+    code: 'permission_denied',
+    error: (
+      `Действие «${capability}» заблокировано: не выдано WRITE-разрешение «${perm}» плагина repos. ` +
+      'READ-разрешения выдаются автоматически при установке, WRITE — только вручную. ' +
+      `Путь исправления: вкладка «Плагины» → раздел «Разрешения» → плагин repos → выдать «${perm}» → повторить действие. ` +
+      'Подробнее: вкладка «MD» → «USER_GUIDE.md» → раздел «Типовые ошибки и пути исправления».'
+    ),
+  };
+}
+
 export async function execCapability<T>(
   capability: string,
   params?: Record<string, unknown>,
@@ -40,7 +59,12 @@ export async function execCapability<T>(
     if (data.success && data.status === 'done') {
       return { status: 'done', result: data.result as T };
     }
-    return { status: 'error', error: String(data.error || 'ошибка выполнения'), code: String(data.code || 'exec_failed') };
+    const rawError = String(data.error || 'ошибка выполнения');
+    const errCode = String(data.code || 'exec_failed');
+    if (rawError.includes('permission not granted') || errCode === 'permission_denied') {
+      return permissionDeniedError<T>(capability);
+    }
+    return { status: 'error', error: rawError, code: errCode };
   } catch {
     return empty;
   }
