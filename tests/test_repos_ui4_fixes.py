@@ -64,7 +64,7 @@ def test_write_confirmation_button_hidden_when_no_changes():
     assert 'Продолжить без коммита' in src, \
         'вместо WRITE-кнопки — нейтральное продолжение (pull --rebase → push)'
     # нейтральная ветка идёт раньше amber-кнопки и является условием
-    assert src.index('Продолжить без коммита') < src.index('Перейти к подтверждению WRITE')
+    assert src.index('Продолжить без коммита') < src.index('Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)')
 
 
 # ==== 4. Rebase recovery (PR #41) ====
