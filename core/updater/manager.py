@@ -150,6 +150,17 @@ def _status_fingerprint():
     return {"digest": digest.hexdigest()}
 
 
+def _find_stash_oid(message):
+    result = _run_git(["reflog", "show", "--format=%H%x1f%s", "refs/stash"])
+    if not result["ok"]:
+        return None
+    for line in result["stdout"].splitlines():
+        sha, separator, subject = line.partition("\x1f")
+        if separator and subject == message and re.fullmatch(r"[0-9a-f]{40,64}", sha):
+            return sha
+    return None
+
+
 def _git_operation_in_progress():
     active = []
     for marker in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"):
@@ -486,15 +497,17 @@ class UpdateManager:
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
             if not journal.get("backup_oid"):
-                # Восстановление после аварии между stash push и записью backup_oid в журнал.
-                latest = _git_ok(["rev-parse", "--verify", "refs/stash"])
-                subject = _git_ok(["log", "-1", "--format=%s", latest])
-                if subject != journal.get("backup_message"):
-                    raise UpdateError(
-                        "Не удалось однозначно найти stash резервной копии. Ничего не изменено.",
-                        "backup_ambiguous", 423,
-                    )
-                journal["backup_oid"] = latest
+                # Ищем запись по уникальному сообщению в reflog: после аварии пользователь
+                # мог создать ещё один stash, поэтому refs/stash указывает уже не на наш.
+                found = _find_stash_oid(journal.get("backup_message", ""))
+                if not found:
+                    journal["state"] = "FAILED"
+                    journal.pop("backup_ref", None)
+                    journal.pop("backup_message", None)
+                    journal["error"] = "Резервный stash не был создан или больше не доступен. Локальные файлы не очищаются."
+                    _save_journal(journal)
+                    return {"success": True, "journal": journal}
+                journal["backup_oid"] = found
                 _save_journal(journal)
             backup_exists = _run_git(["cat-file", "-e", backup_ref + "^{commit}"])
             if not backup_exists["ok"]:
