@@ -89,6 +89,8 @@ def test_remote_urls_are_redacted_before_returning_to_ui(tmp_path):
     assert safe == 'https://github.com/org/repo.git'
     private_query = _sanitize_remote_url('https://example.com/repo?access_token=abc&branch=main')
     assert 'abc' not in private_query and 'branch=main' in private_query
+    signed = _sanitize_remote_url('https://example.com/repo?X-Amz-Signature=secret#token=fragment-secret')
+    assert 'secret' not in signed and 'fragment-secret' not in signed
 
 
 def test_worktree_is_accepted_as_repository(tmp_path):
@@ -144,3 +146,17 @@ def test_sync_snapshot_binds_remote_and_upstream(tmp_path):
                    cwd=repo, check=True, capture_output=True)
     result = repos_service.repo_sync(repo, 'must not push elsewhere', preview['snapshot'])
     assert result['ok'] is False and result['snapshot_changed'] is True
+
+
+def test_checkout_ui_requires_explicit_confirmation():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, 'src', 'components', 'tabs', 'RepositoriesTab.tsx')
+    with open(path, encoding='utf-8') as f:
+        source = f.read()
+    assert 'await reposCheckout(repoPath, branch, create, r.confirmation.id)' not in source
+    start = source.index('function BranchesSection(')
+    end = source.index('function ChangesSection(', start)
+    branches = source[start:end]
+    assert 'setPending({' in branches
+    assert 'ConfirmationBar pending={pending}' in branches
+    assert 'doCheckout(branch, create, t)' in branches

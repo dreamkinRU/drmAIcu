@@ -398,12 +398,12 @@ def _sanitize_remote_url(value):
         if parsed.port:
             host = '%s:%s' % (host, parsed.port)
         netloc = ('***@' if parsed.username is not None or parsed.password is not None else '') + host
-        sensitive = ('token', 'access_token', 'password', 'passwd', 'auth', 'key', 'secret')
+        sensitive = ('token', 'access_token', 'password', 'passwd', 'auth', 'key', 'secret', 'signature', 'credential', 'jwt', 'bearer')
         query = [
             (key, '***' if any(word in key.lower() for word in sensitive) else val)
             for key, val in parse_qsl(parsed.query, keep_blank_values=True)
         ]
-        return urlunsplit((parsed.scheme, netloc, parsed.path, urlencode(query), parsed.fragment))
+        return urlunsplit((parsed.scheme, netloc, parsed.path, urlencode(query), ''))
     except (ValueError, TypeError):
         return '[remote URL скрыт]'
 
