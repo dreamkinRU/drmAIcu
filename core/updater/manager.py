@@ -121,10 +121,10 @@ def _status_fingerprint():
     digest.update(staged_diff.encode("utf-8", errors="surrogatepass"))
     digest.update(unstaged_diff.encode("utf-8", errors="surrogatepass"))
     raw_paths = _git_ok(["ls-files", "--others", "--exclude-standard", "-z"])
-    files = [item for item in raw_paths.split("\\0") if item]
+    files = [item for item in raw_paths.split("\0") if item]
     root = os.path.realpath(BASE)
     for rel in sorted(files):
-        if os.path.isabs(rel) or any(part in ("", ".", "..") for part in rel.replace("\\\\", "/").split("/")):
+        if os.path.isabs(rel) or any(part in ("", ".", "..") for part in rel.replace("\\", "/").split("/")):
             raise UpdateError("Обнаружен небезопасный путь untracked-файла", "unsafe_untracked_path")
         full = os.path.join(root, rel)
         real = os.path.realpath(os.path.dirname(full))
@@ -345,7 +345,7 @@ class UpdateManager:
                     latest = _run_git(["rev-parse", "--verify", "refs/stash"])
                     if latest.get("ok"):
                         subject = _run_git(["log", "-1", "--format=%s", latest["stdout"].strip()])
-                        backup_created = subject.get("ok") and subject["stdout"].rstrip("\\r\\n") == journal.get("backup_message")
+                        backup_created = subject.get("ok") and subject["stdout"].rstrip("\r\n") == journal.get("backup_message")
                 if not backup_created:
                     journal.pop("backup_ref", None)
                     journal.pop("backup_message", None)
