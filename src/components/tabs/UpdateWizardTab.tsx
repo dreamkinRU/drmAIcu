@@ -50,7 +50,7 @@ export default function UpdateWizardTab() {
   const state = journal?.state || 'IDLE';
   const canApply = state === 'CHECKED' && !(journal?.blockers || []).length;
   const canPrepare = state === 'CODE_UPDATED';
-  const canRecover = ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING'].includes(state);
+  const canRecover = ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING', 'PREPARING'].includes(state);
   const steps = [
     { number: 1, title: 'Проверка и план', done: ['CHECKED', 'APPLYING', 'CODE_UPDATED', 'RESTORING', 'COMPLETED', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
     { number: 2, title: 'Резервирование и обновление', done: ['CODE_UPDATED', 'RESTORING', 'COMPLETED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
