@@ -1,8 +1,12 @@
 """Repos Plugin v1.2.1 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
 
-Политика автоматизации (замороженная, §2): READ-операции со статусом/историей/
-ветками выполняются автоматически; любые изменения (add/commit/pull/push/fetch/
-checkout/sync) — WRITE с подтверждением пользователя на каждое действие.
+Политика автоматизации (§2): READ-операции со статусом/историей/ветками
+выполняются автоматически; отдельные WRITE (add/commit/pull/push/fetch/checkout)
+— с подтверждением на каждое действие. Кнопка «Синхронизировать» (repos.sync) —
+БЕЗ подтверждения (решение заказчика от 26.11.2026, allowlist
+AUTO_CONFIRMED_CAPABILITIES в core/plugins/api.py): одно нажатие заменяет
+sync.bat (add -A → commit → pull --rebase → push); разрешение repos.sync
+по-прежнему выдаётся/отзывается в Плагинах → Разрешения.
 Авторизация в удалённых репозиториях — как в локальном git (Credential Manager /
 SSH): плагин не хранит и не запросает токены. CRITICAL-операций нет.
 """
@@ -175,8 +179,8 @@ def initialize(ctx):
         'Переключение/создание ветки (WRITE, подтверждение)')
     reg('repos.sync_preview', 'repos.read', _sync_preview, 'auto',
         'Полный предварительный diff Sync без изменения index/worktree')
-    reg('repos.sync', 'repos.sync', _sync, 'confirm',
-        'Кнопка «Синхронизировать»: add -A -> commit -> pull --rebase -> push (одно подтверждение на весь пакет, замена sync.bat)')
+    reg('repos.sync', 'repos.sync', _sync, 'auto',
+        'Кнопка «Синхронизировать»: add -A -> commit -> pull --rebase -> push (без подтверждения, решение заказчика 26.11.2026; замена sync.bat)')
     reg('repos.rebase_state', 'repos.read', _rebase_state, 'auto',
         'Диагностика активного rebase и конфликтующих файлов (READ)')
     reg('repos.rebase_continue', 'repos.write', _rebase_continue, 'confirm',

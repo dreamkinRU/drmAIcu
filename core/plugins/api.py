@@ -12,6 +12,23 @@ from .confirmations import ConfirmationError
 from .models import ConfirmationPolicy, PermissionLevel
 from .permissions import PermissionDenied, permission_level
 
+# Решение заказчика (26.11.2026): Sync выполняется одной кнопкой без подтверждения
+# WRITE (полная замена sync.bat). Явный allowlist: исключение касается только
+# перечисленных (plugin, permission) и не ослабляет минимум для остальных WRITE;
+# разрешение по-прежнему должно быть выдано в Плагинах → Разрешения.
+AUTO_CONFIRMED_CAPABILITIES = {
+    ('repos', 'repos.sync'),
+}
+
+def _minimum_policy(plugin_id, permission, level):
+    if (plugin_id, permission) in AUTO_CONFIRMED_CAPABILITIES:
+        return ConfirmationPolicy.AUTO.value
+    return {
+        PermissionLevel.READ.value: ConfirmationPolicy.AUTO.value,
+        PermissionLevel.WRITE.value: ConfirmationPolicy.CONFIRM.value,
+        PermissionLevel.CRITICAL.value: ConfirmationPolicy.CRITICAL.value,
+    }[level]
+
 
 class GatewayBlocked(Exception):
     def __init__(self, code, message):
@@ -117,11 +134,7 @@ class PluginAPI:
         if rec is not None and permission not in rec.permissions:
             raise ValueError('capability permission is not declared in plugin manifest: %s' % permission)
 
-        minimum = {
-            PermissionLevel.READ.value: ConfirmationPolicy.AUTO.value,
-            PermissionLevel.WRITE.value: ConfirmationPolicy.CONFIRM.value,
-            PermissionLevel.CRITICAL.value: ConfirmationPolicy.CRITICAL.value,
-        }[level]
+        minimum = _minimum_policy(self._plugin_id, permission, level)
         rank = {
             ConfirmationPolicy.AUTO.value: 0,
             ConfirmationPolicy.CONFIRM.value: 1,
@@ -143,11 +156,7 @@ class PluginAPI:
             level = permission_level(cap.permission)
         except ValueError as e:
             raise GatewayBlocked('invalid_permission', str(e)) from e
-        minimum = {
-            PermissionLevel.READ.value: ConfirmationPolicy.AUTO.value,
-            PermissionLevel.WRITE.value: ConfirmationPolicy.CONFIRM.value,
-            PermissionLevel.CRITICAL.value: ConfirmationPolicy.CRITICAL.value,
-        }[level]
+        minimum = _minimum_policy(self._plugin_id, cap.permission, level)
         rank = {
             ConfirmationPolicy.AUTO.value: 0,
             ConfirmationPolicy.CONFIRM.value: 1,

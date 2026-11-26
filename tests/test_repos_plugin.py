@@ -92,9 +92,9 @@ def test_entry_registers_capabilities_with_policies():
                  'repos.fetch', 'repos.checkout'):
         assert caps[name]['policy'] == 'confirm', name
         assert caps[name]['permission'] == 'repos.write'
-    # Sync — отдельное разрешение, один пакет
+    # Sync — отдельное разрешение, один пакет; без подтверждения (решение заказчика 26.11.2026)
     assert caps['repos.sync']['permission'] == 'repos.sync'
-    assert caps['repos.sync']['policy'] == 'confirm'
+    assert caps['repos.sync']['policy'] == 'auto'
 
 
 def test_diagnostics_and_status(tmp_path):
@@ -232,8 +232,8 @@ def test_git_allowlist_rejects_dangerous_commands(tmp_path):
 
 
 def test_sync_exec_flow_through_manager(tmp_path):
-    """Сквозной поток через реальный PluginManager: exec -> confirmation_required
-    -> confirm -> повторный exec с токеном -> пакет выполнен (замена sync.bat)."""
+    """Сквозной поток через реальный PluginManager: exec выполняет пакет сразу
+    (repos.sync — auto, решение заказчика 26.11.2026; замена sync.bat)."""
     from core.plugins.manager import PluginManager
 
     remote = str(tmp_path / 'remote.git')
@@ -265,13 +265,7 @@ def test_sync_exec_flow_through_manager(tmp_path):
 
     from plugins.repos import repos_service
     params = {'path': repo, 'message': 'e2e sync через gateway', 'snapshot': repos_service.repo_status(repo)['snapshot']}
-    out = mgr.exec('repos', 'repos.sync', params)
-    assert out['status'] == 'confirmation_required', out
-    cid = out['confirmation']['id']
-    assert out['confirmation']['policy'] == 'confirm'
-
-    # mgr.confirm(cid, True) исполняет подтверждённый пакет (документированный поток manager)
-    out2 = mgr.confirm(cid, True)
+    out2 = mgr.exec('repos', 'repos.sync', params)
     assert out2['status'] == 'done', out2
     result = out2['result']
     assert result['ok'], result
@@ -281,10 +275,10 @@ def test_sync_exec_flow_through_manager(tmp_path):
     # коммит реально ушёл в bare-remote
     out_log = subprocess.run(['git', 'log', '--oneline', '-1'], cwd=remote, capture_output=True, text=True, encoding='utf-8', errors='replace')
     assert 'e2e sync через gateway' in out_log.stdout
-    # повторный запуск с тем же токеном — честный отказ (токен одноразовый)
+    # auto-капабилити не принимает confirmation_token — честный отказ
     from core.plugins.api import GatewayBlocked
     with pytest.raises(GatewayBlocked):
-        mgr.exec('repos', 'repos.sync', params, confirmation_token=cid)
+        mgr.exec('repos', 'repos.sync', params, confirmation_token='stale-token')
 
 
 def test_rebase_recovery_reports_conflicts_and_requires_explicit_actions(tmp_path):

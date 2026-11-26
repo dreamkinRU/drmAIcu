@@ -504,7 +504,7 @@ function OverviewSection({
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          Сначала показывается diff всех staged, unstaged и новых файлов. Никакие файлы не индексируются и не коммитятся до отдельного подтверждения WRITE.
+          Сначала показывается diff всех staged, unstaged и новых файлов. Никакие файлы не индексируются и не коммитятся до нажатия кнопки «Синхронизировать» — по решению заказчика Sync выполняется одной кнопкой, без подтверждения WRITE.
         </p>
 
         {syncPreview && (
@@ -557,7 +557,7 @@ function OverviewSection({
             )}
 
             {syncPreview.stat && <p className="text-xs text-gray-500 whitespace-pre-wrap">{syncPreview.stat}</p>}
-            {syncPreview.truncated && <p className="text-xs text-amber-300">Diff обрезан по лимиту 1 000 000 символов. Перед продолжением требуется явное подтверждение.</p>}
+            {syncPreview.truncated && <p className="text-xs text-amber-300">Diff обрезан по лимиту 1 000 000 символов. Продолжайте, только если понимаете, что попадёт в Sync (отметьте чекбокс ниже).</p>}
             <div>
               <p className="text-xs text-gray-400 font-semibold mb-2">Полный diff (staged + unstaged + untracked)</p>
               {syncPreview.diff ? (
@@ -591,16 +591,16 @@ function OverviewSection({
             )}
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Изменений нет → нет и WRITE-подтверждения за коммит; Sync выполнит только
-                  pull --rebase → push. Кнопка нейтральная и честно объясняет, что будет
-                  сделано и что всё равно потребуется одно подтверждение WRITE (spec §6). */}
+              {/* Изменений нет → нет и коммита; Sync выполнит только pull --rebase → push.
+                  Обе кнопки выполняют Sync сразу, без подтверждения WRITE (решение
+                  заказчика 26.11.2026): preview diff остаётся этапом осознанности. */}
               {syncPreview.snapshot_files.length === 0 ? (
                 <button
                   disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}
                   onClick={requestSyncConfirmation}
                   className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 border border-gray-600 text-gray-200 hover:border-gray-400 disabled:opacity-40"
                 >
-                  Продолжить без коммита (pull --rebase → push, потребуется подтверждение)
+                  Продолжить без коммита (pull --rebase → push, без подтверждения)
                 </button>
               ) : (
                 <button
@@ -608,7 +608,7 @@ function OverviewSection({
                   onClick={requestSyncConfirmation}
                   className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/60 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40"
                 >
-                  Перейти к подтверждению WRITE
+                  Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)
                 </button>
               )}
               <button

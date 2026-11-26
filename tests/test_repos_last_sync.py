@@ -119,9 +119,7 @@ def test_last_sync_persists_across_manager_restart(tmp_path):
 
     from plugins.repos import repos_service
     params = {'path': repo, 'message': 'persist sync', 'snapshot': repos_service.repo_status(repo)['snapshot']}
-    out = mgr.exec('repos', 'repos.sync', params)
-    assert out['status'] == 'confirmation_required', out
-    out2 = mgr.confirm(out['confirmation']['id'], True)
+    out2 = mgr.exec('repos', 'repos.sync', params)  # repos.sync — auto (решение заказчика 26.11.2026)
     assert out2['status'] == 'done' and out2['result']['ok'], out2
 
     got = mgr.exec('repos', 'repos.last_sync', {'path': repo})
@@ -173,9 +171,7 @@ def test_failed_sync_is_recorded_with_error(tmp_path):
 
     from plugins.repos import repos_service
     params = {'path': repo, 'message': 'will fail at rebase', 'snapshot': repos_service.repo_status(repo)['snapshot']}
-    out = mgr.exec('repos', 'repos.sync', params)
-    cid = out['confirmation']['id']
-    out2 = mgr.confirm(cid, True)
+    out2 = mgr.exec('repos', 'repos.sync', params)  # repos.sync — auto
     assert out2['status'] == 'done', out2
     result = out2['result']
     assert result['ok'] is False and result.get('rebase_conflict') is True, result

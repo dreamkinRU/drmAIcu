@@ -124,7 +124,7 @@ def test_sync_overview_requires_preview_before_write_confirmation():
     src = _read(REPOS_TAB)
     assert 'reposSyncPreview(repoPath)' in src
     assert 'Полный diff (staged + unstaged + untracked)' in src
-    assert 'Перейти к подтверждению WRITE' in src
+    assert 'Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)' in src
     assert 'syncPreview.complete' in src
     assert 'syncPreview.truncated' in src
     assert 'onClick={() => runSync()}' not in src

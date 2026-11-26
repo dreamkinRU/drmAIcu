@@ -111,8 +111,7 @@ def test_sync_result_persists_with_hints_in_last_sync(tmp_path):
     rows = [{'permission': row['permission'], 'granted': True} for row in mgr.permissions_status('repos')['permissions']]
     mgr.permissions_put('repos', rows)
 
-    out = mgr.exec('repos', 'repos.sync', {'path': repo, 'message': ''})
-    out2 = mgr.confirm(out['confirmation']['id'], True)
+    out2 = mgr.exec('repos', 'repos.sync', {'path': repo, 'message': ''})  # repos.sync — auto
     assert out2['status'] == 'done' and out2['result']['ok'], out2
     got = mgr.exec('repos', 'repos.last_sync', {'path': repo})
     res = got['result']['result']
