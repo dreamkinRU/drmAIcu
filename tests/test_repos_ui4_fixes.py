@@ -90,3 +90,27 @@ def test_rebase_capabilities_registered_and_allowlisted():
     assert 'core.editor=:' in gs, 'разрешён только неинтерактивный префикс -c core.editor=: для rebase'
     ts = _read(REPOS_TS)
     assert 'reposRebaseState' in ts and 'reposRebaseContinue' in ts and 'reposRebaseAbort' in ts
+
+
+
+# ==== 5. Персистентный последний результат Sync (state плагина, §9.1) ====
+
+def test_last_sync_persisted_in_plugin_state_and_restored_by_ui():
+    """Результат Sync переживает обновление страницы: repos.sync пишет его в
+    state плагина (ctx.save_state), repos.last_sync (READ/auto) возвращает,
+    UI восстанавливает панель при монтировании и показывает время попытки."""
+    plugin = _read(REPOS_PLUGIN)
+    assert "reg('repos.last_sync', 'repos.read'" in plugin, \
+        'repos.last_sync — READ, auto (доступен без подтверждения)'
+    assert '_remember_sync' in plugin and 'last_sync_by_path' in plugin, \
+        'результат Sync сохраняется в state плагина'
+    assert 'ctx.save_state' in plugin and 'ctx.load_state' in plugin
+
+    tab = _read(REPOS_TAB)
+    assert 'refreshLastSync' in tab, 'панель результата восстанавливается при монтировании'
+    assert 'reposLastSync(' in tab, 'UI запрашивает последний результат Sync с бэкенда'
+    assert 'последняя попытка' in tab, 'показывается время последней попытки Sync'
+
+    # capability есть в service-слое frontend
+    svc = _read(REPOS_TS)
+    assert 'repos.last_sync' in svc

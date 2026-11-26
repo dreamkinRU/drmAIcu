@@ -10,6 +10,7 @@ import {
   RepoStatus,
   RepoSyncResult,
   RepoSyncPreview,
+  RepoLastSyncInfo,
   SimpleGitResult,
 } from '../types';
 
@@ -119,6 +120,10 @@ export const reposSyncPreview = (path: string) =>
 
 export const reposSync = (path: string, message: string, snapshot: string, token?: string) =>
   execCapability<RepoSyncResult>('repos.sync', { path, message, snapshot }, token);
+
+/** Последний результат Sync (персистентно в state плагина — переживает обновление страницы). */
+export const reposLastSync = (path: string) =>
+  execCapability<RepoLastSyncInfo>('repos.last_sync', { path });
 
 /** Состояние незавершённого rebase и конфликтующие файлы (READ). */
 export const reposRebaseState = (path: string) =>

@@ -42,7 +42,8 @@ def make_ctx(manager_cls=None):
             self.activity = ActivityJournal(os.path.join(tmp, 'activity'))
             self.events = EventBus()
             self.registry = type('R', (), {'get': lambda self, pid: None})()
-            self.settings = type('S', (), {'merged': lambda self, pid, schema: {}})()
+            from core.plugins.settings import SettingsManager
+            self.settings = SettingsManager(os.path.join(tmp, 'state'))
 
     module = load_entry('repos', PLUGIN_DIR, 'plugin.py')
     ctx = PluginAPI(FakeManager(), 'repos')
