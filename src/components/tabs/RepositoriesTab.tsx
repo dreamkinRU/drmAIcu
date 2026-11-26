@@ -378,9 +378,11 @@ function OverviewSection({
       setSyncPreview(null);
       setPreviewAcknowledged(false);
       if (r.result.ok) {
-        setNotice({ kind: 'ok', text: r.result.committed
-          ? 'синхронизировано: commit ' + (r.result.commit_sha || '') + ' доведён до ' + r.result.head
-          : 'синхронизировано без нового коммита, HEAD: ' + r.result.head });
+        const pulledN = r.result.pulled_count ?? 0;
+        setNotice({ kind: 'ok', text: '✅ актуально: локально = GitHub (ветка ' + (r.result.steps.find(x => x.branch)?.branch || '') + ')' +
+          (r.result.committed ? '; отправлен commit ' + (r.result.commit_sha || '') : '; локальных изменений не было') +
+          (pulledN > 0 ? '; получено с remote: ' + pulledN + ' коммит(ов)' : '; новых коммитов с remote не пришло') +
+          '; HEAD: ' + r.result.head });
       } else {
         setNotice({ kind: 'err', text: r.result.error || 'синхронизация не завершена' });
       }
@@ -624,11 +626,37 @@ function OverviewSection({
             Заголовок честно называет итог, шаги показывают, что именно произошло. */}
         {syncResult && (
           <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-3 text-xs font-mono space-y-1">
-            <div className={`font-sans text-sm font-semibold ${syncResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>
-              {syncResult.ok
-                ? (syncResult.committed ? '✅ Синхронизация выполнена: создан commit и выполнен push' : '✅ Синхронизация выполнена без нового коммита (pull --rebase → push)')
-                : '❌ Синхронизация не завершена — см. упавший шаг ниже'}
-            </div>
+            {syncResult.ok ? (
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/50 p-3 font-sans space-y-1.5">
+                <div className="text-base font-bold text-emerald-300">
+                  ✅ Актуально: локальная копия = GitHub
+                </div>
+                <div className="text-emerald-200/90">
+                  ветка <span className="font-mono text-cyan-300">{syncResult.steps.find(x => x.branch)?.branch || '?'}</span> · HEAD <span className="font-mono text-cyan-300">{syncResult.head}</span> — всё, что сейчас есть в GitHub, уже у тебя
+                </div>
+                <div className="text-gray-300">
+                  {syncResult.committed
+                    ? <>↑ Отправлено: commit <span className="font-mono text-cyan-300">{syncResult.commit_sha}</span> (add -A → commit → pull --rebase → push)</>
+                    : '· локальных изменений не было — новый commit не требовался'}
+                </div>
+                <div className={syncResult.pulled_count ? 'text-amber-200' : 'text-gray-500'}>
+                  {syncResult.pulled_count
+                    ? <>↓ Получено с remote: {syncResult.pulled_count} коммит(ов):</>
+                    : '· новых коммитов с remote не пришло'}
+                </div>
+                {!!syncResult.pulled_count && (
+                  <ul className="ml-4 list-disc space-y-0.5 text-gray-300">
+                    {(syncResult.pulled || []).map(c => (
+                      <li key={c.sha}><span className="font-mono text-cyan-300">{c.sha}</span> {c.subject}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <div className="font-sans text-sm font-semibold text-red-300">
+                ❌ Синхронизация не завершена — см. упавший шаг ниже
+              </div>
+            )}
             {lastSyncAt && (
               <div className="text-gray-500 font-sans">
                 последняя попытка: {lastSyncAt.slice(0, 10)} · {timeUtc3(lastSyncAt)} (UTC+3)

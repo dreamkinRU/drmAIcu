@@ -352,6 +352,8 @@ export interface RepoSyncResult {
   error?: string;
   rebase_conflict?: boolean;
   push_rejected?: boolean;
+  pulled?: Array<{ sha: string; subject: string }>;
+  pulled_count?: number;
 }
 
 /** PATCHMASTER-мост (только чтение): журнал патчей и их статус синхронизации. */

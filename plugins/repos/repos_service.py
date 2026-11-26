@@ -617,11 +617,26 @@ def repo_sync(path, message, expected_snapshot=None):
     else:
         steps.append({'step': 'add', 'ok': True, 'skipped': True, 'note': 'изменений нет'})
 
+    hb = _r(['rev-parse', 'HEAD'], path)
+    head_before = hb.get('stdout', '').strip() if hb.get('ok') else ''
+
     rp = repo_pull(path, rebase=True)
     steps.append({'step': 'pull --rebase', **{k: v for k, v in rp.items() if k in ('ok', 'error')}})
     if not rp.get('ok'):
         return {'ok': False, 'error': rp.get('error', 'pull failed'),
                 'rebase_conflict': rp.get('rebase_conflict', False), 'steps': steps}
+
+    # Что пришло с remote (для честного уведомления «Актуально»): HEAD сдвинулся —
+    # перечисляем коммиты между old..new (получено pull --rebase).
+    ha = _r(['rev-parse', 'HEAD'], path)
+    head_after = ha.get('stdout', '').strip() if ha.get('ok') else ''
+    pulled = []
+    if head_before and head_after and head_before != head_after:
+        gl = _r(['log', '--pretty=format:%h%x09%s', '-n', '20', head_before + '..' + head_after], path)
+        if gl.get('ok') and (gl.get('stdout') or '').strip():
+            for line in gl['stdout'].strip().splitlines():
+                parts = line.split('\t', 1)
+                pulled.append({'sha': parts[0], 'subject': parts[1] if len(parts) > 1 else ''})
 
     merged = last_merged_pr(path)
     steps.append({'step': 'merged_pr_check', 'ok': True, 'last_merged': merged})
@@ -634,7 +649,8 @@ def repo_sync(path, message, expected_snapshot=None):
 
     r = _r(['log', '-1', '--oneline'], path)
     return {'ok': True, 'steps': steps, 'head': r.get('stdout', '').strip(),
-            'committed': changes, 'commit_sha': steps[-4]['sha'] if (changes and len(steps) >= 4) else None}
+            'committed': changes, 'commit_sha': steps[-4]['sha'] if (changes and len(steps) >= 4) else None,
+            'pulled': pulled, 'pulled_count': len(pulled)}
 
 
 def last_merged_pr(path):
