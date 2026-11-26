@@ -1,6 +1,6 @@
 # HANDOFF — передача работы над drmAIcu (для нового исполнителя)
 
-**Актуально для:** v.3.16.0 Model · 26.11.2026 · PR #10–#53 смержены · открытых PR нет · этот документ — точка входа нового исполнителя (человека или AI-ассистента).
+**Актуально для:** v.3.16.1 Model · 26.11.2026 · PR #10–#53 смержены · открытых PR нет · этот документ — точка входа нового исполнителя (человека или AI-ассистента).
 
 **Изменение политики (решение заказчика, 26.11.2026):** repos.sync — auto, Sync выполняется одной кнопкой без подтверждения WRITE (allowlist AUTO_CONFIRMED_CAPABILITIES в core/plugins/api.py); остальные WRITE — по-прежнему confirm.
 
@@ -38,6 +38,7 @@
 
 ## 5. Текущее состояние (26.11.2026)
 
+- 3.16.1: из Обзора вкладки Репозитории убраны блоки «Отдельные операции» и «Просмотр файла» (решение заказчика; backend-capabilities не тронуты).
 - 3.16.0: Sync без подтверждения WRITE (решение заказчика): allowlist AUTO_CONFIRMED_CAPABILITIES в core/plugins/api.py — только (repos, repos.sync); UI-тексты и тесты обновлены (test_sync_no_confirmation.py).
 - 3.15.0: repos.sync возвращает refresh_hints и pulled_files — панель «✅ Актуально» честно подсказывает, что sync.bat раньше делал сам: npm install при изменении package.json/package-lock.json, npm run build/перезапуск при изменениях src/, перезапуск панели при .py; команды автоматически не запускаются (замороженная политика WRITE-only-through-gateway), тесты tests/test_sync_refresh_hints.py.
 - v.3.14.0: REST-слой `main.py` декомпозирован в `api/` — `routes_system` (статус/версия/логи/ресурсы/md/рестарт), `routes_agents` (task/agents/pipelines/context), `routes_providers` (модели/ping/config), `routes_patches` (обёртка PATCHMASTER), `routes_project` (скан/очистка/архив/история), общие зависимости — `api/shared.py`. `main.py` — точка сборки (CORS, монтаж роутеров, UI); `/api/patches/verify-108` теперь проверяет конвейер и в `api/routes_patches.py`. Поведение эндпоинтов не менялось (код перенесён 1:1); попутно исправлен паттерн classify_file для одноразовых `*_*.py`-скриптов и цифры тестов в README/ARCHITECTURE (88 → 300+).
