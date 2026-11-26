@@ -223,3 +223,22 @@ def test_apply_recovery_rejects_tampered_backup(tmp_path, monkeypatch):
     assert 'backup checksum mismatch' in result['failed'][0]
     assert target.read_text(encoding='utf-8') == 'new value\n'
     assert (tmp_path / 'patch_journal.json').exists()
+
+
+def test_stats_reports_valid_unrecovered_journal_as_locked(tmp_path, monkeypatch):
+    _configure_engine(tmp_path, monkeypatch)
+    (tmp_path / 'patch_journal.json').write_text(json.dumps({
+        'op': 'apply',
+        'patch_id': 'pending-apply',
+        'steps': [{
+            'path': str(tmp_path / 'module.py'), 'tgt': 'module.py',
+            'existed': False, 'backs': [], 'backup_sha': None, 'done': False,
+        }],
+    }), encoding='utf-8')
+
+    result = patch_engine.stats()
+
+    assert result['locked'] is True
+    assert result['journal_locked'] is True
+    assert result['journal_pending'] is True
+    assert 'recover_journal' in result['journal_lock_reason']

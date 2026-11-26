@@ -1206,13 +1206,18 @@ def stats():
     ps = list_patches()
     man = load_manifest()
     ap = len([p for p in ps if p['is_applied']])
-    load_journal()
+    journal = load_journal()
+    journal_pending = journal is not None
+    journal_reason = JOURNAL_LOCK or (
+        'незавершённая транзакция требует recover_journal()' if journal_pending else ''
+    )
     return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap, 'version': _ENGINE_VERSION,
             'errors': len([p for p in ps if p.get('error')]),
             'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),
             'rollbacks_count': len(man.get('rollbacks', [])),
             'backups_count': len(os.listdir(BACKUP_DIR)),
-            'locked': bool(MANIFEST_LOCK or JOURNAL_LOCK),
-            'journal_locked': bool(JOURNAL_LOCK),
-            'journal_lock_reason': JOURNAL_LOCK}
+            'locked': bool(MANIFEST_LOCK or journal_reason),
+            'journal_locked': bool(journal_reason),
+            'journal_pending': journal_pending,
+            'journal_lock_reason': journal_reason}
