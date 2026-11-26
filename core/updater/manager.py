@@ -313,12 +313,17 @@ class UpdateManager:
     def state(self):
         with _LOCK:
             journal = _load_journal()
+            if journal.get("state") == "RESTART_REQUIRED" and journal.get("process_pid") != os.getpid():
+                journal["state"] = "COMPLETED"
+                journal["restart_verified_pid"] = os.getpid()
+                journal["restart_verified_at"] = _now()
+                _save_journal(journal)
             return {"success": True, "journal": journal}
 
     def check(self):
         with _LOCK, _repo_lock():
             journal = _load_journal()
-            if journal.get("state") in ("APPLYING", "CODE_UPDATED", "RESTORING", "PREPARING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"):
+            if journal.get("state") in ("APPLYING", "CODE_UPDATED", "RESTORING", "PREPARING", "RESTART_REQUIRED", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"):
                 raise UpdateError(
                     "Есть незавершённая операция (%s). Сначала завершите восстановление." % journal.get("state"),
                     "operation_incomplete", 423,
@@ -536,7 +541,11 @@ class UpdateManager:
                         raise UpdateError("%s: не удалось запустить команду: %s" % (label, exc), "environment_launch_failed", 503)
                 journal["environment_steps"] = results
                 journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed"))
-                journal["state"] = "COMPLETED"
+                if journal["restart_required"]:
+                    journal["process_pid"] = os.getpid()
+                    journal["state"] = "RESTART_REQUIRED"
+                else:
+                    journal["state"] = "COMPLETED"
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
             except Exception as exc:
