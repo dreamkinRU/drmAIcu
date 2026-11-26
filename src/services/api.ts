@@ -451,7 +451,9 @@ export async function fetchBackendLogs(): Promise<LogEntry[]> {
 
 export async function loadMDFile(name: string): Promise<{ content: string; error?: string }> {
   try {
-    const res = await fetch(`/api/md/${encodeURIComponent(name)}`);
+    // Докам может быть вложенный путь (docs/X.md) — кодируем посегментно, иначе '/' станет %2F
+    const enc = name.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`/api/md/${enc}`);
     const data = await res.json();
     if (data.error) return { content: '', error: data.error };
     return { content: data.content || '' };
@@ -462,7 +464,8 @@ export async function loadMDFile(name: string): Promise<{ content: string; error
 
 export async function saveMDFile(name: string, content: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`/api/md/${encodeURIComponent(name)}` , {
+    const enc = name.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`/api/md/${enc}` , {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),

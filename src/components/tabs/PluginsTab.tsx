@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   PluginActivityEntry,
   PluginCatalogEntry,
@@ -56,11 +56,41 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'activity', label: 'Активность' },
 ];
 
+const PLUGIN_DOCS_FILE = 'docs/PLUGIN_SYSTEM.md';
+
 export default function PluginsTab(props: PluginsTabProps) {
   const { plugins, catalog, confirmations, activity, loading, notice, setNotice } = props;
   const [section, setSection] = useState<Section>('installed');
   const [permissionRow, setPermissionRow] = useState<PluginPermissionRow | null>(null);
   const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [docsText, setDocsText] = useState('');
+  const [docsError, setDocsError] = useState('');
+  const [docsLoading, setDocsLoading] = useState(false);
+
+  // Кнопка «Описание системы плагинов»: читает docs/PLUGIN_SYSTEM.md через
+  // разрешённый /api/md-маршрут (только *.md в корне и docs/).
+  const toggleDocs = useCallback(async () => {
+    if (docsOpen) { setDocsOpen(false); return; }
+    setDocsOpen(true);
+    setDocsLoading(true);
+    setDocsError('');
+    try {
+      const res = await fetch('/api/md/docs/PLUGIN_SYSTEM.md');
+      const data = await res.json();
+      if (data.error) {
+        setDocsText('');
+        setDocsError(data.error);
+      } else {
+        setDocsText(data.content || '');
+      }
+    } catch {
+      setDocsText('');
+      setDocsError('Ошибка сети: не удалось загрузить описание системы плагинов');
+    } finally {
+      setDocsLoading(false);
+    }
+  }, [docsOpen]);
 
   useEffect(() => {
     if (section === 'permissions' && selectedPlugin) {
@@ -74,6 +104,17 @@ export default function PluginsTab(props: PluginsTabProps) {
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h2 className="text-2xl font-bold">🔌 Плагины</h2>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={toggleDocs}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              docsOpen
+                ? 'bg-emerald-500/15 border-emerald-400/70 text-emerald-300'
+                : 'bg-gray-800/50 border-gray-700/60 text-gray-300 hover:border-gray-600'
+            }`}
+          >
+            📖 Описание системы плагинов
+          </button>
           {SECTIONS.map(s => (
             <button
               key={s.id}
@@ -90,6 +131,28 @@ export default function PluginsTab(props: PluginsTabProps) {
           ))}
         </div>
       </div>
+
+      {docsOpen && (
+        <div className="rounded-xl border border-emerald-500/40 bg-gray-900/60 p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-bold text-emerald-300">📖 Описание системы плагинов — {PLUGIN_DOCS_FILE}</h3>
+            <button
+              type="button"
+              onClick={toggleDocs}
+              className="px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:border-gray-500"
+            >
+              ✕ Закрыть
+            </button>
+          </div>
+          {docsLoading ? (
+            <p className="text-sm text-gray-400">Загрузка…</p>
+          ) : docsError ? (
+            <p className="text-sm text-red-300">Ошибка загрузки: {docsError}</p>
+          ) : (
+            <pre className="whitespace-pre-wrap text-sm text-gray-200 font-mono max-h-[60vh] overflow-y-auto leading-relaxed">{docsText}</pre>
+          )}
+        </div>
+      )}
 
       {notice && (
         <div

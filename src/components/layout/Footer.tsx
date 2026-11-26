@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { TabId } from '../../types';
 import Tooltip from '../ui/Tooltip';
 import { fetchSystemResources, SystemResources } from '../../services/api';
+import { POLL_INTERVALS } from '../../utils/constants';
 
 interface FooterProps {
   setActiveTab: (tab: TabId) => void;
@@ -17,10 +18,19 @@ export default function Footer({ setActiveTab, ollamaProcesses, restarting, onRe
     let active = true;
     const load = async () => {
       const data = await fetchSystemResources();
-      if (active && data) setSysRes(data);
+      if (active && data) {
+        // ANTI-JITTER: обновляем счётчики памяти только при реальном изменении —
+        // иначе каждое обновление перерисовывает индикаторы и они «прыгают».
+        setSysRes(prev =>
+          prev && prev.ram_used_gb === data.ram_used_gb && prev.ram_total_gb === data.ram_total_gb &&
+          prev.vram_used_gb === data.vram_used_gb && prev.vram_total_gb === data.vram_total_gb
+            ? prev
+            : data
+        );
+      }
     };
     load();
-    const id = setInterval(load, 3000);
+    const id = setInterval(load, POLL_INTERVALS.RESOURCES);
     return () => {
       active = false;
       clearInterval(id);

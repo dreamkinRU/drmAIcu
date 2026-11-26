@@ -24,10 +24,14 @@ export function usePatches(addLog: (entry: any) => void) {
   const [patchFilter, setPatchFilter] = useState<'all' | 'pending' | 'applied' | 'errors'>('all');
   const [patchLog, setPatchLog] = useState<string[]>([]);
 
+  // ANTI-JITTER: setState только при реальном изменении — иначе каждый опрос
+  // создаёт новый список и перерисовывает вкладку без причины.
+  const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
   const loadPatches = async () => {
     const [list, stats] = await Promise.all([loadPatchList(), loadPatchStats()]);
-    setPatches(list);
-    setPatchStats(stats);
+    setPatches(prev => (sameJson(prev, list) ? prev : list));
+    setPatchStats(prev => (sameJson(prev, stats) ? prev : stats));
   };
 
   const previewPatch = async (patch: PatchInfo) => {

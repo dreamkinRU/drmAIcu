@@ -39,9 +39,40 @@ interface RepositoriesTabProps {
 
 const PATH_STORAGE_KEY = 'drmAIcu.repos.defaultPath';
 
+// STICKY ERRORS: ошибка сохраняется в sessionStorage — страница её дёргает
+// перерисовками/перезагрузками, но текст ошибки остаётся видимым, пока
+// пользователь не закроет его сам или пока новое действие не покажет результат.
+const NOTICE_KEY = 'drmAIcu.repos.notice';
+
+function loadStickyNotice(): Notice {
+  try {
+    const raw = sessionStorage.getItem(NOTICE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.kind === 'ok' || parsed.kind === 'err' || parsed.kind === 'warn') && typeof parsed.text === 'string') {
+        return parsed;
+      }
+    }
+  } catch { /* повреждённые данные игнорируем */ }
+  return null;
+}
+
+function storeNotice(n: Notice) {
+  try {
+    if (n) sessionStorage.setItem(NOTICE_KEY, JSON.stringify(n));
+    else sessionStorage.removeItem(NOTICE_KEY);
+  } catch { /* домашний режим без sessionStorage — просто не сохраняем */ }
+}
+
 export default function RepositoriesTab({ plugins, refresh, setActiveTab }: RepositoriesTabProps) {
   const [section, setSection] = useState<Section>('overview');
-  const [notice, setNotice] = useState<Notice>(null);
+  const [notice, setNoticeState] = useState<Notice>(() => loadStickyNotice());
+  // Липкое уведомление: каждая установка <state> и снятие синхронно пишутся в
+  // sessionStorage — ошибка не пропадает ни при перерисовке, ни при перезагрузке.
+  const setNotice = useCallback((n: Notice) => {
+    setNoticeState(n);
+    storeNotice(n);
+  }, []);
   const [pathInput, setPathInput] = useState<string>(() => localStorage.getItem(PATH_STORAGE_KEY) || '');
   const repoPath = pathInput.trim().replace(/\/+$/, '');
 
@@ -94,7 +125,7 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab }: Repo
               ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
               : 'bg-red-500/10 border-red-500/40 text-red-300'
           }`}
-          onClick={() => setNotice(null)}
+          onClick={() => { setNoticeState(null); storeNotice(null); }}
         >
           {notice.text}
         </div>

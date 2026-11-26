@@ -14,12 +14,16 @@ export function useOllama() {
   const [newModelName, setNewModelName] = useState('');
   const [isPulling, setIsPulling] = useState(false);
 
+  // ANTI-JITTER: setState только при реальном изменении данных — иначе каждый
+  // опрос создаёт новый массив и перерисовывает страницу без причины.
+  const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
   const checkOllama = async () => {
     const result = await checkOllamaApi(ollamaUrl);
     if (result.online) {
-      setOllamaStatus('online');
-      setOllamaModels(result.models);
-      setOllamaProcesses(result.processes);
+      setOllamaStatus(prev => (prev === 'online' ? prev : 'online'));
+      setOllamaModels(prev => (sameJson(prev, result.models) ? prev : result.models));
+      setOllamaProcesses(prev => (sameJson(prev, result.processes) ? prev : result.processes));
       setProviders(prev =>
         prev.map(p =>
           p.name === 'Ollama'
@@ -28,9 +32,9 @@ export function useOllama() {
         )
       );
     } else {
-      setOllamaStatus('offline');
-      setOllamaModels([]);
-      setOllamaProcesses([]);
+      setOllamaStatus(prev => (prev === 'offline' ? prev : 'offline'));
+      setOllamaModels(prev => (prev.length === 0 ? prev : []));
+      setOllamaProcesses(prev => (prev.length === 0 ? prev : []));
       setProviders(prev =>
         prev.map(p => (p.name === 'Ollama' ? { ...p, status: 'offline', models: 0 } : p))
       );
@@ -39,7 +43,7 @@ export function useOllama() {
 
   const loadInstalledModels = async () => {
     const models = await loadInstalledModelsApi();
-    setInstalledModels(models);
+    setInstalledModels(prev => (sameJson(prev, models) ? prev : models));
   };
 
   const pullModel = async () => {
