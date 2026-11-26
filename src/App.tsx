@@ -26,6 +26,7 @@ import TasksTab from './components/tabs/TasksTab';
 import PatchesTab from './components/tabs/PatchesTab';
 import PluginsTab from './components/tabs/PluginsTab';
 import RepositoriesTab from './components/tabs/RepositoriesTab';
+import UpdateWizardTab from './components/tabs/UpdateWizardTab';
 import { usePlugins } from './hooks/usePlugins';
 import { restartSystem as restartSystemApi, loadAppVersionApi } from './services/api';
 
@@ -406,6 +407,8 @@ export default function App() {
             addLog={addLog}
           />
         )}
+
+        {activeTab === 'updates' && <UpdateWizardTab />}
 
         {activeTab === 'tasks' && (
           <TasksTab
