@@ -54,3 +54,4 @@ restart.flag
 
 # === Plugin System runtime (secrets, registry, journal) ===
 data/plugins/
+.pytest_atomicio_tmp/

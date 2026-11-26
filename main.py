@@ -389,6 +389,27 @@ def s_logs():
     return JSONResponse({'logs': merged})
 
 
+@app.delete('/api/logs/issues')
+def s_logs_clear_issues():
+    """Кнопка «Очистить ошибки» во вкладке «Логи».
+
+    Честное поведение: удаляем из журнала только записи уровня error/warn —
+    как из ядра (LOG), так и из журналов активности плагинов
+    (manager.clear_issues → data/plugins/activity/*.jsonl). Info/action записи
+    остаются. Без этого пользователь не может убрать старые уже исправленные ошибки.
+    """
+    before = len(LOG)
+    LOG[:] = [e for e in LOG if e.get('level') not in ('error', 'warn')]
+    removed = before - len(LOG)
+    try:
+        mgr = get_manager()
+        if mgr is not None:
+            removed += mgr.clear_issues()
+    except Exception:
+        pass  # логи ядра мы уже очистили — не отдаём 500 из-за плагинов
+    return JSONResponse({'success': True, 'removed': removed})
+
+
 @app.post('/api/logs')
 async def s_log_add(payload: dict):
     """Принять ошибку/событие от UI и сохранить в общий LOG.

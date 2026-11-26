@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LogEntry } from '../types';
 import { initialLogs, POLL_INTERVALS } from '../utils/constants';
-import { fetchBackendLogs, postBackendLog } from '../services/api';
+import { clearBackendLogIssues, fetchBackendLogs, postBackendLog } from '../services/api';
 
 export function useLogs() {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
@@ -37,5 +37,14 @@ export function useLogs() {
     return () => clearInterval(interval);
   }, []);
 
-  return { logs, setLogs, addLog, refreshLogs };
+  // Кнопка «Очистить ошибки»: убирает из локального журнала (и с бэкенда через
+  // DELETE /api/logs/issues) все записи error/warn — старые уже исправленные ошибки
+  // перестают мозолить глаза, info/действия остаются. После очистки ротация
+  // (refreshLogs) их не вернёт, потому что на бэкенде их больше нет.
+  const clearIssues = async () => {
+    await clearBackendLogIssues();
+    setLogs(prev => prev.filter(l => l.level !== 'error' && l.level !== 'warn'));
+  };
+
+  return { logs, setLogs, addLog, refreshLogs, clearIssues };
 }

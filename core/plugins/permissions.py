@@ -5,6 +5,8 @@ import threading
 
 from .models import PermissionLevel
 
+from .atomicio import atomic_write_json
+
 CRITICAL_PERMISSIONS = {
     'repos.remote.delete',
     'repos.history.drop',
@@ -52,10 +54,8 @@ class PermissionManager:
 
     def _save(self):
         with self._lock:
-            tmp = self.path + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump({k: sorted(v) for k, v in self._grants.items()}, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, self.path)
+            # atomic_write_json: retry при WinError 5 (антивирус/облако держат файл)
+            atomic_write_json(self.path, {k: sorted(v) for k, v in self._grants.items()})
 
     def declared_ok(self, manifest_permissions):
         """Раскладка заявленных разрешений по уровням."""
