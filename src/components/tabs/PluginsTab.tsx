@@ -340,6 +340,7 @@ function PermissionsSection({
   onSave: (id: string, rows: { permission: string; granted: boolean }[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (row) {
       const d: Record<string, boolean> = {};
@@ -347,6 +348,23 @@ function PermissionsSection({
       setDraft(d);
     }
   }, [row]);
+
+  // Клик по бейджу = сразу PUT на бэкенд (раньше менялся только локальный draft,
+  // и после обновления страницы сбрасывался, если не нажать «Сохранить разрешения»).
+  const togglePermission = async (permission: string) => {
+    if (!row || saving) return;
+    const next = { ...draft, [permission]: !draft[permission] };
+    setDraft(next);
+    setSaving(true);
+    try {
+      await onSave(
+        row.plugin,
+        row.permissions.map(pp => ({ permission: pp.permission, granted: Boolean(next[pp.permission]) })),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (plugins.length === 0) {
     return (
@@ -385,29 +403,24 @@ function PermissionsSection({
               </div>
               <button
                 type="button"
-                onClick={() => setDraft(prev => ({ ...prev, [p.permission]: !prev[p.permission] }))}
-                className={`px-3 py-1 rounded-lg text-xs font-bold border ${
-                  draft[p.permission]
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                    : 'bg-gray-800 border-gray-700 text-gray-400'
+                disabled={!row}
+                onClick={() => togglePermission(p.permission)}
+                title="Клик — переключить и сохранить сразу"
+                className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
+                  saving
+                    ? 'opacity-60 cursor-wait'
+                    : draft[p.permission]
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
                 }`}
               >
                 {draft[p.permission] ? 'выдано' : 'нет'}
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() =>
-              onSave(
-                row.plugin,
-                row.permissions.map(p => ({ permission: p.permission, granted: Boolean(draft[p.permission]) })),
-              )
-            }
-            className="px-4 py-2 rounded-lg text-xs font-bold bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25"
-          >
-            Сохранить разрешения
-          </button>
+          <p className="text-xs text-gray-500 pt-1">
+            Изменение сохраняется на бэкенде сразу при клике по бейджу «выдано/нет».
+          </p>
         </div>
       )}
     </div>

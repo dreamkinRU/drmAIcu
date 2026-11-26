@@ -1,6 +1,6 @@
 {
   "name": "drmaicu",
-  "version": "3.11.1",
+  "version": "3.11.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,8 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.4",
-    "recharts": "^2.10.0"
+    "recharts": "^2.10.0",
+    "remark-breaks": "^4.0.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.20",

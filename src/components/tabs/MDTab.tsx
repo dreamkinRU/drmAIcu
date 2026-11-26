@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { MDFile } from '../../types';
 import { mdFiles } from '../../utils/constants';
 
@@ -96,8 +97,10 @@ export default function MDTab({
           )}
           {view === 'preview' ? (
             <div className="h-96 overflow-y-auto rounded-lg bg-gray-800 border border-gray-700 px-5 py-4">
+              {/* remark-breaks: одиночный перевод строки -> <br>, как в GitHub-комментариях,
+                  иначе строки без пустой строки между абзацами склеиваются в "простыню" */}
               <div className="prose prose-invert max-w-none prose-headings:text-white prose-a:text-cyan-300 prose-code:text-emerald-300 prose-pre:bg-gray-900 prose-strong:text-white">
-                <ReactMarkdown>{mdContent}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkBreaks]}>{mdContent}</ReactMarkdown>
               </div>
             </div>
           ) : (
