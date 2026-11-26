@@ -501,12 +501,18 @@ class UpdateManager:
                 # мог создать ещё один stash, поэтому refs/stash указывает уже не на наш.
                 found = _find_stash_oid(journal.get("backup_message", ""))
                 if not found:
-                    journal["state"] = "FAILED"
-                    journal.pop("backup_ref", None)
-                    journal.pop("backup_message", None)
-                    journal["error"] = "Резервный stash не был создан или больше не доступен. Локальные файлы не очищаются."
+                    current_head = _git_ok(["rev-parse", "HEAD"])
+                    if current_head == journal.get("old_head") and _worktree_status():
+                        journal["state"] = "FAILED"
+                        journal.pop("backup_ref", None)
+                        journal.pop("backup_message", None)
+                        journal["error"] = "Резервный stash не был создан; исходные локальные файлы остались в рабочем дереве."
+                        _save_journal(journal)
+                        return {"success": True, "journal": journal}
+                    journal["state"] = "RECOVERY_REQUIRED"
+                    journal["error"] = "Backup stash не найден в reflog, хотя рабочее дерево уже очищено или HEAD изменён. Автоматические действия остановлены; требуется ручная Git-диагностика."
                     _save_journal(journal)
-                    return {"success": True, "journal": journal}
+                    raise UpdateError(journal["error"], "backup_lost", 423)
                 journal["backup_oid"] = found
                 _save_journal(journal)
             backup_exists = _run_git(["cat-file", "-e", backup_ref + "^{commit}"])
