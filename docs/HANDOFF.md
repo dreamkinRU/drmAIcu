@@ -1,19 +1,19 @@
 # HANDOFF — передача работы над drmAIcu (для нового исполнителя)
 
-**Актуально для:** v.3.13.1 Model · 26.11.2026 · PR #10–#52 смержены · открытых PR нет · этот документ — точка входа нового исполнителя (человека или AI-ассистента).
+**Актуально для:** v.3.14.0 Model · 26.11.2026 · PR #10–#53 смержены · открытых PR нет · этот документ — точка входа нового исполнителя (человека или AI-ассистента).
 
 ---
 
 ## 1. Что это за проект
 
-- drmAIcu — локальная панель «Universal AI-Guardian»: FastAPI (через NiceGUI `app`) + PATCHMASTER (`patch_engine.py`, двухфазные атомарные транзакции патчей) + AI-движок (`agent_engine.py`) на бэкенде; React 18 + Vite + Tailwind 4 на фронтенде (`src/`).
+- drmAIcu — локальная панель «Universal AI-Guardian»: FastAPI (через NiceGUI `app`) + PATCHMASTER (`patch_engine.py`, двухфазные атомарные транзакции патчей) + AI-движок (`agent_engine.py`) на бэкенде; REST-слой разнесён по доменам в `api/` (`routes_system`, `routes_agents`, `routes_providers`, `routes_patches`, `routes_project`, общие зависимости — `api/shared.py`); React 18 + Vite + Tailwind 4 на фронтенде (`src/`).
 - Система плагинов v1.0 (`core/plugins/`) + встроенный плагин Репозитории (`plugins/repos/`): работа с локальными git-репозиториями (status/diff/commit/push/pull --rebase/sync/rebase-recovery) через Capability Gateway с подтверждениями.
 - Заказчик работает на Windows, проект лежит в облачной папке `G:\Mega\git\drmAIcu` — это источник половины специфических багов (см. §7).
 
 ## 2. Как запустить и проверить
 
 - Полный запуск: `launcher.bat` (watchdog: Python Core на :8080 + Vite dev на :5173 + браузер). Только бэкенд: `python main.py`.
-- Тесты бэкенда: `python -m pytest tests -q` (на 3.13.1 — 300 passed, 1 skipped).
+- Тесты бэкенда: `python -m pytest tests -q` (на 3.14.0 — 300 passed, 1 skipped).
 - Фронтенд: `npx tsc --noEmit` (typecheck), `npm run build` (сборка). CI гоняет pytest на ubuntu-latest **и** windows-latest + typecheck/build — см. `.github/workflows/ci.yml`.
 - Версия в шапке UI приходит из `GET /api/version` (значение `version.py`); после обновления у заказчика **обязателен** `npm run build`, иначе он видит старую сборку.
 
@@ -36,7 +36,7 @@
 
 ## 5. Текущее состояние (26.11.2026)
 
-- v.3.13.1: всё из PR #52 смержено в main, CI зелёный (ubuntu+windows), 300 passed/1 skipped.
+- v.3.14.0: REST-слой `main.py` декомпозирован в `api/` — `routes_system` (статус/версия/логи/ресурсы/md/рестарт), `routes_agents` (task/agents/pipelines/context), `routes_providers` (модели/ping/config), `routes_patches` (обёртка PATCHMASTER), `routes_project` (скан/очистка/архив/история), общие зависимости — `api/shared.py`. `main.py` — точка сборки (CORS, монтаж роутеров, UI); `/api/patches/verify-108` теперь проверяет конвейер и в `api/routes_patches.py`. Поведение эндпоинтов не менялось (код перенесён 1:1); попутно исправлен паттерн classify_file для одноразовых `*_*.py`-скриптов и цифры тестов в README/ARCHITECTURE (88 → 300+).
 - Недавно сделано: панель «✅ Актуально: локальная копия = GitHub» после Sync (pulled_count + список коммитов с remote); WinError 5 resilience (retry 20×1с ≈16с, registry живёт в памяти при заблокированном файле, `data_warnings` в `/api/plugins` + health + янтарный баннер в Плагинах); fail-fast самопроверка плагина Репозитории при разноверсионных файлах (v1.2.1); версия в шапке из `/api/version` (PR #50).
 - Открытых PR нет. Локальные черновые ветки `vibe/docs-ux-9018bf`, `vibe/github-manager-9018bf` — старьё, не мержить без ревизии.
 - Данные плагинов: `data/plugins/` (registry/permissions/confirmations/state/secrets/activity) — в .gitignore.
