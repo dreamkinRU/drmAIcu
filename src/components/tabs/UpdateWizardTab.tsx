@@ -86,6 +86,12 @@ export default function UpdateWizardTab() {
         </div>
       )}
 
+      {journal?.error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-200 whitespace-pre-wrap">
+          <b>Последняя ошибка из журнала:</b> {journal.error}
+        </div>
+      )}
+
       <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-cyan-300 font-bold">01</span>
