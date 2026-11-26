@@ -63,8 +63,9 @@ def _error(exc):
 
 
 @router.get("/api/updates/state")
-def update_state():
+def update_state(request: Request):
     try:
+        _check_local_browser_request(request)
         return JSONResponse(manager.state())
     except Exception as exc:
         return _error(exc)
