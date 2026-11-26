@@ -1,4 +1,4 @@
-"""Repos Plugin v1.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
+"""Repos Plugin v1.1.0 — точка входа (контракт docs/PLUGIN_API_CONTRACT.md).
 
 Политика автоматизации (замороженная, §2): READ-операции со статусом/историей/
 ветками выполняются автоматически; любые изменения (add/commit/pull/push/fetch/
@@ -63,7 +63,7 @@ def initialize(ctx):
                                            create=bool((params or {}).get('create')))
 
     def _sync(params):
-        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False))
+        return repos_service.repo_sync(_sc(params, 'path'), _sc(params, 'message', required=False), _sc(params, 'snapshot'))
 
     reg = ctx.register_capability
     reg('repos.diagnostics', 'repos.read', _diagnostics, 'auto',

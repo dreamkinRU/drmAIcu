@@ -11,8 +11,8 @@ import subprocess
 
 GIT_COMMANDS = {
     'status', 'branch', 'remote', 'log', 'diff', 'fetch', 'pull', 'push',
-    'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base', 'config',
-    'add', 'commit', 'switch',
+    'checkout', 'rev-parse', 'show-ref', 'ls-files', 'merge-base',
+    'add', 'commit', 'switch', 'check-ref-format',
 }
 GIT_GLOBAL_FLAGS = {'--version', '--help'}
 
@@ -42,8 +42,11 @@ def git_version():
 def validate_repo_path(path):
     if not path or not os.path.isdir(path):
         raise GitCommandRejected('repo path does not exist: %s' % path)
-    if not os.path.isdir(os.path.join(path, '.git')):
-        raise GitCommandRejected('not a git repository: %s' % path)
+    marker = os.path.join(path, '.git')
+    # В обычном репозитории .git — каталог; в worktree/submodule — файл.
+    # Проверка остаётся дешёвой: фактическую валидность Git подтвердит сама команда.
+    if not (os.path.isdir(marker) or os.path.isfile(marker)):
+        raise GitCommandRejected('not a git working tree: %s' % path)
 
 
 def run_git(args, cwd=None, timeout=DEFAULT_TIMEOUT):

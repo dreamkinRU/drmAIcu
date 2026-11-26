@@ -304,12 +304,12 @@ function OverviewSection({
 
   const runSync = async (token?: string) => {
     setBusy(true);
-    const r = await reposSync(repoPath, commitMsg, token);
+    const r = await reposSync(repoPath, commitMsg, status.snapshot, token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
       const cid = r.confirmation.id;
       setPending({
-        label: `Синхронизировать ${repoPath}: add -A → commit → pull --rebase → push (одно подтверждение на весь пакет)`,
+        label: `Sync ${repoPath}: ${status.branch} → ${status.upstream || `origin/${status.branch}`}; ${status.snapshot_files.length} файл(ов) — ${status.snapshot_files.slice(0, 8).join(', ')}${status.snapshot_files.length > 8 ? ` и ещё ${status.snapshot_files.length - 8}` : ''}. add -A → commit → pull --rebase → push`,
         cid,
         run: t => runSync(t),
       });
@@ -327,15 +327,21 @@ function OverviewSection({
       reload();
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
+    } else {
+      setNotice({ kind: 'err', text: 'синхронизация: сервер вернул неожиданный статус' });
     }
   };
 
-  const runWrite = async (label: string, call: (token?: string) => ReturnType<typeof reposFetch>) => {
+  const runWrite = async (label: string, call: (token?: string) => ReturnType<typeof reposFetch>, token?: string) => {
     setBusy(true);
-    const r = await call();
+    const r = await call(token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      setPending({ label: `${label} ${repoPath} (WRITE — подтвердите)`, cid: r.confirmation.id, run: t => { void call(t); } });
+      setPending({
+        label: `${label} ${repoPath} (WRITE — подтвердите)`,
+        cid: r.confirmation.id,
+        run: t => { void runWrite(label, call, t); },
+      });
       return;
     }
     if (r.status === 'done') {
@@ -345,6 +351,8 @@ function OverviewSection({
       reload();
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
+    } else {
+      setNotice({ kind: 'err', text: `${label}: сервер вернул неожиданный статус` });
     }
   };
 
@@ -526,19 +534,28 @@ function BranchesSection({
 
   useEffect(() => { load(); }, [load]);
 
-  const doCheckout = async (branch: string, create: boolean) => {
+  const [pending, setPending] = useState<{ label: string; cid: string; run: (token: string) => void } | null>(null);
+
+  const doCheckout = async (branch: string, create: boolean, token?: string) => {
     setBusy(true);
-    const r = await reposCheckout(repoPath, branch, create);
+    const r = await reposCheckout(repoPath, branch, create, token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      await reposCheckout(repoPath, branch, create, r.confirmation.id);
+      setPending({
+        label: `${create ? 'Создать и переключиться на' : 'Переключиться на'} ветку ${branch} в ${repoPath}`,
+        cid: r.confirmation.id,
+        run: t => { void doCheckout(branch, create, t); },
+      });
+      return;
+    }
+    if (r.status === 'done' && r.result.ok) {
       setNotice({ kind: 'ok', text: `ветка ${create ? 'создана и активирована' : 'активирована'}: ${branch}` });
-    } else if (r.status === 'done' && r.result.ok) {
-      setNotice({ kind: 'ok', text: `ветка активирована: ${branch}` });
+    } else if (r.status === 'done') {
+      setNotice({ kind: 'err', text: r.result.error || 'checkout не выполнен' });
     } else if (r.status === 'error') {
       setNotice({ kind: 'err', text: r.error });
     } else {
-      setNotice({ kind: 'err', text: 'checkout не выполнен' });
+      setNotice({ kind: 'err', text: 'checkout не выполнен: неожиданный статус ответа' });
     }
     load();
     reload();
@@ -546,6 +563,7 @@ function BranchesSection({
 
   return (
     <div className="space-y-4">
+      {pending && <ConfirmationBar pending={pending} busy={busy} clear={() => setPending(null)} />}
       <RepoInfoCard repoPath={repoPath} status={status} />
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">🌿 Ветки</h3>
@@ -607,12 +625,16 @@ function ChangesSection({
   // Обновить список файлов и диффы + общий статус (сомнений в том, откуда данные, не остётся).
   const refresh = useCallback(() => { load(); reload(); }, [load, reload]);
 
-  const write = async (label: string, call: (token?: string) => ReturnType<typeof reposAdd>) => {
+  const write = async (label: string, call: (token?: string) => ReturnType<typeof reposAdd>, token?: string) => {
     setBusy(true);
-    const r = await call();
+    const r = await call(token);
     setBusy(false);
     if (r.status === 'confirmation_required' && r.confirmation) {
-      setPending({ label: `${label} ${repoPath} (WRITE — подтвердите)`, cid: r.confirmation.id, run: t => { void call(t); } });
+      setPending({
+        label: `${label} ${repoPath} (WRITE — подтвердите)`,
+        cid: r.confirmation.id,
+        run: t => { void write(label, call, t); },
+      });
       return;
     }
     if (r.status === 'done') {
@@ -620,6 +642,7 @@ function ChangesSection({
       if (res.ok) setNotice({ kind: 'ok', text: `${label}: OK${res.sha ? ' (' + res.sha + ')' : ''}` });
       else setNotice({ kind: 'err', text: res.error || `${label}: ошибка` });
     } else if (r.status === 'error') setNotice({ kind: 'err', text: r.error });
+    else setNotice({ kind: 'err', text: `${label}: сервер вернул неожиданный статус` });
     load();
     reload();
   };

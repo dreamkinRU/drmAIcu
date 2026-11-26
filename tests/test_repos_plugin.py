@@ -246,7 +246,8 @@ def test_sync_exec_flow_through_manager(tmp_path):
         rows.append({'permission': row['permission'], 'granted': True})
     mgr.permissions_put('repos', rows)
 
-    params = {'path': repo, 'message': 'e2e sync через gateway'}
+    from plugins.repos import repos_service
+    params = {'path': repo, 'message': 'e2e sync через gateway', 'snapshot': repos_service.repo_status(repo)['snapshot']}
     out = mgr.exec('repos', 'repos.sync', params)
     assert out['status'] == 'confirmation_required', out
     cid = out['confirmation']['id']

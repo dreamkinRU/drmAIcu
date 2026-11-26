@@ -9,6 +9,9 @@
 никогда не превращается в fake-успех.
 """
 import os
+import stat
+import hashlib
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from . import git_service
 
@@ -18,6 +21,61 @@ LOG_LIMIT_MAX = 200
 
 def _r(args, path=None, timeout=git_service.DEFAULT_TIMEOUT):
     return git_service.run_git(args, cwd=path, timeout=timeout)
+
+
+def repo_sync_snapshot(path):
+    """Хэширует текущее содержимое изменённых/новых файлов для подтверждения Sync."""
+    validate(path)
+    commands = (
+        ['diff', '--name-only', '-z', '--no-renames'],
+        ['diff', '--cached', '--name-only', '-z', '--no-renames'],
+        ['ls-files', '--others', '--exclude-standard', '-z'],
+    )
+    names = set()
+    for args in commands:
+        result = _r(args, path)
+        if not result['ok']:
+            return {'ok': False, 'error': result['stderr'].strip() or 'cannot build sync snapshot'}
+        names.update(os.fsdecode(item) for item in result['stdout'].split('\0') if item)
+    branch = _r(['rev-parse', '--abbrev-ref', 'HEAD'], path)
+    head = _r(['rev-parse', 'HEAD'], path)
+    upstream = _r(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], path)
+    remotes = _r(['remote', '-v'], path)
+    digest = hashlib.sha256()
+    digest.update((branch.get('stdout', '').strip() + '\0').encode('utf-8'))
+    digest.update((head.get('stdout', '').strip() + '\0').encode('ascii', errors='ignore'))
+    digest.update((upstream.get('stdout', '').strip() + '\0').encode('utf-8'))
+    # Сырые URL участвуют только в хэше: в snapshot/ответ API они не возвращаются.
+    digest.update(remotes.get('stdout', '').encode('utf-8', errors='replace'))
+    files = sorted(names)
+    for rel in files:
+        full = os.path.join(path, rel)
+        digest.update(rel.encode('utf-8', errors='surrogatepass'))
+        digest.update(b'\0')
+        try:
+            info = os.lstat(full)
+        except FileNotFoundError:
+            digest.update(b'DELETED\0')
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            digest.update(b'LINK\0')
+            digest.update(os.readlink(full).encode('utf-8', errors='surrogatepass'))
+        elif stat.S_ISREG(info.st_mode):
+            digest.update(('MODE:%s:' % stat.S_IMODE(info.st_mode)).encode('ascii'))
+            digest.update(b'FILE\0')
+            with open(full, 'rb') as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                    digest.update(chunk)
+        elif stat.S_ISDIR(info.st_mode):
+            digest.update(b'DIR\0')
+            if os.path.exists(os.path.join(full, '.git')):
+                sub_head = _r(['rev-parse', 'HEAD'], full)
+                sub_status = _r(['status', '--porcelain=v1', '-z'], full)
+                digest.update(sub_head.get('stdout', '').strip().encode('ascii', errors='ignore'))
+                digest.update(sub_status.get('stdout', '').encode('utf-8', errors='replace'))
+        else:
+            digest.update(('MODE:%s\0' % info.st_mode).encode('ascii'))
+    return {'ok': True, 'snapshot': digest.hexdigest(), 'files': files}
 
 
 def repo_status(path):
@@ -54,9 +112,13 @@ def repo_status(path):
         entries.append({'code': code, 'file': file,
                         'staged': code[0] not in (' ', '?'),
                         'unstaged': code[1] != ' ' if code[0] != '?' else True})
+    snapshot = repo_sync_snapshot(path)
+    if not snapshot.get('ok'):
+        return {'ok': False, 'error': snapshot.get('error', 'cannot build repository snapshot')}
     return {'ok': True, 'path': path, 'branch': branch, 'upstream': upstream,
             'ahead': ahead, 'behind': behind,
-            'changed': bool(entries), 'entries': entries}
+            'changed': bool(entries), 'entries': entries,
+            'snapshot': snapshot['snapshot'], 'snapshot_files': snapshot['files']}
 
 
 def repo_log(path, limit=30):
@@ -107,7 +169,7 @@ def repo_remote(path):
         parts = line.split()
         if len(parts) >= 2 and parts[0] not in seen:
             seen.add(parts[0])
-            remotes.append({'name': parts[0], 'url': parts[1]})
+            remotes.append({'name': parts[0], 'url': _sanitize_remote_url(parts[1])})
     return {'ok': True, 'remotes': remotes}
 
 
@@ -126,15 +188,36 @@ def read_file(path, rel, max_bytes=READ_FILE_MAX_BYTES):
     if not rel or rel.startswith('/') or '..' in os.path.normpath(rel).split(os.sep) or '\\' in str(rel):
         return {'ok': False, 'error': 'недопустимый путь файла'}
     full = os.path.normpath(os.path.join(path, rel))
-    if not (full == os.path.normpath(path) or full.startswith(os.path.normpath(path) + os.sep)):
-        return {'ok': False, 'error': 'путь вне репозитория'}
-    if not os.path.isfile(full):
+    root_real = os.path.realpath(path)
+    full_real = os.path.realpath(full)
+    try:
+        inside = os.path.commonpath([root_real, full_real]) == root_real
+    except ValueError:
+        inside = False
+    if not inside:
+        return {'ok': False, 'error': 'путь вне репозитория (включая symbolic link)'}
+    if not os.path.isfile(full_real):
         return {'ok': False, 'error': 'файл не найден: %s' % rel}
-    size = os.path.getsize(full)
-    if size > max_bytes:
-        return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (size, max_bytes)}
-    with open(full, 'rb') as f:
-        data = f.read()
+    try:
+        flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+        fd = os.open(full_real, flags)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                return {'ok': False, 'error': 'допускается чтение только обычных файлов'}
+            if info.st_size > max_bytes:
+                return {'ok': False, 'error': 'файл слишком большой (%d байт, лимит %d)' % (info.st_size, max_bytes)}
+            with os.fdopen(fd, 'rb') as f:
+                fd = None
+                data = f.read(max_bytes + 1)
+        finally:
+            if fd is not None:
+                os.close(fd)
+    except OSError as e:
+        return {'ok': False, 'error': 'не удалось безопасно открыть файл: %s' % e}
+    if len(data) > max_bytes:
+        return {'ok': False, 'error': 'файл слишком большой (лимит %d байт)' % max_bytes}
+    size = len(data)
     try:
         text = data.decode('utf-8')
         encoding = 'utf-8'
@@ -225,7 +308,14 @@ def repo_checkout(path, branch, create=False):
     validate(path)
     if not branch or not str(branch).strip():
         return {'ok': False, 'error': 'требуется имя ветки'}
-    clean = str(branch).strip().replace('remotes/origin/', '')
+    clean = str(branch).strip()
+    if clean.startswith('remotes/origin/'):
+        clean = clean[len('remotes/origin/'):]
+    if clean.startswith('-'):
+        return {'ok': False, 'error': 'имя ветки не может начинаться с дефиса'}
+    check = _r(['check-ref-format', '--branch', clean], path)
+    if not check['ok']:
+        return {'ok': False, 'error': 'недопустимое имя ветки: %s' % clean}
     args = ['checkout'] + (['-b'] if create else []) + [clean]
     r = _r(args, path)
     if not r['ok']:
@@ -233,13 +323,20 @@ def repo_checkout(path, branch, create=False):
     return {'ok': True, 'branch': clean, 'created': bool(create)}
 
 
-def repo_sync(path, message):
-    """Полная замена sync.bat: add -> commit -> pull --rebase -> push (+ merged PR check)."""
+def repo_sync(path, message, expected_snapshot=None):
+    """Sync выполняется только если рабочие файлы совпадают с подтверждённым snapshot."""
     validate(path)
     steps = []
     st = repo_status(path)
     if not st.get('ok'):
         return {'ok': False, 'error': st.get('error', 'git status failed'), 'steps': []}
+    if expected_snapshot is None:
+        expected_snapshot = st.get('snapshot')
+    if not expected_snapshot or st.get('snapshot') != expected_snapshot:
+        return {'ok': False,
+                'error': 'рабочие файлы изменились после предварительного просмотра. Обновите статус и подтвердите Sync заново.',
+                'snapshot_changed': True, 'steps': [],
+                'expected_snapshot': expected_snapshot, 'actual_snapshot': st.get('snapshot')}
 
     changes = st.get('changed', False)
     steps.append({'step': 'status', 'ok': True, 'changed': changes, 'branch': st.get('branch')})
@@ -254,6 +351,11 @@ def repo_sync(path, message):
         steps.append({'step': 'add', **ra})
         if not ra.get('ok'):
             return {'ok': False, 'error': ra.get('error', 'git add failed'), 'steps': steps}
+        after_add = repo_sync_snapshot(path)
+        if not after_add.get('ok') or after_add.get('snapshot') != expected_snapshot:
+            return {'ok': False,
+                    'error': 'содержимое изменилось во время git add. Коммит и push отменены; проверьте staged changes и повторите Sync.',
+                    'snapshot_changed': True, 'steps': steps}
         rc = repo_commit(path, msg)
         steps.append({'step': 'commit', **{k: v for k, v in rc.items() if k in ('ok', 'sha', 'error')}})
         if not rc.get('ok'):
@@ -284,6 +386,26 @@ def repo_sync(path, message):
 def last_merged_pr(path):
     r = _r(['log', '-1', '--grep=Merge pull request #', '--format=%s'], path)
     return (r.get('stdout', '').strip() if r.get('ok') else None) or None
+
+
+def _sanitize_remote_url(value):
+    """Удаляет userinfo и секреты из query string перед выдачей в UI/API."""
+    try:
+        parsed = urlsplit(value)
+        if not parsed.scheme or not parsed.netloc:
+            return value
+        host = parsed.hostname or ''
+        if parsed.port:
+            host = '%s:%s' % (host, parsed.port)
+        netloc = ('***@' if parsed.username is not None or parsed.password is not None else '') + host
+        sensitive = ('token', 'access_token', 'password', 'passwd', 'auth', 'key', 'secret', 'signature', 'credential', 'jwt', 'bearer')
+        query = [
+            (key, '***' if any(word in key.lower() for word in sensitive) else val)
+            for key, val in parse_qsl(parsed.query, keep_blank_values=True)
+        ]
+        return urlunsplit((parsed.scheme, netloc, parsed.path, urlencode(query), ''))
+    except (ValueError, TypeError):
+        return '[remote URL скрыт]'
 
 
 def validate(path):

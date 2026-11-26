@@ -242,6 +242,8 @@ export interface RepoStatus {
   behind: number;
   changed: boolean;
   entries: RepoStatusEntry[];
+  snapshot: string;
+  snapshot_files: string[];
   error?: string;
 }
 
