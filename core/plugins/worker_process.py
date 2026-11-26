@@ -219,27 +219,40 @@ class PluginWorker:
             governor.release_worker()
 
     def _terminate_process_tree(self, proc):
-        if proc.poll() is not None:
-            return
-        if os.name == 'nt':
-            try:
-                subprocess.run(
-                    ['taskkill', '/PID', str(proc.pid), '/T', '/F'],
-                    capture_output=True, timeout=5, check=False,
-                )
-                proc.wait(timeout=3)
-                return
-            except Exception:
-                pass
-        else:
+        if os.name != 'nt':
+            # Process group can outlive its leader; kill it even when proc.poll() is set.
             try:
                 os.killpg(proc.pid, signal.SIGTERM)
-                proc.wait(timeout=3)
-                return
             except ProcessLookupError:
                 return
             except Exception:
                 pass
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                pass
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except Exception:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=3)
+                except Exception:
+                    pass
+            return
+        if proc.poll() is not None:
+            return
+        try:
+            subprocess.run(
+                ['taskkill', '/PID', str(proc.pid), '/T', '/F'],
+                capture_output=True, timeout=5, check=False,
+            )
+            proc.wait(timeout=3)
+            return
+        except Exception:
+            pass
         try:
             proc.kill()
             proc.wait(timeout=3)
