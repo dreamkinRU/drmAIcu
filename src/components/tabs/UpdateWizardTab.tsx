@@ -50,7 +50,7 @@ export default function UpdateWizardTab() {
   const state = journal?.state || 'IDLE';
   const canApply = state === 'CHECKED' && !(journal?.blockers || []).length;
   const canPrepare = state === 'CODE_UPDATED';
-  const canRecover = ['RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING'].includes(state);
+  const canRecover = ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING'].includes(state);
   const steps = [
     { number: 1, title: 'Проверка и план', done: ['CHECKED', 'APPLYING', 'CODE_UPDATED', 'RESTORING', 'COMPLETED', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
     { number: 2, title: 'Резервирование и обновление', done: ['CODE_UPDATED', 'RESTORING', 'COMPLETED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
@@ -118,6 +118,21 @@ export default function UpdateWizardTab() {
             {journal.incoming_commits.map((commit: any) => (
               <div key={commit.sha} className="text-xs text-gray-300"><code className="text-cyan-300">{commit.sha.slice(0, 8)}</code> · {commit.subject}</div>
             ))}
+          </div>
+        )}
+
+        {journal?.change_summary?.files?.length > 0 && (
+          <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Файлы, которые придут с обновлением ({journal.change_summary.files.length})</div>
+            <ul className="mt-2 space-y-1 text-xs font-mono text-gray-300 max-h-40 overflow-auto">
+              {journal.change_summary.files.map((file: string) => <li key={file}>{file}</li>)}
+            </ul>
+          </div>
+        )}
+        {journal?.migration_files?.length > 0 && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-200">
+            Обнаружены миграции, которые мастер не запускает автоматически:
+            <ul className="list-disc ml-5 mt-1">{journal.migration_files.map((file: string) => <li key={file}>{file}</li>)}</ul>
           </div>
         )}
         {journal?.blockers?.length > 0 && (
