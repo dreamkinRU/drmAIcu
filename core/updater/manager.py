@@ -142,7 +142,7 @@ def _status_fingerprint():
                     digest.update(chunk)
         else:
             digest.update(("MODE:%s" % info.st_mode).encode("ascii"))
-    return {"status": status, "digest": digest.hexdigest()}
+    return {"digest": digest.hexdigest()}
 
 
 def _branch_and_upstream():
@@ -233,6 +233,8 @@ class UpdateManager:
             _validate_official_remote(remote)
             before_status = _status()
             fingerprint = _status_fingerprint()
+            if _status() != before_status:
+                raise UpdateError("Рабочее дерево изменилось во время проверки. Повторите шаг 1.", "working_tree_changed")
             old_head = _git_ok(["rev-parse", "HEAD"])
             _git_ok(["fetch", "--no-tags", remote, remote_branch], _TIMEOUT)
             remote_ref = "refs/remotes/%s/%s" % (remote, remote_branch)
