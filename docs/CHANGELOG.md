@@ -10,7 +10,9 @@
 - Лог: сообщение после Sync теперь тоже честное (актуально, отправлено/не было изменений, получено с remote, HEAD).
 - Техдолг: шапки документации актуализированы (#10–#50); проверены фоновые опросы — anti-jitter (обновление только при реальном изменении данных) уже покрыл Footer/Патчи/Плагины, мёртвый код тестов GitHub-плагина удалён в консолидации.
 - Тесты: `test_sync_result_reports_pulled_commits` (реальный remote: 2 коммита competitor'а → pulled_count=2, повторный sync → 0), контракт `test_sync_success_panel_shows_uptodate_and_pulled`, обновлён `test_sync_result_panel_has_always_visible_header`.
-- Итого 293 passed, 1 skipped.
+- Устойчивость к облачным папкам (реальный кейс: проект в G:\Mega\, клиент Mega удержал registry.json — плагин упал в error): окно retry atomicio увеличено 10×0.5с → 20×1с (~16 с); сбой записи registry.json больше НЕ роняет плагин — состояние живёт в памяти (persist_error), деградация честно видна в /api/plugins (data_warnings), health() и янтарным баннером во вкладке «Плагины».
+- tests/test_persist_degrade.py (6 тестов): retry переживает кратковременную блокировку, честная ошибка при исчерпании, registry переживает заблокированный файл, manager/routes/UI показывают деградацию.
+- Итого 299 passed, 1 skipped.
 
 ## v.3.12.9 Model (Текущая) — 26.11.2026
 

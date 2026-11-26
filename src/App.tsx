@@ -379,6 +379,7 @@ export default function App() {
 
         {activeTab === 'plugins' && (
           <PluginsTab
+            dataWarnings={pluginCtl.dataWarnings}
             plugins={pluginCtl.plugins}
             catalog={pluginCtl.catalog}
             confirmations={pluginCtl.confirmations}

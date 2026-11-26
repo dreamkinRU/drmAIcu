@@ -11,6 +11,7 @@ import {
   fetchPluginActivity,
   fetchPlugins,
   fetchPluginsCatalog,
+  fetchPluginsWarnings,
   installPlugin,
   pluginAction,
   uninstallPlugin,
@@ -29,13 +30,15 @@ export function usePlugins() {
   const [catalog, setCatalog] = useState<PluginCatalogEntry[]>([]);
   const [confirmations, setConfirmations] = useState<PluginConfirmation[]>([]);
   const [activity, setActivity] = useState<PluginActivityEntry[]>([]);
+  const [dataWarnings, setDataWarnings] = useState<{ registry_persist_error?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const refresh = useCallback(async () => {
-    const [pl, cat, conf, act] = await Promise.all([
+    const [pl, cat, warnings, conf, act] = await Promise.all([
       fetchPlugins(),
       fetchPluginsCatalog(),
+      fetchPluginsWarnings(),
       fetchConfirmations(),
       fetchPluginActivity(),
     ]);
@@ -44,6 +47,7 @@ export function usePlugins() {
       if (pl && !sameJson(pl, prev)) { changed = true; return pl; }
       return prev;
     });
+    setDataWarnings(prev => (warnings && !sameJson(warnings, prev) ? warnings : prev));
     setCatalog(prev => {
       if (cat && !sameJson(cat, prev)) { changed = true; return cat; }
       return prev;
@@ -110,7 +114,7 @@ export function usePlugins() {
   }, [refresh]);
 
   return {
-    plugins, catalog, confirmations, activity, loading, notice,
+    plugins, catalog, confirmations, activity, dataWarnings, loading, notice,
     refresh, install, enable, disable, uninstall, grantAll, decide, setNotice,
   };
 }
