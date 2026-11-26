@@ -17,8 +17,8 @@ import time
 from .api import PendingConfirmation, PluginAPI
 from .confirmations import ConfirmationError, ConfirmationManager
 from .events import ActivityJournal, EventBus
-from .loader import Loader, load_entry, unload
-from .models import (PLUGIN_API_VERSION, PluginRecord, PluginStatus, api_compatible)
+from .loader import Loader, load_entry, read_manifest, unload
+from .models import (PLUGIN_API_VERSION, PluginRecord, PluginStatus, api_compatible, validate_manifest)
 from .permissions import PermissionLevel, PermissionManager, permission_level
 from .secrets import SecretManager
 from .settings import SettingsManager, SettingsValidationError
@@ -106,8 +106,8 @@ class PluginManager:
                 try:
                     plugin_dir = self.loader.install_copy(pid, plugin_dir)
                     # После staging повторно читаем manifest из фактически установленной копии.
-                    copied_manifest, _manifest_path = self.loader.read_manifest(plugin_dir)
-                    copied_manifest, copied_errors = self.loader.validate_manifest(copied_manifest)
+                    copied_manifest, _manifest_path = read_manifest(plugin_dir)
+                    copied_manifest, copied_errors = validate_manifest(copied_manifest)
                     if copied_errors:
                         raise PluginInstallError('installed plugin manifest validation failed: %s' % '; '.join(copied_errors))
                     if copied_manifest.get('id') != pid:
