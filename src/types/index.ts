@@ -250,6 +250,7 @@ export interface RepoCommit {
   author: string;
   date: string;
   subject: string;
+  body?: string;
 }
 
 export interface RepoLog {

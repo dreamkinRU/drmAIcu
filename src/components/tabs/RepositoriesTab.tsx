@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LogEntry, PluginInfo,
   RepoBranches,
+  RepoCommit,
   RepoDiff,
   RepoFileContent,
   RepoRemote,
@@ -139,7 +140,15 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <h2 className="text-2xl font-bold">📁 Репозитории</h2>
+        <div>
+          <h2 className="text-2xl font-bold">📁 Репозитории</h2>
+          {/* Текущий репозиторий с путём — здесь, под заголовком; отдельная строка-плашка сверху убрана. */}
+          {repoPath && (
+            <p className="font-mono text-xs text-gray-500 mt-0.5 break-all">
+              Текущий проект: <span className="text-gray-400">{repoPath}</span>{status ? <span className="text-gray-600"> · открыт</span> : null}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <SectionButton active={section === 'overview'} onClick={() => setSection('overview')}>Обзор</SectionButton>
           <SectionButton active={section === 'history'} onClick={() => setSection('history')}>История</SectionButton>
@@ -170,7 +179,6 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
         </div>
       )}
 
-      <RepoPathBar repoPath={repoPath} hasStatus={!!status} onOpenSettings={() => setSettingsOpen(true)} />
 
       {!status ? (
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 text-sm text-gray-400">
@@ -195,25 +203,6 @@ export default function RepositoriesTab({ plugins, refresh, setActiveTab, addLog
         />
       )}
     </div>
-  );
-}
-
-// Тонкая строка пути: только сам путь (клик открывает модальное окно настроек).
-// Ветка/↑↓/счётчики перенесены: ветка и ahead/behind — в карточке «Текущий проект»
-// (RepoInfoCard), счётчик изменений — на кнопке «Изменения». Дубли в правой части
-// path bar убраны по запросу пользователя.
-function RepoPathBar({ repoPath, hasStatus, onOpenSettings }: { repoPath: string; hasStatus: boolean; onOpenSettings: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpenSettings}
-      className="w-full rounded-xl border border-gray-800 bg-gray-900/50 p-3 flex items-center gap-3 text-left hover:border-gray-600"
-      title="Открыть настройки репозитория"
-    >
-      <span className="text-base leading-none">⚙</span>
-      <span className="flex-1 font-mono text-sm text-gray-300 truncate">{repoPath || <span className="text-gray-500">путь не задан — откройте ⚙ Настройки</span>}</span>
-      <span className="text-xs text-gray-500 shrink-0">{hasStatus ? 'открыт' : 'задать путь'}</span>
-    </button>
   );
 }
 
@@ -299,6 +288,7 @@ function OverviewSection({
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ label: string; cid: string; run: (token: string) => void } | null>(null);
   const [syncResult, setSyncResult] = useState<RepoSyncResult | null>(null);
+  const [syncConfirm, setSyncConfirm] = useState(false);
   const [fileRel, setFileRel] = useState('');
   const [fileView, setFileView] = useState<RepoFileContent | null>(null);
 
@@ -362,6 +352,48 @@ function OverviewSection({
     <div className="space-y-4">
       {pending && <ConfirmationBar pending={pending} busy={busy} clear={() => setPending(null)} />}
 
+      {/* Диалог перед синхронизацией, если есть незакоммиченные изменения:
+          sync закоммитит и запушит их — пользователь должен подтвердить это до начала. */}
+      {syncConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setSyncConfirm(false)}>
+          <div
+            className="w-full max-w-lg rounded-xl border border-amber-500/40 bg-gray-900 shadow-2xl p-5 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-amber-300">⚠ Синхронизация с локальными изменениями</h3>
+            <p className="text-sm text-gray-300">
+              В репозитории{' '}
+              <span className="font-mono text-xs text-gray-400 break-all">{repoPath}</span>{' '}
+              есть <span className="text-amber-300 font-semibold">{status.entries.length}</span> незакоммиченных файлов. Будет выполнено:
+            </p>
+            <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-3 text-xs font-mono text-gray-300 space-y-1">
+              <div>1. git add -A</div>
+              <div>2. git commit «{commitMsg.trim() || <span className="text-red-400">(пустое сообщение — sync будет отклонён)</span>}»</div>
+              <div>3. git pull --rebase</div>
+              <div>4. git push</div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Изменения будут закоммичены и отправлены в удалённый репозиторий. Пустое сообщение коммита отклоняется (как в sync.bat).
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setSyncConfirm(false)}
+                className="px-4 py-2 rounded-lg text-sm border border-gray-700 text-gray-300 hover:border-gray-500"
+              >
+                Отмена
+              </button>
+              <button
+                disabled={busy || !commitMsg.trim()}
+                onClick={() => { setSyncConfirm(false); runSync(); }}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/70 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
+              >
+                Продолжить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
         <h3 className="font-bold text-white">🔄 Синхронизация (замена sync.bat)</h3>
         <div className="flex items-center gap-2">
@@ -373,7 +405,8 @@ function OverviewSection({
           />
           <button
             disabled={busy}
-            onClick={() => runSync()}
+            onClick={() => (status.entries.length > 0 ? setSyncConfirm(true) : runSync())}
+            title={status.entries.length > 0 ? 'Есть незакоммиченные изменения — перед синхронизацией будет диалог подтверждения' : ''}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/70 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
           >
             Синхронизировать
@@ -396,6 +429,11 @@ function OverviewSection({
               </div>
             ))}
             {syncResult.head && <div className="text-gray-400">HEAD: {syncResult.head}</div>}
+            {!syncResult.ok && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm font-sans text-red-300 whitespace-pre-wrap">
+                {syncResult.error || 'синхронизация прервана — смотрите ошибку упавшего шага выше'}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -455,18 +493,35 @@ function HistorySection({ repoPath }: { repoPath: string }) {
     return () => { alive = false; };
   }, [repoPath]);
 
+  // Мерж-коммиты не рисуем отдельными строками: их текст входит в подсказку ближайшего ниже обычного коммита
+  // (этот коммит вошёл в ветку через этот мерж). Подсказка показывает полный текст коммита (subject + body).
+  const isMerge = (c: RepoCommit) => c.subject.startsWith('Merge ');
+  const rows: Array<{ c: RepoCommit; merge?: RepoCommit }> = [];
+  if (log) {
+    let lastMerge: RepoCommit | undefined;
+    for (const c of log.commits) {
+      if (isMerge(c)) { lastMerge = c; continue; }
+      rows.push({ c, merge: lastMerge });
+    }
+  }
+
   if (err) return <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">{err}</div>;
   if (!log) return <div className="text-sm text-gray-500">загрузка истории…</div>;
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-1.5">
-      {log.commits.map(c => (
-        <div key={c.sha} className="flex items-center gap-3 text-sm">
-          <span className="font-mono text-cyan-300 text-xs">{c.sha}</span>
-          <span className="text-gray-300 flex-1 truncate">{c.subject}</span>
-          <span className="text-gray-500 text-xs">{c.author} · {c.date.slice(0, 10)} · {timeUtc3(c.date)} UTC+3</span>
-        </div>
-      ))}
+      {rows.map(({ c, merge }) => {
+        const tip = c.body ? `${c.subject}\n\n${c.body}` : c.subject;
+        const fullTip = merge ? `${tip}\n\n\u2014\nвошёл через мерж\n${merge.sha} ${merge.subject}` : tip;
+        return (
+          <div key={c.sha} className="flex items-center gap-3 text-sm" title={fullTip}>
+            <span className="font-mono text-cyan-300 text-xs">{c.sha}</span>
+            <span className="text-gray-300 flex-1 truncate">{c.subject}</span>
+            <span className="text-gray-500 text-xs shrink-0">{c.date.slice(0, 10)} · {timeUtc3(c.date)}</span>
+          </div>
+        );
+      })}
       {log.commits.length === 0 && <p className="text-sm text-gray-500">коммитов нет (репозиторий пуст)</p>}
+      {log.commits.length > 0 && rows.length === 0 && <p className="text-sm text-gray-500">обычных коммитов нет — только мержи</p>}
     </div>
   );
 }

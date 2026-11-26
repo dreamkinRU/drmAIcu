@@ -137,13 +137,15 @@ def test_logs_tab_has_clear_errors_button():
     assert "fetch('/api/logs/issues', { method: 'DELETE' })" in api, 'нет DELETE-запроса очистки на бэкенд'
 
 
-# ==== 9. История: время HH:MM UTC+3 ====
+# ==== 9. История: время HH:MM UTC+3 (без метки «UTC+3» в строке — сама конвертация осталась) ====
 
 def test_history_shows_time_utc3():
     src = _read(REPOS_TAB)
     assert 'timeUtc3' in src, 'нет функции времени UTC+3; путь исправления: добавить конвертацию ISO-даты в HistorySection'
     assert "timeZone: 'Europe/Moscow'" in src, 'зона должна быть фиксированной (Europe/Moscow = UTC+3)'
-    assert 'UTC+3' in src, 'в подписи должно быть явно указано UTC+3'
+    # с PR #40 метка «UTC+3» из строки истории убрана (пользовательская просьба) —
+    # но конвертация в Europe/Moscow обязана остаться.
+    assert "{c.author}" not in src, 'автор коммита больше не показывается в строке истории'
     assert 'hour: \'2-digit\', minute: \'2-digit\', hour12: false' in src, 'формат HH:MM 24-часовой'
 
 
