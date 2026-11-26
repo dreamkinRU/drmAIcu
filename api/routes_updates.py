@@ -30,6 +30,14 @@ def _check_local_browser_request(request: Request):
     allowed_ip = bool(origin_ip and origin_ip.is_loopback)
     if parsed.scheme != "http" or not (allowed_name or allowed_ip):
         raise UpdateError("Операции обновления доступны только из локального браузера.", "origin_rejected", 403)
+    host_header = request.headers.get("host", "")
+    try:
+        request_host = urlparse("//" + host_header).hostname
+        host_ip = ipaddress.ip_address(request_host) if request_host else None
+    except ValueError:
+        request_host, host_ip = None, None
+    if not (request_host in ("localhost", "127.0.0.1", "::1") or (host_ip and host_ip.is_loopback)):
+        raise UpdateError("Host header не относится к локальному интерфейсу.", "host_rejected", 403)
     fetch_site = request.headers.get("sec-fetch-site", "").lower()
     if fetch_site == "cross-site":
         raise UpdateError("Cross-site запрос отклонён.", "cross_site_rejected", 403)
