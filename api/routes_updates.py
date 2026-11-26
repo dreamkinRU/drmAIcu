@@ -37,7 +37,7 @@ def _check_local_browser_request(request: Request, require_origin=True):
         request_host = urlparse("//" + host_header).hostname
         host_ip = ipaddress.ip_address(request_host) if request_host else None
     except ValueError:
-        request_host, host_ip = None, None
+        host_ip = None
     if not (request_host in ("localhost", "127.0.0.1", "::1") or (host_ip and host_ip.is_loopback)):
         raise UpdateError("Host header не относится к локальному интерфейсу.", "host_rejected", 403)
     fetch_site = request.headers.get("sec-fetch-site", "").lower()
