@@ -156,7 +156,7 @@ export type TabId =
   | 'patches'
   | 'project'
   | 'plugins'
-  | 'github';
+  | 'repositories';
 
 export type PluginStatus = 'installed' | 'disabled' | 'loading' | 'running' | 'error' | 'update_available' | 'incompatible';
 
@@ -224,75 +224,119 @@ export interface PluginCatalogEntry {
   permissions?: PluginPermission[];
 }
 
-// === GitHub Plugin (Этап 4) ===
+// === Repos Plugin (sync.bat / GitHub Desktop replacement) ===
 
-export interface GitHubRepository {
-  full_name: string;
-  private: boolean;
-  default_branch: string;
-  html_url: string | null;
-  description: string | null;
-  updated_at: string | null;
-  permissions?: Record<string, boolean>;
+export interface RepoStatusEntry {
+  code: string;
+  file: string;
+  staged: boolean;
+  unstaged: boolean;
 }
 
-export interface GitHubRepoList {
-  page: number;
-  total_count: number;
-  repositories: GitHubRepository[];
-}
-
-export interface GitHubBranch {
-  name: string;
-  sha: string | null;
-  protected: boolean;
-}
-
-export interface GitHubBranchList {
-  page: number;
-  branches: GitHubBranch[];
-}
-
-export interface GitHubTreeEntry {
+export interface RepoStatus {
+  ok: boolean;
   path: string;
-  type: 'blob' | 'tree' | string;
-  size?: number;
+  branch: string;
+  upstream: string;
+  ahead: number;
+  behind: number;
+  changed: boolean;
+  entries: RepoStatusEntry[];
+  error?: string;
 }
 
-export interface GitHubTree {
+export interface RepoCommit {
   sha: string;
-  truncated: boolean;
-  tree: GitHubTreeEntry[];
+  author: string;
+  date: string;
+  subject: string;
 }
 
-export interface GitHubDirListing {
-  type: 'dir';
-  entries: { name: string; path: string; type: string; size?: number }[];
+export interface RepoLog {
+  ok: boolean;
+  commits: RepoCommit[];
+  error?: string;
 }
 
-export interface GitHubFileContent {
-  type: 'file';
+export interface RepoBranch {
+  name: string;
+  sha: string;
+  head: boolean;
+  remote: boolean;
+}
+
+export interface RepoBranches {
+  ok: boolean;
+  current: string;
+  branches: RepoBranch[];
+  error?: string;
+}
+
+export interface RepoRemoteInfo {
+  name: string;
+  url: string;
+}
+
+export interface RepoRemote {
+  ok: boolean;
+  remotes: RepoRemoteInfo[];
+  error?: string;
+}
+
+export interface RepoDiff {
+  ok: boolean;
+  staged: boolean;
+  stat: string;
+  error?: string;
+}
+
+export interface RepoFileContent {
+  ok: boolean;
   path: string;
   size: number;
   encoding: string;
   content: string;
-  sha: string;
-}
-
-export interface GitHubConnection {
-  ok: boolean;
-  configured: boolean;
-  app_id_set?: boolean;
-  installation_id_set?: boolean;
-  repositories_total?: number;
   error?: string;
 }
 
-export interface PluginSecretKeys {
-  plugin: string;
-  secrets: string[];
+export interface ReposDiagnostics {
+  git: boolean;
+  version: string | null;
 }
 
+export interface RepoSyncStep {
+  step: string;
+  ok?: boolean;
+  changed?: boolean;
+  skipped?: boolean;
+  note?: string;
+  branch?: string;
+  sha?: string;
+  error?: string;
+  last_merged?: string | null;
+  remote?: string;
+}
+
+export interface RepoSyncResult {
+  ok: boolean;
+  steps: RepoSyncStep[];
+  head?: string;
+  committed?: boolean;
+  commit_sha?: string | null;
+  error?: string;
+  rebase_conflict?: boolean;
+  push_rejected?: boolean;
+}
+
+export interface SimpleGitResult {
+  ok: boolean;
+  error?: string;
+  output?: string;
+  branch?: string;
+  sha?: string | null;
+  created?: boolean;
+  nothing_to_commit?: boolean;
+}
 export type ExecOutcome<T> =
   | { status: 'done'; result: T }
   | { status: 'confirmation_required'; confirmation: PluginConfirmation }

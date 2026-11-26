@@ -1,5 +1,14 @@
 # drmAIcu — История изменений
 
+## v.3.9.0 Model (Текущая) — 26.11.2026
+
+### Repositories Plugin v1.0 — замена sync.bat + GitHub Desktop
+- GitHub App удалён целиком: плагин `github` (`plugins/github/`, клиент JWT/Installation Token, вкладка «GitHub») полностью вырезан; `pyjwt` убран из зависимостей. Авторизация push/pull — как в локальном git (Credential Manager/SSH), плагин ничего не хранит.
+- Новый плагин `repos` (`plugins/repos/`): READ-авто (`repos.status`, `repos.log`, `repos.branches`, `repos.remote`, `repos.diff`, `repos.read_file`, `repos.diagnostics`) и WRITE-подтверждение (`repos.add`, `repos.commit`, `repos.push`, `repos.pull --rebase`, `repos.fetch`, `repos.checkout`); политика автоматизации §2 сохранена.
+- Кнопка «Синхронизировать» (`repos.sync`) — полный пакет as sync.bat: `git add -A` → commit (если есть изменения; пустое сообщение отклоняется) → `pull --rebase` (конфликт → честная подсказка про `git rebase --continue`) → проверка merged PR (локальный `git log --grep`) → `push origin <ветка>`; одно подтверждение WRITE на весь пакет.
+- Новая вкладка «Репозитории» (`RepositoriesTab.tsx`): открытие локального репозитория по пути (`.git` обязателен), статус ветки/ahead/behind, история коммитов, ветки (создание/переключение с подтверждением), diff staged/unstaged, пошаговый коммит, просмотр файла.
+- `core/plugins/permissions.py`: `sync`-действия мапятся на WRITE; CRITICAL-список очищен от GitHub App-имён.
++12 тестов (пакет sync в bare-remote, обход каталога, одноразовый токен, e2e через PluginManager) — 194 зелёных.
 ## v.3.8.0 Model (Текущая) — 26.11.2026
 
 ### GitHub App setup + Repository Manager UI (Этап 4)

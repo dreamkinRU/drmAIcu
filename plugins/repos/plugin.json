@@ -1,0 +1,21 @@
+{
+  "id": "repos",
+  "name": "Репозитории",
+  "version": "1.0.0",
+  "description": "Работа с локальными и сетевыми git-репозиториями: статус, история, ветки, add/commit/pull/push/fetch и кнопка Sync (полная замена sync.bat). Авторизация — как в локальном git (Credential Manager/SSH), плагин ничего не хранит.",
+  "author": "drmAIcu",
+  "api_version": "1.0",
+  "entry_point": "plugin.py",
+  "permissions": [
+    "repos.read",
+    "repos.write",
+    "repos.sync"
+  ],
+  "settings_schema": {
+    "default_path": {
+      "type": "string",
+      "title": "Репозиторий по умолчанию (полный путь к локальной папке с .git)",
+      "default": ""
+    }
+  }
+}

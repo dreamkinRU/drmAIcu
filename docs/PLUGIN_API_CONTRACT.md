@@ -174,7 +174,7 @@ RUNNING → STOP / DISABLE / ERROR / UNINSTALL
 `{'success': False, 'error': <текст>, 'code': <машинный код>}` — соответствует
 существующему стилю APIdrmAIcu.
 
-GitHub-специфичные маршруты (`/api/plugins/github/repositories/*` и т.д.)
+Специфичные для конкретного плагина маршруты (например `/api/plugins/repos/*`)
 реализуются поверх `exec`-механизма на этапах 4–8.
 
 ## 10.1. Секреты через REST (Этап 4)

@@ -105,10 +105,10 @@ export default function Header(props: HeaderProps) {
               </button>
             </Tooltip>
 
-            <Tooltip text="GitHub: подключение App и репозитории" position="bottom">
-              <button onClick={() => setActiveTab('github')} className={navBtnClass('github')}>
-                <span>🐙</span>
-                <span>GitHub</span>
+            <Tooltip text="Репозитории: локальный git и синхронизация с GitHub (замена sync.bat)" position="bottom">
+              <button onClick={() => setActiveTab('repositories')} className={navBtnClass('repositories')}>
+                <span>🗂</span>
+                <span>Репозитории</span>
               </button>
             </Tooltip>
 
