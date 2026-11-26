@@ -103,8 +103,9 @@ async def update_recover(request: Request):
         _check_local_browser_request(request)
         body = await request.json()
         operation_id = body.get("operation_id") if isinstance(body, dict) else None
+        manual_confirmation = bool(body.get("manual_confirmation")) if isinstance(body, dict) else False
         if not isinstance(operation_id, str) or len(operation_id) != 32:
             raise UpdateError("Некорректный идентификатор операции.", "invalid_operation_id", 422)
-        return JSONResponse(manager.recover(operation_id))
+        return JSONResponse(manager.recover(operation_id, manual_confirmation=manual_confirmation))
     except Exception as exc:
         return _error(exc)
