@@ -345,6 +345,7 @@ class UpdateManager:
                     sha, sep, subject = line.partition("\x1f")
                     incoming.append({"sha": sha, "subject": subject if sep else ""})
             plan = {
+                "schema": 1,
                 "id": uuid.uuid4().hex,
                 "state": "CHECKED",
                 "created_at": _now(),
