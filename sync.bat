@@ -79,7 +79,7 @@ git log -1 --oneline
 echo === Отправляем изменения на GitHub ===
 git push origin main
 if %errorlevel% neq 0 (
-    echo [ОШИБКА] push не прошёл (защита ветки / сеть). Изменения остались локально в main.
+    echo [ОШИБКА] push не прошёл — защита ветки или сеть. Изменения остались локально в main.
     pause & exit /b 1
 )
 

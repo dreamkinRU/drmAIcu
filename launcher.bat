@@ -24,7 +24,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 if not exist "node_modules" (
-    echo [INFO] Installing dependencies (first run)...
+    echo [INFO] Installing dependencies, first run...
     call npm install
     if !errorlevel! neq 0 (
         echo [ERROR] npm install failed. Check Node.js: node --version, npm --version
