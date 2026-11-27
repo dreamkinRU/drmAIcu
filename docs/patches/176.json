@@ -1,0 +1,144 @@
+{
+  "patch_id": "176",
+  "type": "multi",
+  "description": "3.19.8 — only for base 31068c0",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "core/updater/manager.py",
+      "find": "    def state(self):",
+      "replace": "    def versions(self):\n        \"\"\"Read local version facts without waiting for the update operation lock.\n        origin/main is a cached Git ref, not a fresh network query.\n        \"\"\"\n        def read_ref(ref):\n            try:\n                return _version_or_none(_git_ok([\"rev-parse\", \"--verify\", ref]))\n            except UpdateError:\n                return None\n        return {\"success\": True, \"versions\": {\n            \"running\": RUNNING_VERSION,\n            \"installed\": read_ref(\"HEAD\"),\n            \"cached_remote\": read_ref(\"refs/remotes/origin/main\"),\n        }}\n\n    def state(self):"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "api/routes_updates.py",
+      "find": "@router.get(\"/api/updates/state\")",
+      "replace": "@router.get(\"/api/updates/versions\")\ndef update_versions(request: Request):\n    try:\n        _check_local_browser_request(request, require_origin=False)\n        return JSONResponse(manager.versions(), headers={\"Cache-Control\": \"no-store\"})\n    except Exception as exc:\n        return _error(exc)\n\n\n@router.get(\"/api/updates/state\")"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "{ visible, incomingRequest, onBusyChange, onOpenRepositories }: { visible: boolean; incomingRequest: number; onBusyChange: (busy: boolean) => void; onOpenRepositories: () => void }",
+      "replace": "{ visible, incomingRequest, onBusyChange, onOpenRepositories, appVersion }: { visible: boolean; incomingRequest: number; onBusyChange: (busy: boolean) => void; onOpenRepositories: () => void; appVersion: string | null }"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "  const [journal, setJournal] = useState<any>(null);",
+      "replace": "  const [journal, setJournal] = useState<any>(null);\n  const [versions, setVersions] = useState<{running: string; installed: string | null; cached_remote: string | null} | null>(null);\n  const [versionError, setVersionError] = useState(false);\n  useEffect(() => {\n    if (!visible) return;\n    let stopped = false;\n    let timer: number;\n    async function poll() {\n      try {\n        const response = await fetch('/api/updates/versions', {cache: 'no-store', signal: AbortSignal.timeout(5000)});\n        const data = await response.json();\n        if (!response.ok || !data.success || !data.versions) throw new Error('versions unavailable');\n        if (!stopped) { setVersions(data.versions); setVersionError(false); }\n      } catch {\n        if (!stopped) { setVersions(null); setVersionError(true); }\n      }\n      if (!stopped) timer = window.setTimeout(poll, 5000);\n    }\n    void poll();\n    return () => { stopped = true; window.clearTimeout(timer); };\n  }, [visible]);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "value={journal?.running_version || journal?.restart_health?.version || '—'}",
+      "replace": "value={versions?.running || appVersion || journal?.running_version || 'Не определена'}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "value={journal?.installed_version || (journal?.new_head ? journal?.target_version : journal?.current_version) || '—'}",
+      "replace": "value={versions ? versions.installed || 'HEAD недоступен' : versionError ? 'Нет данных' : 'Загрузка…'}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "<Metric label=\"GitHub (последняя проверка)\" value={journal?.target_version || '—'} />",
+      "replace": "<Metric label=\"GitHub (локальный origin/main)\" value={versions ? versions.cached_remote || 'Нет локального ref' : versionError ? 'Нет данных' : 'Загрузка…'} />"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "Последняя проверка GitHub: {formatDate(journal?.created_at)}. Нажмите входящую синхронизацию для нового fetch.",
+      "replace": "Последняя проверка мастером: {formatDate(journal?.created_at)}. Версия origin/main читается из локального Git ref, не является онлайн-проверкой. Для свежего fetch нажмите «Проверить обновления»."
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "        {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state))",
+      "replace": "        {versionError && <p role=\"status\" className=\"text-xs text-amber-300\">Снимок Git-версий недоступен; повторяем чтение автоматически.</p>}\n        {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state))"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/App.tsx",
+      "find": "<UpdateWizardTab visible={activeTab === 'updates'}",
+      "replace": "<UpdateWizardTab appVersion={appVersion} visible={activeTab === 'updates'}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "version.py",
+      "find": "VERSION = '3.19.7'",
+      "replace": "VERSION = '3.19.8'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package.json",
+      "find": "\"version\": \"3.19.7\"",
+      "replace": "\"version\": \"3.19.8\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "  \"version\": \"3.19.7\",\n  \"lockfileVersion\"",
+      "replace": "  \"version\": \"3.19.8\",\n  \"lockfileVersion\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.7\",",
+      "replace": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.8\","
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "README.md",
+      "find": "**Версия 3.19.7 Model**",
+      "replace": "**Версия 3.19.8 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/USER_GUIDE.md",
+      "find": "**Версия 3.19.7 Model**",
+      "replace": "**Версия 3.19.8 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ARCHITECTURE.md",
+      "find": "**Версия 3.19.7 Model**",
+      "replace": "**Версия 3.19.8 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/HANDOFF.md",
+      "find": "**Актуально для:** v.3.19.7 Model",
+      "replace": "**Актуально для:** v.3.19.8 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/CHANGELOG.md",
+      "find": "## v.3.19.7 Model (Текущая)",
+      "replace": "## v.3.19.8 Model (Текущая) — 27.11.2026\n\n- Update Manager: независимый read-only снимок запущенной версии, Git HEAD и локального origin/main, доступный без журнала обновлений; повторное чтение и явная диагностика вместо пустых полей.\n\n## v.3.19.7 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "**Редакция плана:** 1.5",
+      "replace": "**Редакция плана:** 1.6"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "3.19.7 Model (кандидат)",
+      "replace": "3.19.8 Model (кандидат)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "## 11. Следующая команда новому агенту",
+      "replace": "## 11. Следующая команда новому агенту\n\nUPD-01 — REVIEW: 3.19.8, база 31068c0, независимый GET versions без журнала и сетевого fetch, локальный origin/main явно помечен как кэш. Скриншот владельца 3.19.6 показал пустые три поля; точная локальная причина отсутствия state не подтверждена. Приёмка: чистый запуск без журнала, недоступный ref, активная операция, повторное чтение после Sync. JSON 176 только для исходной базы. CI и локальная приёмка ещё не подтверждены."
+    },
+    {
+      "type": "create",
+      "target_file": "tests/test_update_versions.py",
+      "full_file_content": "import importlib\n\nupdater = importlib.import_module(\"core.updater.manager\")\n\n\ndef test_versions_independent_of_journal(monkeypatch):\n    def git(args):\n        return {\"HEAD\": \"local\", \"refs/remotes/origin/main\": \"remote\"}[args[-1]]\n    monkeypatch.setattr(updater, \"_git_ok\", git)\n    monkeypatch.setattr(updater, \"_version_or_none\", lambda head: {\"local\": \"3.19.8\", \"remote\": \"3.19.9\"}[head])\n    def forbidden():\n        raise AssertionError(\"must not read journal\")\n    monkeypatch.setattr(updater, \"_load_journal\", forbidden)\n    assert updater.manager.versions()[\"versions\"] == {\n        \"running\": updater.RUNNING_VERSION, \"installed\": \"3.19.8\", \"cached_remote\": \"3.19.9\"}\n\n\ndef test_versions_missing_remote(monkeypatch):\n    def git(args):\n        if args[-1] != \"HEAD\":\n            raise updater.UpdateError(\"missing ref\")\n        return \"local\"\n    monkeypatch.setattr(updater, \"_git_ok\", git)\n    monkeypatch.setattr(updater, \"_version_or_none\", lambda head: \"3.19.8\")\n    result = updater.manager.versions()[\"versions\"]\n    assert result[\"installed\"] == \"3.19.8\"\n    assert result[\"cached_remote\"] is None\n"
+    }
+  ]
+}

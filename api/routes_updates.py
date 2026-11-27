@@ -67,6 +67,15 @@ def _error(exc):
     )
 
 
+@router.get("/api/updates/versions")
+def update_versions(request: Request):
+    try:
+        _check_local_browser_request(request, require_origin=False)
+        return JSONResponse(manager.versions(), headers={"Cache-Control": "no-store"})
+    except Exception as exc:
+        return _error(exc)
+
+
 @router.get("/api/updates/state")
 def update_state(request: Request):
     try:

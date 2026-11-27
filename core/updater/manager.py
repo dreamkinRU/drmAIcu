@@ -510,6 +510,21 @@ class UpdateManager:
         except (OSError, ValueError, AttributeError):
             return {"success": True, "progress": {}}
 
+    def versions(self):
+        """Read local version facts without waiting for the update operation lock.
+        origin/main is a cached Git ref, not a fresh network query.
+        """
+        def read_ref(ref):
+            try:
+                return _version_or_none(_git_ok(["rev-parse", "--verify", ref]))
+            except UpdateError:
+                return None
+        return {"success": True, "versions": {
+            "running": RUNNING_VERSION,
+            "installed": read_ref("HEAD"),
+            "cached_remote": read_ref("refs/remotes/origin/main"),
+        }}
+
     def state(self):
         with _LOCK, _process_lock():
             journal = _load_journal()

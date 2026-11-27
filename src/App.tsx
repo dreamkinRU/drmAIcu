@@ -414,7 +414,7 @@ export default function App() {
         )}
 
         <div hidden={activeTab !== 'updates'}>
-          <UpdateWizardTab visible={activeTab === 'updates'} incomingRequest={incomingRequest} onBusyChange={setIncomingBusy} onOpenRepositories={() => setActiveTab('repositories')} />
+          <UpdateWizardTab appVersion={appVersion} visible={activeTab === 'updates'} incomingRequest={incomingRequest} onBusyChange={setIncomingBusy} onOpenRepositories={() => setActiveTab('repositories')} />
         </div>
 
         {activeTab === 'tasks' && (

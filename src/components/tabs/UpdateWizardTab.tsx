@@ -16,8 +16,28 @@ async function callUpdate(path: string, operationId?: string, manualConfirmation
   return data;
 }
 
-export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange, onOpenRepositories }: { visible: boolean; incomingRequest: number; onBusyChange: (busy: boolean) => void; onOpenRepositories: () => void }) {
+export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange, onOpenRepositories, appVersion }: { visible: boolean; incomingRequest: number; onBusyChange: (busy: boolean) => void; onOpenRepositories: () => void; appVersion: string | null }) {
   const [journal, setJournal] = useState<any>(null);
+  const [versions, setVersions] = useState<{running: string; installed: string | null; cached_remote: string | null} | null>(null);
+  const [versionError, setVersionError] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    let stopped = false;
+    let timer: number;
+    async function poll() {
+      try {
+        const response = await fetch('/api/updates/versions', {cache: 'no-store', signal: AbortSignal.timeout(5000)});
+        const data = await response.json();
+        if (!response.ok || !data.success || !data.versions) throw new Error('versions unavailable');
+        if (!stopped) { setVersions(data.versions); setVersionError(false); }
+      } catch {
+        if (!stopped) { setVersions(null); setVersionError(true); }
+      }
+      if (!stopped) timer = window.setTimeout(poll, 5000);
+    }
+    void poll();
+    return () => { stopped = true; window.clearTimeout(timer); };
+  }, [visible]);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [progress, setProgress] = useState<any>(null);
@@ -171,11 +191,12 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
           </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          <Metric label="Запущенная версия" value={journal?.running_version || journal?.restart_health?.version || '—'} />
-          <Metric label="Установленная версия (Git)" value={journal?.installed_version || (journal?.new_head ? journal?.target_version : journal?.current_version) || '—'} />
-          <Metric label="GitHub (последняя проверка)" value={journal?.target_version || '—'} />
+          <Metric label="Запущенная версия" value={versions?.running || appVersion || journal?.running_version || 'Не определена'} />
+          <Metric label="Установленная версия (Git)" value={versions ? versions.installed || 'HEAD недоступен' : versionError ? 'Нет данных' : 'Загрузка…'} />
+          <Metric label="GitHub (локальный origin/main)" value={versions ? versions.cached_remote || 'Нет локального ref' : versionError ? 'Нет данных' : 'Загрузка…'} />
         </div>
-        <p className="text-xs text-gray-400">Последняя проверка GitHub: {formatDate(journal?.created_at)}. Нажмите входящую синхронизацию для нового fetch.</p>
+        <p className="text-xs text-gray-400">Последняя проверка мастером: {formatDate(journal?.created_at)}. Версия origin/main читается из локального Git ref, не является онлайн-проверкой. Для свежего fetch нажмите «Проверить обновления».</p>
+        {versionError && <p role="status" className="text-xs text-amber-300">Снимок Git-версий недоступен; повторяем чтение автоматически.</p>}
         {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state)) && <div role="status" className="space-y-2 text-sm text-cyan-200">
           <div>{(({backup:'Резервирование',merge:'Fast-forward Git',restore:'Восстановление файлов',python:'Python зависимости',npm:'npm ci',frontend_build:'Сборка frontend'} as Record<string,string>)[progress?.active_step] || activity)}</div>
           <div className="h-2 overflow-hidden rounded bg-gray-800"><div className="h-full w-1/3 animate-pulse rounded bg-cyan-500" /></div>
