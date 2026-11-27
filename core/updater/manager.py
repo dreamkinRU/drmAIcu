@@ -6,6 +6,8 @@ commit, push, rebase или reset. Локальные изменения сох�
 refs/drmaicu/update-backups/<id> и восстанавливаются через stash apply --index.
 """
 import json
+import ast
+from version import VERSION as RUNNING_VERSION
 import hashlib
 import os
 import re
@@ -13,6 +15,8 @@ import subprocess
 import stat
 import sys
 import threading
+import time
+from contextlib import contextmanager
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -82,6 +86,15 @@ def _load_journal():
             data = json.load(stream)
         if not isinstance(data, dict) or data.get("schema") != 1:
             raise ValueError("unknown journal schema")
+        if data.get("state") not in {"IDLE", "CHECKED", "APPLYING", "CODE_UPDATED", "RESTORING", "PREPARING", "RESTART_REQUIRED", "COMPLETED", "FAILED", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"}:
+            raise ValueError("unknown journal state")
+        if data.get("state") != "IDLE" and not re.fullmatch(r"[0-9a-f]{32}", str(data.get("id", ""))):
+            raise ValueError("invalid operation id")
+        for key in ("old_head", "remote_head", "new_head", "backup_oid"):
+            if data.get(key) is not None and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", str(data[key])):
+                raise ValueError("invalid " + key)
+        if data.get("backup_ref") and data["backup_ref"] != "refs/drmaicu/update-backups/" + data["id"]:
+            raise ValueError("invalid backup ref")
         return data
     except FileNotFoundError:
         return {"schema": 1, "state": "IDLE", "updated_at": _now()}
@@ -90,6 +103,47 @@ def _load_journal():
             "Журнал обновления повреждён; автоматическое продолжение запрещено: %s" % exc,
             "journal_corrupt", 423,
         )
+
+
+@contextmanager
+def _process_lock():
+    """OS-owned lock; released automatically on process exit. Never unlink lock file."""
+    os.makedirs(_JOURNAL_DIR, exist_ok=True)
+    path = os.path.join(_JOURNAL_DIR, "operation.lock")
+    with open(path, "a+b") as stream:
+        if os.fstat(stream.fileno()).st_size == 0:
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise UpdateError("Другая операция обновления или блокировка файла. Путь исправления: завершите другую операцию и повторите запрос.", "update_locked", 423) from exc
+        try:
+            yield
+        finally:
+            stream.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def _replace_journal(temp, destination):
+    # Cloud clients and antivirus can transiently hold the destination on Windows.
+    for attempt in range(5):
+        try:
+            os.replace(temp, destination)
+            return
+        except PermissionError as exc:
+            if attempt == 4:
+                raise UpdateError("Журнал заблокирован. Путь исправления: приостановите облачную синхронизацию и проверьте сохранённый временный журнал.", "journal_write_blocked", 423) from exc
+            time.sleep(0.1 * (2 ** attempt))
 
 
 def _save_journal(data):
@@ -101,7 +155,7 @@ def _save_journal(data):
         stream.write(payload)
         stream.flush()
         os.fsync(stream.fileno())
-    os.replace(temp, _JOURNAL_PATH)
+    _replace_journal(temp, _JOURNAL_PATH)
 
 def _create_backup_bundle(operation_id, backup_ref, backup_oid):
     """Экспортирует backup ref в отдельный bundle вне .git и проверяет его."""
@@ -224,7 +278,7 @@ def _find_stash_oid(message):
         return None
     for line in result["stdout"].splitlines():
         sha, separator, subject = line.partition("\x1f")
-        if separator and subject == message and re.fullmatch(r"[0-9a-f]{40,64}", sha):
+        if separator and message and (subject == message or subject.endswith(": " + message)) and re.fullmatch(r"[0-9a-f]{40,64}", sha):
             return sha
     return None
 
@@ -293,6 +347,36 @@ def _changed_files(status_text):
     return sorted(set(files))
 
 
+def _target_version(head):
+    try:
+        source = _git_ok(["show", head + ":version.py"])
+        for node in ast.parse(source).body:
+            if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "VERSION" for target in node.targets):
+                value = ast.literal_eval(node.value)
+                if isinstance(value, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
+                    return value
+    except (SyntaxError, ValueError, UpdateError):
+        pass
+    raise UpdateError("Не удалось определить целевую версию.", "target_version_invalid")
+
+
+def _restart_health(journal):
+    """Called via the running API, not an external full-system health guarantee."""
+    head = journal.get("remote_head")
+    if not head:
+        raise UpdateError("Недостаточно данных для проверки рестарта.", "restart_metadata_missing")
+    target = journal.get("target_version") or _target_version(head)
+    if _git_ok(["rev-parse", "HEAD"]) != head:
+        raise UpdateError("HEAD не совпадает с целевым.", "restart_head_mismatch")
+    if RUNNING_VERSION != target:
+        raise UpdateError("Запущена другая версия ядра.", "restart_version_mismatch")
+    if _git_operation_in_progress() or _git_ok(["ls-files", "-u"]):
+        raise UpdateError("Обнаружена незавершённая Git-операция.", "restart_git_conflict")
+    if any(not step.get("ok") for step in journal.get("environment_steps", [])):
+        raise UpdateError("Подготовка окружения не завершена.", "restart_environment_failed")
+    return {"version": RUNNING_VERSION, "head": head, "api": "responding"}
+
+
 def _read_update_diff(old_head, new_head):
     result = _run_git(["diff", "--name-only", "-z", old_head, new_head], 30)
     if not result["ok"]:
@@ -311,9 +395,16 @@ class UpdateManager:
     """Трёхэтапный процесс с устойчивым журналом и явными барьерами подтверждения."""
 
     def state(self):
-        with _LOCK:
+        with _LOCK, _process_lock():
             journal = _load_journal()
             if journal.get("state") == "RESTART_REQUIRED" and journal.get("process_pid") != os.getpid():
+                try:
+                    journal["restart_health"] = _restart_health(journal)
+                except UpdateError as exc:
+                    journal["error"] = str(exc)
+                    _save_journal(journal)
+                    return {"success": True, "journal": journal}
+                journal.pop("error", None)
                 journal["state"] = "COMPLETED"
                 journal["restart_verified_pid"] = os.getpid()
                 journal["restart_verified_at"] = _now()
@@ -321,7 +412,7 @@ class UpdateManager:
             return {"success": True, "journal": journal}
 
     def check(self):
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("state") in ("APPLYING", "CODE_UPDATED", "RESTORING", "PREPARING", "RESTART_REQUIRED", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"):
                 raise UpdateError(
@@ -398,12 +489,16 @@ class UpdateManager:
             return {"success": True, "plan": journal}
 
     def apply(self, operation_id):
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("state") != "CHECKED" or journal.get("id") != operation_id:
                 raise UpdateError("План устарел или отсутствует. Выполните повторную проверку.", "plan_stale")
             if journal.get("blockers"):
                 raise UpdateError("Обновление заблокировано: " + " ".join(journal["blockers"]), "update_blocked")
+            branch, upstream, remote, remote_branch = _branch_and_upstream()
+            _validate_official_remote(remote)
+            if (branch, upstream, remote, remote_branch) != (journal.get("branch"), journal.get("upstream"), journal.get("remote"), journal.get("remote_branch")) or _git_operation_in_progress():
+                raise UpdateError("Ветка или состояние Git изменились. Повторите проверку.", "plan_stale")
             if _git_ok(["rev-parse", "HEAD"]) != journal.get("old_head"):
                 raise UpdateError("HEAD изменился после проверки. Повторите шаг 1.", "plan_stale")
             current_status = _status_fingerprint()
@@ -447,27 +542,20 @@ class UpdateManager:
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
             except Exception as exc:
-                backup_created = bool(journal.get("backup_oid"))
-                if journal.get("backup_ref") and not backup_created:
-                    latest = _run_git(["rev-parse", "--verify", "refs/stash"])
-                    if latest.get("ok"):
-                        subject = _run_git(["log", "-1", "--format=%s", latest["stdout"].strip()])
-                        backup_created = subject.get("ok") and subject["stdout"].rstrip("\r\n") == journal.get("backup_message")
-                if not backup_created:
-                    journal.pop("backup_ref", None)
-                    journal.pop("backup_message", None)
-                    journal["state"] = "FAILED"
-                else:
-                    journal["state"] = "RECOVERY_REQUIRED"
+                # A failed command can still have changed HEAD or the worktree.
+                # Preserve the intent and let recover inspect the actual repository.
+                journal["state"] = "RECOVERY_REQUIRED"
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise
 
     def prepare(self, operation_id):
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("id") != operation_id or journal.get("state") != "CODE_UPDATED":
                 raise UpdateError("Шаг 2 ещё не завершён или операция устарела.", "invalid_state")
+            if _git_ok(["rev-parse", "HEAD"]) != journal.get("remote_head") or _git_operation_in_progress() or _git_ok(["ls-files", "-u"]):
+                raise UpdateError("HEAD или состояние Git изменилось; подготовка остановлена.", "head_unknown", 423)
             journal["state"] = "RESTORING"
             _save_journal(journal)
             try:
@@ -478,6 +566,7 @@ class UpdateManager:
                             "Автоматическое восстановление остановлено, резервная копия сохранена.",
                             "restore_worktree_dirty",
                         )
+                    _ensure_backup_ref(journal)
                     result = _run_git(["stash", "apply", "--index", journal["backup_ref"]], _TIMEOUT)
                     if not result["ok"]:
                         raise UpdateError(
@@ -542,6 +631,7 @@ class UpdateManager:
                 journal["environment_steps"] = results
                 journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed"))
                 if journal["restart_required"]:
+                    journal["target_version"] = _target_version(journal["remote_head"])
                     journal["process_pid"] = os.getpid()
                     journal["state"] = "RESTART_REQUIRED"
                 else:
@@ -556,12 +646,17 @@ class UpdateManager:
 
     def recover(self, operation_id, manual_confirmation=False):
         """Повторная попытка или подтверждение ручного восстановления локальных изменений."""
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("id") != operation_id or journal.get("state") not in (
                 "APPLYING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR", "RESTORING", "PREPARING"
             ):
                 raise UpdateError("Нет операции, требующей восстановления.", "invalid_state")
+            current_head = _git_ok(["rev-parse", "HEAD"])
+            if current_head not in (journal.get("old_head"), journal.get("remote_head")):
+                raise UpdateError("HEAD неизвестен; восстановление остановлено.", "head_unknown", 423)
+            if _git_operation_in_progress() or _git_ok(["ls-files", "-u"]):
+                raise UpdateError("Сначала разрешите Git-конфликты.", "git_conflict", 423)
             backup_ref = journal.get("backup_ref")
             if not backup_ref:
                 current_head = _git_ok(["rev-parse", "HEAD"])
@@ -569,7 +664,7 @@ class UpdateManager:
                     journal["new_head"] = current_head
                     journal["change_summary"] = journal.get("change_summary") or _read_update_diff(journal["old_head"], current_head)
                     journal["state"] = "CODE_UPDATED"
-                elif current_head == journal.get("old_head"):
+                elif current_head == journal.get("old_head") and _status_fingerprint() == journal.get("status_fingerprint"):
                     journal["state"] = "FAILED"
                 else:
                     raise UpdateError("HEAD не совпадает ни с исходной, ни с целевой версией. Нужна ручная диагностика.", "head_unknown", 423)
@@ -582,7 +677,7 @@ class UpdateManager:
                 found = _find_stash_oid(journal.get("backup_message", ""))
                 if not found:
                     current_head = _git_ok(["rev-parse", "HEAD"])
-                    if current_head == journal.get("old_head") and _worktree_status():
+                    if current_head == journal.get("old_head") and _status_fingerprint() == journal.get("status_fingerprint"):
                         journal["state"] = "FAILED"
                         journal.pop("backup_ref", None)
                         journal.pop("backup_message", None)
@@ -624,8 +719,10 @@ class UpdateManager:
                 journal["new_head"] = current_head
                 journal["change_summary"] = _read_update_diff(journal["old_head"], current_head)
                 journal["state"] = "CODE_UPDATED"
-            else:
+            elif current_head == journal.get("old_head"):
                 journal["state"] = "FAILED"
+            else:
+                raise UpdateError("HEAD изменился при восстановлении.", "head_unknown", 423)
             journal.pop("error", None)
             _save_journal(journal)
             return {"success": True, "journal": journal}

@@ -243,6 +243,8 @@ def test_restart_required_completes_only_after_new_process(git_fixture, monkeypa
         "state": "RESTART_REQUIRED",
         "process_pid": 12345,
         "restart_required": True,
+        "remote_head": _git(git_fixture, "rev-parse", "HEAD"),
+        "target_version": updater.RUNNING_VERSION,
     }
     updater._save_journal(journal)
     monkeypatch.setattr(updater.os, "getpid", lambda: 54321)
@@ -251,3 +253,115 @@ def test_restart_required_completes_only_after_new_process(git_fixture, monkeypa
     assert state["state"] == "COMPLETED"
     assert state["restart_verified_pid"] == 54321
     assert state["restart_verified_at"]
+
+
+def test_journal_replace_retries_transient_permission_error(git_fixture, monkeypatch):
+    original = updater.os.replace
+    calls = []
+
+    def flaky(source, target):
+        calls.append(target)
+        if len(calls) < 3:
+            raise PermissionError("simulated cloud lock")
+        return original(source, target)
+
+    monkeypatch.setattr(updater.os, "replace", flaky)
+    monkeypatch.setattr(updater.time, "sleep", lambda _: None)
+    updater._save_journal({"schema": 1, "state": "IDLE"})
+    assert len(calls) == 3
+    assert updater._load_journal()["state"] == "IDLE"
+
+
+def test_journal_permanent_permission_error_preserves_temp(git_fixture, monkeypatch):
+    def blocked(*args):
+        raise PermissionError("simulated cloud lock")
+
+    monkeypatch.setattr(updater.os, "replace", blocked)
+    monkeypatch.setattr(updater.time, "sleep", lambda _: None)
+    with pytest.raises(updater.UpdateError) as error:
+        updater._save_journal({"schema": 1, "state": "IDLE"})
+    assert error.value.code == "journal_write_blocked"
+    assert os.path.isfile(updater._JOURNAL_PATH + ".tmp")
+
+
+def test_process_lock_released_after_exception(git_fixture):
+    with pytest.raises(RuntimeError):
+        with updater._process_lock():
+            raise RuntimeError("failure")
+    with updater._process_lock():
+        pass
+
+
+def test_failure_after_merge_requires_recovery(git_fixture, monkeypatch):
+    plan = updater.manager.check()["plan"]
+    original = updater._git_ok
+
+    def interrupted(args, timeout=30):
+        result = original(args, timeout)
+        if args[:2] == ["merge", "--ff-only"]:
+            raise updater.UpdateError("simulated interruption")
+        return result
+
+    monkeypatch.setattr(updater, "_git_ok", interrupted)
+    with pytest.raises(updater.UpdateError):
+        updater.manager.apply(plan["id"])
+    assert updater.manager.state()["journal"]["state"] == "RECOVERY_REQUIRED"
+    recovered = updater.manager.recover(plan["id"])["journal"]
+    assert recovered["state"] == "CODE_UPDATED"
+    assert recovered["new_head"] == plan["remote_head"]
+
+
+@pytest.mark.parametrize("failure", ["stash", "update-ref", "bundle", "merge"])
+def test_recover_interrupted_backup_sequence(git_fixture, monkeypatch, failure):
+    work = git_fixture
+    (work / "local-note.txt").write_text("keep me", encoding="utf-8")
+    plan = updater.manager.check()["plan"]
+    original = updater._git_ok
+    hit = False
+
+    def interrupted(args, timeout=30):
+        nonlocal hit
+        result = original(args, timeout)
+        if not hit and args[0] == failure:
+            hit = True
+            raise updater.UpdateError("simulated interruption")
+        return result
+
+    monkeypatch.setattr(updater, "_git_ok", interrupted)
+    with pytest.raises(updater.UpdateError):
+        updater.manager.apply(plan["id"])
+    assert hit
+    monkeypatch.setattr(updater, "_git_ok", original)
+    recovered = updater.manager.recover(plan["id"])["journal"]
+    assert recovered["state"] == ("CODE_UPDATED" if failure == "merge" else "FAILED")
+    assert (work / "local-note.txt").read_text(encoding="utf-8") == "keep me"
+    assert recovered["backup_verified"]
+
+
+def test_restart_rejects_wrong_version(git_fixture, monkeypatch):
+    updater._save_journal({"schema": 1, "id": "b" * 32, "state": "RESTART_REQUIRED",
+                           "process_pid": -1, "remote_head": _git(git_fixture, "rev-parse", "HEAD"),
+                           "target_version": "999.0.0"})
+    journal = updater.manager.state()["journal"]
+    assert journal["state"] == "RESTART_REQUIRED"
+    assert journal["error"]
+
+
+def test_journal_rejects_invalid_backup_ref(git_fixture):
+    updater._save_journal({"schema": 1, "id": "b" * 32, "state": "APPLYING",
+                           "backup_ref": "refs/heads/main"})
+    with pytest.raises(updater.UpdateError) as error:
+        updater.manager.state()
+    assert error.value.code == "journal_corrupt"
+
+
+def test_process_lock_excludes_another_process(git_fixture):
+    code = ("from core.updater import manager as u; "
+            "u._JOURNAL_DIR = " + repr(updater._JOURNAL_DIR) + "; "
+            "exec('with u._process_lock(): pass')")
+    with updater._process_lock():
+        result = subprocess.run([updater.sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
+        assert result.returncode != 0
+        assert "update_locked" in result.stderr or "Другая операция" in result.stderr
+    result = subprocess.run([updater.sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr

@@ -82,7 +82,7 @@ export default function UpdateWizardTab() {
 
       {error && (
         <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200 whitespace-pre-wrap">
-          <b>Операция не завершена:</b> {error}
+          <b>Операция не завершена:</b> {error}<div className="mt-2">Путь исправления: устраните указанную причину. При повреждённом журнале сохраните journal.json и journal.json.tmp для диагностики; не удаляйте резервные ссылки.</div>
         </div>
       )}
 
@@ -193,12 +193,12 @@ export default function UpdateWizardTab() {
         )}
         {journal?.restart_required && state === 'RESTART_REQUIRED' && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
-            Изменён Python-код. Для загрузки новой версии требуется перезапустить drmAIcu. Перезапуск не выполняется автоматически, чтобы не прервать показ результата мастера.
+            Изменён Python-код. Для загрузки новой версии требуется перезапустить drmAIcu. Если проверка не прошла, исправьте причину и повторно откройте мастер. Перезапуск не выполняется автоматически, чтобы не прервать показ результата мастера.
           </div>
         )}
         {journal?.restart_verified_at && (
           <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-200">
-            Перезапуск подтверждён: новый процесс drmAIcu запущен, API отвечает. {journal.restart_verified_at}
+            Перезапуск подтверждён: версия {journal.restart_health?.version || '—'}, HEAD {journal.restart_health?.head?.slice(0, 12) || '—'}, API отвечает. {journal.restart_verified_at}
           </div>
         )}
         {journal?.environment_steps?.map((item: any) => (
