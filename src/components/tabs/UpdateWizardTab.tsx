@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
+import { cleanCommandOutput, updateStateLabel, hasNpmWarnings } from './updatePresentation';
 
 type ApiResult = { success: boolean; error?: string; code?: string; plan?: any; journal?: any };
 
@@ -143,7 +144,7 @@ export default function UpdateWizardTab() {
             <p className="text-sm text-gray-400 mt-1">Три шага. Каждый этап запускается отдельно и только после подтверждения.</p>
           </div>
           <span className={`text-xs px-3 py-1.5 rounded-full border ${state === 'COMPLETED' ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10' : canRecover ? 'border-red-500/50 text-red-300 bg-red-500/10' : 'border-gray-700 text-gray-300 bg-gray-800'}`}>
-            {upToDate ? 'Актуальная версия' : state}
+            {upToDate ? 'Актуальная версия' : updateStateLabel(state)}
           </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -180,7 +181,7 @@ export default function UpdateWizardTab() {
 
       {journal?.error && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-200 whitespace-pre-wrap">
-          <b>Последняя ошибка из журнала:</b> {journal.error}
+          <b>Последняя ошибка из журнала:</b> {cleanCommandOutput(journal.error)}
         </div>
       )}
 
@@ -298,8 +299,8 @@ export default function UpdateWizardTab() {
         )}
         {journal?.environment_steps?.map((item: any) => (
           <div key={item.step} className="rounded-lg border border-gray-800 bg-gray-950/70 p-3">
-            <div className="flex justify-between text-sm"><b className="text-gray-200">{item.step}</b><span className={item.ok ? 'text-emerald-300' : 'text-red-300'}>{item.ok ? 'PASS' : 'FAIL'}</span></div>
-            {(item.stderr || item.stdout) && <details className="mt-2 text-xs text-gray-400"><summary>Вывод команды</summary><pre className="whitespace-pre-wrap max-h-48 overflow-auto">{[item.stdout,item.stderr].filter(Boolean).join("\\n")}</pre></details>}
+            <div className="flex justify-between text-sm"><b className="text-gray-200">{item.step}</b><span className={item.ok ? (hasNpmWarnings(item) ? 'text-amber-300' : 'text-emerald-300') : 'text-red-300'}>{item.ok ? (hasNpmWarnings(item) ? 'Выполнен с предупреждениями' : 'Выполнен') : 'Ошибка'}</span></div>
+            {(item.stderr || item.stdout) && <details className="mt-2 text-xs text-gray-400"><summary>Вывод команды</summary><pre className="whitespace-pre-wrap max-h-48 overflow-auto">{[item.stdout, item.stderr].map(cleanCommandOutput).filter(Boolean).join("\n")}</pre></details>}
           </div>
         ))}
       </section>
@@ -308,7 +309,7 @@ export default function UpdateWizardTab() {
         <h3 className="font-bold text-white">История обновлений</h3>
         {!history.length && <p className="text-sm text-gray-400">Архив пока пуст. Завершённые операции сохраняются перед следующей проверкой.</p>}
         {history.map(item => <details key={item.id} className="rounded-lg border border-gray-800 p-3 text-sm">
-          <summary className="cursor-pointer text-gray-200">{item.current_version || '—'} → {item.target_version || item.remote_head?.slice(0,8) || '—'} · {item.state === 'COMPLETED' ? 'Завершено' : item.state} · {formatDate(item.finished_at || item.updated_at)}</summary>
+          <summary className="cursor-pointer text-gray-200">{item.current_version || '—'} → {item.target_version || item.remote_head?.slice(0,8) || '—'} · {updateStateLabel(item.state)} · {formatDate(item.finished_at || item.updated_at)}</summary>
           <div className="mt-3"><UpdateReport item={item} /></div>
           <button className="mt-3 rounded border border-gray-600 px-3 py-1" onClick={async () => {
             try { await navigator.clipboard.writeText(JSON.stringify(item, null, 2)); setCopyStatus('Диагностический отчёт скопирован'); }
@@ -356,13 +357,13 @@ function UpdateReport({ item }: { item: any }) {
     ['Перезапуск', item.restart_verified_at ? 'Выполнен' : item.restart_required === false ? 'Не требуется' : 'Нет данных'],
   ];
   return <div className="space-y-2 text-sm text-gray-300">
-    <div className="font-mono">{item.current_version || '—'} → {item.target_version || '—'} · {item.state}</div>
+    <div className="font-mono">{item.current_version || '—'} → {item.target_version || '—'} · {updateStateLabel(item.state)}</div>
     <div>Начало: {formatDate(item.started_at)} · Окончание: {formatDate(item.finished_at || item.updated_at)}</div>
     <div>Продолжительность: {typeof item.duration_seconds === 'number' ? item.duration_seconds + ' сек.' : 'Нет данных'}</div>
     {rows.map(([label,status]) => <div key={label} className="flex justify-between gap-2 border-t border-gray-800 pt-1"><span>{label}</span><span className={status === 'Выполнен' ? 'text-emerald-300' : status === 'Ошибка' ? 'text-red-300' : 'text-gray-400'}>{status}</span></div>)}
     <details><summary className="cursor-pointer text-cyan-300">Журнал этапов и коды завершения</summary>
       <div className="mt-2 max-h-64 overflow-auto space-y-1 font-mono text-xs">
-        {(item.events || []).map((e: any,i: number) => <div key={i}>{formatDate(e.at)} · {e.state} {e.step || ''} {e.code || ''}</div>)}
+        {(item.events || []).map((e: any,i: number) => <div key={i}>{formatDate(e.at)} · {updateStateLabel(e.state)} {e.step || ''} {e.code || ''}</div>)}
         {(item.environment_steps || []).map((e: any) => <div key={e.step}>{e.step}: {e.ok ? 'PASS' : 'FAIL'} · exit {e.code ?? '—'} {e.diagnostic || ''}</div>)}
         {!item.events?.length && <div>Подробные события старой операции не сохранены.</div>}
       </div>

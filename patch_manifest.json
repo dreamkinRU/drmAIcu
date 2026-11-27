@@ -1,17 +1,6 @@
 {
   "applied": [
     {
-      "patch_id": "018",
-      "target_file": "src/App.tsx",
-      "applied_at": "2026-11-15T19:04:55.549054",
-      "checksum": "f589dbef725dad1d6e47d3c496ad25157f3caa074757ec59f089722fb9cb6aff",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_190455.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_20261115_190455_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\App.tsx_LATEST.bak"
-      ]
-    },
-    {
       "patch_id": "019",
       "target_file": "main.py",
       "applied_at": "2026-11-18T17:56:55.711872",
@@ -4086,6 +4075,138 @@
         "backups/agent_engine.py_20261123_231910_685501.bak",
         "backups/agent_engine.py_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "171",
+      "target_file": "src/components/tabs/updatePresentation.ts+src/components/tabs/UpdateWizardTab.tsx+version.py+package.json+package-lock.json+README.md+docs/USER_GUIDE.md+docs/ARCHITECTURE.md+docs/HANDOFF.md+docs/CHANGELOG.md+docs/UPDATE_MANAGER.md+tests/update_presentation.test.mjs",
+      "operations": [
+        {
+          "target_file": "src/components/tabs/updatePresentation.ts",
+          "checksum": "e07af9c2dbe1282f7ce817fe20733b9d397ec8f2bf5c26f02994c2ca9146cfb0",
+          "backups": [],
+          "backup_sha": null
+        },
+        {
+          "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+          "checksum": "90ed903f78a96c41d2bcec4d408aac140927f1970fe8b8b42bffd3fa0743be09",
+          "backups": [
+            "backups/src__components__tabs__UpdateWizardTab.tsx_20261127_203851_994131.bak",
+            "backups/src__components__tabs__UpdateWizardTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "e1f8a62801a297244871f4720e0b61684001d7a28763f3ee90dd86f424e24b0e"
+        },
+        {
+          "target_file": "version.py",
+          "checksum": "cd4ff500883dc5577fad6102ac18f4e34ed0efbcd4e50312948816e516c7f77e",
+          "backups": [
+            "backups/version.py_20261127_203851_999183.bak",
+            "backups/version.py_LATEST.bak"
+          ],
+          "backup_sha": "ee6eaefab21eeb2c0f2d3f1a97d21cd9081dd8c1511affc408d79a39940cfb17"
+        },
+        {
+          "target_file": "package.json",
+          "checksum": "a4c1449283961109c7fb7605afda4cef70872c2879b66ad9235a03cea2ca0ff9",
+          "backups": [
+            "backups/package.json_20261127_203852_002722.bak",
+            "backups/package.json_LATEST.bak"
+          ],
+          "backup_sha": "89e45157658f6eee912ab8b6a5dd55e8c13c1e2d70e2c9612149065a30f45bda"
+        },
+        {
+          "target_file": "package-lock.json",
+          "checksum": "8e26c490de2293662ca79a7cbe678cfccee22610a5771af94cd2cfe38fd0a5c3",
+          "backups": [
+            "backups/package-lock.json_20261127_203852_005384.bak",
+            "backups/package-lock.json_LATEST.bak"
+          ],
+          "backup_sha": "1989bc7d8eb7817e9d2e31ca9f9431db96c6b2300baa32e34834b91cd11e4e74"
+        },
+        {
+          "target_file": "README.md",
+          "checksum": "904f6f6fccf8d7b6fcd0c23a60f808c487cd44610bf1ed2d7fda297ed6caa17e",
+          "backups": [
+            "backups/README.md_20261127_203852_008781.bak",
+            "backups/README.md_LATEST.bak"
+          ],
+          "backup_sha": "31caf1e2e23bca70afde5845f9b656c98f746c23b7091560e75d9c9469a076f0"
+        },
+        {
+          "target_file": "docs/USER_GUIDE.md",
+          "checksum": "9ec70f0d229246b27d710490118507ff1ad7b443b9a76c41a157885f8d1a4fa5",
+          "backups": [
+            "backups/docs__USER_GUIDE.md_20261127_203852_010838.bak",
+            "backups/docs__USER_GUIDE.md_LATEST.bak"
+          ],
+          "backup_sha": "a99941b2b51c81ea0142909ab9fa5879d0dbd50ffb6eb6fccd02a699771f86ee"
+        },
+        {
+          "target_file": "docs/ARCHITECTURE.md",
+          "checksum": "d4eaa425e76ebf0beb64024fe22aa162c62b24aa3c6e64cbd3d39ea850cc3194",
+          "backups": [
+            "backups/docs__ARCHITECTURE.md_20261127_203852_012844.bak",
+            "backups/docs__ARCHITECTURE.md_LATEST.bak"
+          ],
+          "backup_sha": "b26e03fed83e7328f4fb949ae2ccae460dcc0406c86443cd6f746a5a185552fd"
+        },
+        {
+          "target_file": "docs/HANDOFF.md",
+          "checksum": "7c789f17ca13f01c51d1ec5dd1a7f6d01f514f3cf7a2342e5c162b9823d9ad58",
+          "backups": [
+            "backups/docs__HANDOFF.md_20261127_203852_014369.bak",
+            "backups/docs__HANDOFF.md_LATEST.bak"
+          ],
+          "backup_sha": "4e735085528b85401b934aa309d8691e2407f953322f6e0e86a4c5cf2b27ff36"
+        },
+        {
+          "target_file": "docs/CHANGELOG.md",
+          "checksum": "5bf93876615b37e6e4b40fc1f9ec11bfcb206977999b83436af7340af66b915a",
+          "backups": [
+            "backups/docs__CHANGELOG.md_20261127_203852_016974.bak",
+            "backups/docs__CHANGELOG.md_LATEST.bak"
+          ],
+          "backup_sha": "7237cf7e892d4f7fc8e13f62ba80427617db8999539adb8ce32bfdc4081f2567"
+        },
+        {
+          "target_file": "docs/UPDATE_MANAGER.md",
+          "checksum": "f0c0ec03009c53ce318950a14e0d9bdb7e0f443fad2d33efb6cdb0829acb7060",
+          "backups": [
+            "backups/docs__UPDATE_MANAGER.md_20261127_203852_020406.bak",
+            "backups/docs__UPDATE_MANAGER.md_LATEST.bak"
+          ],
+          "backup_sha": "69913d730b7b46b21671d612f844bac06087c30a23ef5e0ea5b6efb05d94e87c"
+        },
+        {
+          "target_file": "tests/update_presentation.test.mjs",
+          "checksum": "2819b9a3b8941afd3b3e9cecefd10c38a8ece02183578ee13bdaac94ebe24632",
+          "backups": [],
+          "backup_sha": null
+        }
+      ],
+      "applied_at": "2026-11-27T20:38:52.639732",
+      "checksum": "380dda16dc20b754066f76a9f2682a5fec2300ea9c5c00dbb6d5b714b779e371",
+      "backups": [
+        "backups/src__components__tabs__UpdateWizardTab.tsx_20261127_203851_994131.bak",
+        "backups/src__components__tabs__UpdateWizardTab.tsx_LATEST.bak",
+        "backups/version.py_20261127_203851_999183.bak",
+        "backups/version.py_LATEST.bak",
+        "backups/package.json_20261127_203852_002722.bak",
+        "backups/package.json_LATEST.bak",
+        "backups/package-lock.json_20261127_203852_005384.bak",
+        "backups/package-lock.json_LATEST.bak",
+        "backups/README.md_20261127_203852_008781.bak",
+        "backups/README.md_LATEST.bak",
+        "backups/docs__USER_GUIDE.md_20261127_203852_010838.bak",
+        "backups/docs__USER_GUIDE.md_LATEST.bak",
+        "backups/docs__ARCHITECTURE.md_20261127_203852_012844.bak",
+        "backups/docs__ARCHITECTURE.md_LATEST.bak",
+        "backups/docs__HANDOFF.md_20261127_203852_014369.bak",
+        "backups/docs__HANDOFF.md_LATEST.bak",
+        "backups/docs__CHANGELOG.md_20261127_203852_016974.bak",
+        "backups/docs__CHANGELOG.md_LATEST.bak",
+        "backups/docs__UPDATE_MANAGER.md_20261127_203852_020406.bak",
+        "backups/docs__UPDATE_MANAGER.md_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -5213,6 +5334,25 @@
         "agent_engine.py"
       ],
       "timestamp": "2026-11-23T23:19:10.833037"
+    },
+    {
+      "action": "apply",
+      "patch_id": "171",
+      "files": [
+        "src/components/tabs/updatePresentation.ts",
+        "src/components/tabs/UpdateWizardTab.tsx",
+        "version.py",
+        "package.json",
+        "package-lock.json",
+        "README.md",
+        "docs/USER_GUIDE.md",
+        "docs/ARCHITECTURE.md",
+        "docs/HANDOFF.md",
+        "docs/CHANGELOG.md",
+        "docs/UPDATE_MANAGER.md",
+        "tests/update_presentation.test.mjs"
+      ],
+      "timestamp": "2026-11-27T20:38:52.639732"
     }
   ],
   "rollbacks": [
