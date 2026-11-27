@@ -3,17 +3,6 @@
     {
       "patch_id": "019",
       "target_file": "main.py",
-      "applied_at": "2026-11-18T17:56:55.711872",
-      "checksum": "39db3d080f0e69c17be553e502edb6a5b9e0a5328cf5293f14d3035d22e7b1e6",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261118_175655.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261118_175655_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
-      "patch_id": "019",
-      "target_file": "main.py",
       "applied_at": "2026-11-18T18:00:40.703368",
       "checksum": "39db3d080f0e69c17be553e502edb6a5b9e0a5328cf5293f14d3035d22e7b1e6",
       "backups": [
@@ -4207,6 +4196,55 @@
         "backups/docs__UPDATE_MANAGER.md_20261127_203852_020406.bak",
         "backups/docs__UPDATE_MANAGER.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "172",
+      "target_file": "docs/ROADMAP.md+README.md+docs/HANDOFF.md+docs/ARCHITECTURE.md",
+      "operations": [
+        {
+          "target_file": "docs/ROADMAP.md",
+          "checksum": "bcfe4dbc1f041d806e12c4546d87ab0544beb775409ed4c82ced99d49411695e",
+          "backups": [],
+          "backup_sha": null
+        },
+        {
+          "target_file": "README.md",
+          "checksum": "c8b8bb7558b395ab5442d19cb7ea07cab908aad2294129675bde3a90e42e1eee",
+          "backups": [
+            "backups/README.md_20261127_204919_337880.bak",
+            "backups/README.md_LATEST.bak"
+          ],
+          "backup_sha": "904f6f6fccf8d7b6fcd0c23a60f808c487cd44610bf1ed2d7fda297ed6caa17e"
+        },
+        {
+          "target_file": "docs/HANDOFF.md",
+          "checksum": "99983aeeac258b4e397535719ef16fa3e1747f4ba93fdd778ce666b56d1ba0ff",
+          "backups": [
+            "backups/docs__HANDOFF.md_20261127_204919_339785.bak",
+            "backups/docs__HANDOFF.md_LATEST.bak"
+          ],
+          "backup_sha": "7c789f17ca13f01c51d1ec5dd1a7f6d01f514f3cf7a2342e5c162b9823d9ad58"
+        },
+        {
+          "target_file": "docs/ARCHITECTURE.md",
+          "checksum": "f1753147b76af18b539ded408a7b543ba583450756056ae506ae4634bc4a5a91",
+          "backups": [
+            "backups/docs__ARCHITECTURE.md_20261127_204919_341796.bak",
+            "backups/docs__ARCHITECTURE.md_LATEST.bak"
+          ],
+          "backup_sha": "d4eaa425e76ebf0beb64024fe22aa162c62b24aa3c6e64cbd3d39ea850cc3194"
+        }
+      ],
+      "applied_at": "2026-11-27T20:49:19.555936",
+      "checksum": "dcb024ddb61684d588ebb106248c16493723805cde261952e440ab238258e7e6",
+      "backups": [
+        "backups/README.md_20261127_204919_337880.bak",
+        "backups/README.md_LATEST.bak",
+        "backups/docs__HANDOFF.md_20261127_204919_339785.bak",
+        "backups/docs__HANDOFF.md_LATEST.bak",
+        "backups/docs__ARCHITECTURE.md_20261127_204919_341796.bak",
+        "backups/docs__ARCHITECTURE.md_LATEST.bak"
+      ]
     }
   ],
   "history": [
@@ -5353,6 +5391,17 @@
         "tests/update_presentation.test.mjs"
       ],
       "timestamp": "2026-11-27T20:38:52.639732"
+    },
+    {
+      "action": "apply",
+      "patch_id": "172",
+      "files": [
+        "docs/ROADMAP.md",
+        "README.md",
+        "docs/HANDOFF.md",
+        "docs/ARCHITECTURE.md"
+      ],
+      "timestamp": "2026-11-27T20:49:19.555936"
     }
   ],
   "rollbacks": [
