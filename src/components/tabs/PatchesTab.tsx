@@ -40,7 +40,7 @@ export default function PatchesTab({
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold">🔄 Система автопатчей</h2>
-          <p className="text-sm text-gray-400 mt-1">Сканирование patch/ и Загрузок каждые 5 сек</p>
+          <p className="text-sm text-gray-400 mt-1">Сканирование JSON/TXT-патчей в patch/ и Загрузках</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -82,6 +82,19 @@ export default function PatchesTab({
         </div>
       </div>
 
+      {!!patchStats.reports?.length && <section className="rounded-xl border border-emerald-500/30 p-4 space-y-2">
+        <h3 className="font-bold text-emerald-300">Последние применённые патчи — отчёты из манифеста</h3>
+        {patchStats.reports.map((report, i) => <details key={report.patch_id + i} open={i === 0} className="rounded border border-gray-700 p-3">
+          <summary className="cursor-pointer text-sm">#{report.patch_id} · {report.applied_at || "Дата неизвестна"} · {report.files.length} файл(ов)</summary>
+          <div className="text-sm mt-2 space-y-1">
+            <p className="text-emerald-300">Изменения зарегистрированы в манифесте</p>
+            <p>Резервных копий: {report.backup_count}</p>
+            <p className={report.archive_status === "archived" ? "text-emerald-300" : "text-amber-300"}>Архив: {({archived:"перемещён",failed:"не завершён — можно повторить через В архив",not_found:"источник не найден или не совпадает",pending:"результат не подтверждён",unknown:"нет исторических данных"} as Record<string,string>)[report.archive_status] || report.archive_status}</p>
+            {report.archive_name && <p className="font-mono text-xs">{report.archive_name}</p>}
+            <ul className="font-mono text-xs max-h-40 overflow-auto">{report.files.map((f,j) => <li key={j}>{f}</li>)}</ul>
+          </div>
+        </details>)}
+      </section>}
       <div className="flex gap-2">
         {(['all', 'pending', 'applied', 'errors'] as const).map(f => (
           <button
@@ -216,7 +229,7 @@ export default function PatchesTab({
                   setSelectedPatch(null);
                   setPatchPreview(null);
                 }}
-                disabled={applyingPatch}
+                disabled={applyingPatch || !!selectedPatch?.is_applied || patches.some(p => p.patch_id === selectedPatch?.patch_id && p.is_applied)}
                 className="flex-1 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold disabled:opacity-50"
               >
                 ✅ Применить

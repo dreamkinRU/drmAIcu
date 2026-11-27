@@ -495,55 +495,65 @@ def _patch_source_dirs():
     return dirs
 
 
-def find_patch_file(pid, fname=''):
-    # B25 FIX: fname из payload не может совершить traversal — только basename + '.json' внутри разрешённых папок
-    dirs = _patch_source_dirs()
-    if fname:
-        f = os.path.basename(str(fname))
-        if f and f.endswith('.json'):
-            for d_dir in dirs:
-                p = os.path.join(d_dir, f)
-                if os.path.isfile(p):
-                    return p
-    if not pid:
+def is_patch_filename(name):
+    return (isinstance(name, str) and bool(name) and not name.startswith('.')
+            and '/' not in name and '\\' not in name and ':' not in name
+            and chr(0) not in name and name.lower().endswith(('.json', '.txt')))
+
+
+def _source_patch(path):
+    if not os.path.isfile(path) or os.path.islink(path):
         return None
-    for d_dir in dirs:
-        for c in (pid + '.json', 'patch_' + pid + '.json'):
-            p = os.path.join(d_dir, c)
-            if os.path.isfile(p):
-                return p
-    for d_dir in dirs:
+    try:
+        data = json.loads(read_text(path).lstrip('\ufeff'))
+        return data if _is_valid_patch_dict(data) else None
+    except (ValueError, OSError):
+        return None
+
+
+def find_patch_file(pid, fname=''):
+    if fname and not is_patch_filename(fname):
+        return None
+    for folder in _patch_source_dirs():
         try:
-            for f in os.listdir(d_dir):
-                if not f.endswith('.json'):
+            names = [fname] if fname else sorted(os.listdir(folder))
+            for name in names:
+                if not is_patch_filename(name):
                     continue
-                p = os.path.join(d_dir, f)
-                if not os.path.isfile(p):
-                    continue
-                try:
-                    d = json.loads(read_text(p))
-                    if isinstance(d, dict) and str(d.get('patch_id', '')) == str(pid):
-                        return p
-                except Exception:
-                    continue
-        except Exception:
-            pass
+                path = os.path.join(folder, name)
+                data = _source_patch(path)
+                if data is not None and (not pid or str(data.get('patch_id', os.path.splitext(name)[0])) == str(pid)):
+                    return path
+        except OSError:
+            continue
     return None
+
+
+def archive_patch_source(path):
+    # Exclusive destination directory prevents replacement of older archives.
+    import uuid
+    if _source_patch(path) is None:
+        raise ValueError('Исходный файл не является патчем')
+    os.makedirs(ARCHIVE_DIR, exist_ok=True)
+    dst = os.path.join(ARCHIVE_DIR, os.path.basename(path))
+    if os.path.lexists(dst):
+        folder = os.path.join(ARCHIVE_DIR, uuid.uuid4().hex)
+        os.mkdir(folder)
+        dst = os.path.join(folder, os.path.basename(path))
+    shutil.move(path, dst)
+    return os.path.relpath(dst, ARCHIVE_DIR)
 
 
 def resolve(data):
     pid = str(data.get('patch_id', ''))
     fname = data.get('filename', '')
-    has_body = bool(data.get('operations')) or bool(data.get('diff')) or bool(data.get('full_file_content'))
+    has_body = bool(data.get('operations')) or bool(data.get('diff')) or bool(data.get('full_file_content')) or bool(data.get('find'))
     if not has_body:
-        p = find_patch_file(pid, fname)
-        if p:
-            try:
-                full = json.loads(read_text(p))
-                log('Loaded patch body from disk: ' + os.path.basename(p))
-                return full
-            except Exception as e:
-                log('Read patch failed: ' + str(e), 'ERROR')
+        path = find_patch_file(pid, fname)
+        if path:
+            full = _source_patch(path)
+            if full is not None:
+                return {**full, 'filename': os.path.basename(path)}
     return data
 
 
@@ -558,7 +568,7 @@ def _is_valid_patch_dict(d):
     if not isinstance(d, dict):
         return False
     if isinstance(d.get('operations'), list) and len(d.get('operations')) > 0:
-        return True
+        return all(isinstance(op, dict) and bool(op.get('target_file')) for op in d['operations'])
     if d.get('patch_id') and d.get('target_file'):
         return True
     return False
@@ -580,19 +590,19 @@ def list_patches():
         except OSError:
             continue
         for f in names:
-            if not f.endswith('.json') or f.startswith('.'):
+            if not is_patch_filename(f):
                 continue
             if f in seen_files:
                 continue
             p = os.path.join(src_dir, f)
-            if not os.path.isfile(p):
+            if not os.path.isfile(p) or os.path.islink(p):
                 continue
             try:
-                d = json.loads(read_text(p))
-                if is_downloads and not _is_valid_patch_dict(d):
+                d = json.loads(read_text(p).lstrip('\ufeff'))
+                if (is_downloads or f.lower().endswith('.txt')) and not _is_valid_patch_dict(d):
                     continue
                 seen_files.add(f)
-                pid = str(d.get('patch_id', f[:-5]))
+                pid = str(d.get('patch_id', os.path.splitext(f)[0]))
                 ops = normalize_ops(d)
                 multi = isinstance(d.get('operations'), list) and len(d.get('operations')) > 1
                 pt = 'multi' if multi else (d.get('type', '') or ('search_and_replace' if d.get('find') else ('unified_diff' if d.get('diff') else 'full_replace')))
@@ -615,10 +625,10 @@ def list_patches():
                             'full_file_content': d.get('full_file_content', ''), 'diff': d.get('diff', ''),
                             'operations': ops})
             except Exception as e:
-                if is_downloads:
+                if is_downloads or f.lower().endswith('.txt'):
                     continue
                 seen_files.add(f)
-                out.append({'filename': f, 'filepath': p, 'patch_id': f[:-5], 'patch_type': 'error',
+                out.append({'filename': f, 'filepath': p, 'patch_id': os.path.splitext(f)[0], 'patch_type': 'error',
                             'target_file': 'error', 'description': 'Bad JSON: ' + str(e)[:80],
                             'author': 'ERR', 'created_at': '', 'is_applied': False, 'multi': False, 'op_count': 0,
                             'file_exists': False, 'content_length': 0, 'has_content': False, 'error': str(e),
@@ -773,9 +783,9 @@ TX_LOCK = threading.RLock()
 
 
 def apply_patch(raw):
-    data = resolve(raw)
-    pid = str(data.get('patch_id', 'unknown'))
     with TX_LOCK:
+        data = resolve(raw)
+        pid = str(data.get('patch_id', 'unknown'))
         return _apply_patch_locked(data, pid)
 
 
@@ -795,6 +805,10 @@ def _apply_patch_locked(data, pid):
     if str(pid) in {str(a.get('patch_id')) for a in man0.get('applied', [])}:
         log('Patch ' + pid + ' rejected: already applied', 'ERROR')
         return {'success': False, 'error': 'Патч ' + str(pid) + ' уже применён (повторное применение запрещено)'}
+    src_patch = find_patch_file(pid, patch_fname)
+    # Never archive an unrelated file selected only by its name or ID.
+    if src_patch and normalize_ops(_source_patch(src_patch) or {}) != normalize_ops(data):
+        src_patch = None
     ops = compute_ops(data)
     errs = [o['err'] for o in ops if o['err']]
     if errs:
@@ -873,7 +887,8 @@ def _apply_patch_locked(data, pid):
         man = load_manifest()
         man['applied'].append({'patch_id': pid, 'target_file': planned[0]['tgt'] if len(planned) == 1 else '+'.join(pl['tgt'] for pl in planned),
                                'operations': oprecs, 'applied_at': datetime.now().isoformat(),
-                               'checksum': combined, 'backups': allb})
+                               'checksum': combined, 'backups': allb,
+                               'archive_status': 'pending' if src_patch else 'not_found'})
         man['history'].append({'action': 'apply', 'patch_id': pid, 'files': [pl['tgt'] for pl in planned],
                                'timestamp': datetime.now().isoformat()})
         if len(man['applied']) > 100:
@@ -883,18 +898,29 @@ def _apply_patch_locked(data, pid):
         save_manifest(man)
         # B51 FIX: транзакция зафиксирована в манифесте — журнал больше не нужен
         _clear_journal()
-        src_patch = find_patch_file(pid, patch_fname)
-        if src_patch and os.path.isfile(src_patch):
+        # Source archive is post-commit housekeeping: never roll back committed code.
+        archive_status = 'not_found'
+        archive_name = None
+        if src_patch:
             try:
-                dst_patch = os.path.join(ARCHIVE_DIR, os.path.basename(src_patch))
-                if os.path.exists(dst_patch):
-                    os.remove(dst_patch)
-                shutil.move(src_patch, dst_patch)
-                log('Patch ' + pid + ' auto-archived to ' + os.path.basename(dst_patch), 'INFO')
+                archive_name = archive_patch_source(src_patch)
+                archive_status = 'archived'
             except Exception as arch_err:
+                archive_status = 'failed'
                 log('Auto-archive failed for ' + pid + ': ' + str(arch_err), 'WARN')
+        report = {'patch_id': pid, 'applied_at': man['applied'][-1]['applied_at'],
+                  'files': [pl['tgt'] for pl in planned], 'archive_status': archive_status,
+                  'archive_name': archive_name, 'backup_count': len(allb)}
+        try:
+            man['applied'][-1].update({'archive_status': archive_status, 'archive_name': archive_name})
+            save_manifest(man)
+        except Exception as report_err:
+            log('Archive report persistence failed: ' + str(report_err), 'WARN')
         log('Patch ' + pid + ' applied with journaled recovery to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
-        return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам) и перемещён в архив', 'backups': allb}
+        return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам). ' +
+                {'archived': 'Исходник в архиве.', 'failed': 'Архивация не завершена; повторное применение запрещено.',
+                 'not_found': 'Исходный файл не найден или не совпадает с патчем.'}[archive_status],
+                'backups': allb, 'report': report}
     except Exception as e:
         rollback_failed = []
         for pl in planned:
@@ -1205,13 +1231,19 @@ def force_unlock_manifest():
 def stats():
     ps = list_patches()
     man = load_manifest()
-    ap = len([p for p in ps if p['is_applied']])
+    ap = len(man.get('applied', []))
+    reports = [{'patch_id': str(a.get('patch_id')), 'applied_at': a.get('applied_at'),
+                'files': [op.get('target_file') for op in a.get('operations', [])],
+                'archive_status': a.get('archive_status', 'unknown'),
+                'archive_name': a.get('archive_name'), 'backup_count': len(a.get('backups', []))}
+               for a in man.get('applied', [])[-20:]][::-1]
     journal = load_journal()
     journal_pending = journal is not None
     journal_reason = JOURNAL_LOCK or (
         'незавершённая транзакция требует recover_journal()' if journal_pending else ''
     )
-    return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap, 'version': _ENGINE_VERSION,
+    return {'total': len(ps), 'applied': ap, 'pending': len([p for p in ps if not p['is_applied'] and not p.get('error')]), 'version': _ENGINE_VERSION,
+            'reports': reports,
             'errors': len([p for p in ps if p.get('error')]),
             'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),

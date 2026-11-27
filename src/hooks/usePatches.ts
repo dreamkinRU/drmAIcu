@@ -42,11 +42,15 @@ export function usePatches(addLog: (entry: any) => void) {
   };
 
   const applyPatch = async (patch: PatchInfo) => {
+    if (applyingPatch || patch.is_applied || patches.some(p => p.patch_id === patch.patch_id && p.is_applied)) return;
     if (!confirm('Применить патч ' + patch.patch_id + '?')) return;
     setApplyingPatch(true);
     try {
       const data = await applyPatchApi(patch);
       if (data.success) {
+        setSelectedPatch(null);
+        setPatchPreview(null);
+        setPatches(prev => prev.map(p => p.patch_id === patch.patch_id ? { ...p, is_applied: true } : p));
         setPatchLog(prev => [...prev, '[' + new Date().toLocaleTimeString() + '] ✅ ' + data.message]);
         alert(data.message + '\nСписок патчей обновлен.');
         loadPatches();
@@ -76,6 +80,8 @@ export function usePatches(addLog: (entry: any) => void) {
     if (data.success) {
       loadPatches();
       setPatchLog(prev => [...prev, '[' + new Date().toLocaleTimeString() + '] 📦 ' + data.message]);
+    } else {
+      alert(data.error || 'Архивация не завершена');
     }
   };
 

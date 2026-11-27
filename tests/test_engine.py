@@ -321,6 +321,51 @@ def test_B25b_patch_body_from_disk_still_works(box):
     assert read(box / "a.py") == "x = 2\n"
 
 
+def test_patch_txt_downloads_archive_and_persistent_report(box, monkeypatch):
+    downloads = box / "downloads"
+    downloads.mkdir()
+    monkeypatch.setattr(engine, "DOWNLOADS_DIR", str(downloads))
+    put(box, "a.txt", "old")
+    data = {"patch_id": "TXT1", "operations": [{"type": "full_replace", "target_file": "a.txt", "full_file_content": "new"}]}
+    src = downloads / "TXT1.TXT"
+    src.write_text(json.dumps(data), encoding="utf-8-sig")
+    (downloads / "notes.txt").write_text("ordinary notes", encoding="utf-8")
+    assert [p["filename"] for p in engine.list_patches()] == ["TXT1.TXT"]
+    (box / "patch" / "archive" / src.name).write_text("old archive", encoding="utf-8")
+    result = engine.apply_patch({"patch_id": "TXT1", "filename": src.name})
+    assert result["success"] and result["report"]["archive_status"] == "archived"
+    assert not src.exists()
+    assert (box / "patch" / "archive" / src.name).read_text(encoding="utf-8") == "old archive"
+    assert engine.stats()["reports"][0]["archive_status"] == "archived"
+    assert engine.stats()["applied"] == 1
+
+
+def test_patch_archive_failure_does_not_repeat_apply(box, monkeypatch):
+    monkeypatch.setattr(engine, "DOWNLOADS_DIR", "")
+    put(box, "a.txt", "old")
+    data = {"patch_id": "LOCKED", "operations": [{"type": "full_replace", "target_file": "a.txt", "full_file_content": "new"}]}
+    src = box / "patch" / "locked.txt"
+    src.write_text(json.dumps(data), encoding="utf-8")
+    def fail(*args):
+        raise PermissionError("locked")
+    monkeypatch.setattr(engine.shutil, "move", fail)
+    result = engine.apply_patch({"patch_id": "LOCKED", "filename": src.name})
+    assert result["success"] and result["report"]["archive_status"] == "failed"
+    assert src.exists() and read(box / "a.txt") == "new"
+    assert engine.list_patches()[0]["is_applied"]
+    assert engine.stats()["pending"] == 0
+    assert not engine.apply_patch(data)["success"]
+
+
+def test_patch_txt_does_not_select_unrelated_file(box, monkeypatch):
+    monkeypatch.setattr(engine, "DOWNLOADS_DIR", "")
+    src = box / "patch" / "notes.txt"
+    src.write_text("ordinary notes", encoding="utf-8")
+    assert engine.find_patch_file("", src.name) is None
+    assert not json.loads(rpat.s_pdel({"filename": src.name}).body)["success"]
+    assert src.exists()
+
+
 def test_B26_manifest_write_crash_keeps_old_state(box, monkeypatch):
     import json as _json
     put(box, "a.py", "x = 1\n")

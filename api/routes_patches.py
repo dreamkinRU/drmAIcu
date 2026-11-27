@@ -73,7 +73,7 @@ def s_pvalidate_all():
     man = load_manifest()
     done = set(str(a.get('patch_id')) for a in man.get('applied', []))
     for f in sorted(os.listdir(PATCH_DIR)):
-        if not f.endswith('.json'):
+        if not _pe.is_patch_filename(f):
             continue
         fp = os.path.join(PATCH_DIR, f)
         try:
@@ -133,18 +133,11 @@ def s_ptest(payload: dict):
 @router.post('/api/patches/apply')
 def s_papply(payload: dict):
     log('API apply: ' + str(payload.get('patch_id', 'unknown')), 'INFO')
-    if payload.get('filename') and not payload.get('operations'):
-        fp = os.path.join(PATCH_DIR, os.path.basename(str(payload['filename'])))
-        if os.path.exists(fp):
-            try:
-                payload = json.loads(read_text(fp))
-            except Exception:
-                pass
     r = apply_patch(payload)
     # B72 FIX (P3-25): авто-рестарт после .py-патча — создаём restart.flag для launcher.bat
     if r.get('success') and isinstance(payload, dict):
-        for _op in (payload.get('operations') or []):
-            if str(_op.get('target_file', '')).lower().endswith('.py'):
+        for target in r.get('report', {}).get('files', []):
+            if str(target).lower().endswith('.py'):
                 try:
                     with open(RESTART_FLAG, 'w', encoding='utf-8') as _ff:
                         _ff.write(datetime.now().isoformat())
@@ -202,26 +195,24 @@ def s_manifest_reset():
 
 @router.post('/api/patches/archive')
 def s_parch(payload: dict):
-    f = os.path.basename(str(payload.get('filename', '')))
-    if not f or not f.endswith('.json'):
+    f = payload.get('filename', '')
+    if not _pe.is_patch_filename(f):
         return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
-    src = find_patch_file('', f)
-    dst = os.path.join(ARCHIVE_DIR, f)
-    if not src or not os.path.exists(src):
-        return JSONResponse({'success': False, 'error': 'Файл не найден'})
-    if os.path.exists(dst):
-        os.remove(dst)
-    try:
-        shutil.move(src, dst)
-        return JSONResponse({'success': True, 'message': f + ' в архиве'})
-    except Exception as e:
-        return JSONResponse({'success': False, 'error': str(e)})
+    with _pe.TX_LOCK:
+        src = find_patch_file('', f)
+        if not src:
+            return JSONResponse({'success': False, 'error': 'Файл не найден или не является патчем'})
+        try:
+            dst = _pe.archive_patch_source(src)
+            return JSONResponse({'success': True, 'message': dst + ' в архиве'})
+        except Exception as e:
+            return JSONResponse({'success': False, 'error': str(e)})
 
 
 @router.post('/api/patches/delete')
 def s_pdel(payload: dict):
-    f = os.path.basename(str(payload.get('filename', '')))
-    if not f or not f.endswith('.json'):
+    f = payload.get('filename', '')
+    if not _pe.is_patch_filename(f):
         return JSONResponse({'success': False, 'error': 'Подозрительное имя файла'})
     p = find_patch_file('', f)
     if not p or not os.path.exists(p):
@@ -240,8 +231,8 @@ def s_pall(payload: dict = {}):
         if p['is_applied'] or not p['has_content']:
             continue
         try:
-            d = json.loads(read_text(p['filepath']))
-            r = apply_patch(d)
+            d = json.loads(read_text(p['filepath']).lstrip('\ufeff'))
+            r = apply_patch({**d, 'filename': p['filename']})
             res.append(dict(patch_id=p['patch_id'], **r))
             if not r.get('success'):
                 break

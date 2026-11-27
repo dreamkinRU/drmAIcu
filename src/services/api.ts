@@ -520,7 +520,17 @@ export async function saveMDFile(name: string, content: string): Promise<{ succe
 // Патчи
 // ============================================================================
 
+export interface PatchReport {
+  patch_id: string;
+  applied_at?: string;
+  files: string[];
+  archive_status: string;
+  archive_name?: string | null;
+  backup_count: number;
+}
+
 export interface PatchStats {
+  reports?: PatchReport[];
   total: number;
   applied: number;
   pending: number;
