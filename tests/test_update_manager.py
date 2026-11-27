@@ -93,6 +93,43 @@ def test_update_preserves_staged_unstaged_and_untracked_changes(git_fixture):
     assert prepared["backup_ref"].startswith("refs/drmaicu/update-backups/")
 
 
+def test_incoming_runs_all_three_stages(git_fixture):
+    work = git_fixture
+    (work / "local-note.txt").write_text("local", encoding="utf-8")
+    result = updater.manager.incoming()["journal"]
+    assert result["state"] == "COMPLETED"
+    assert result["backup_verified"] is True
+    assert result["local_changes_restored"] is True
+    assert (work / "local-note.txt").read_text(encoding="utf-8") == "local"
+    assert (work / "remote.txt").exists()
+    second = updater.manager.incoming()["plan"]
+    assert second["behind"] == 0
+    assert second["state"] == "CHECKED"
+
+
+def test_incoming_stops_on_blockers(git_fixture, monkeypatch):
+    work = git_fixture
+    (work / "own.txt").write_text("own", encoding="utf-8")
+    _commit(work, "local commit")
+    head = _git(work, "rev-parse", "HEAD")
+    with pytest.raises(updater.UpdateError) as error:
+        updater.manager.incoming()
+    assert error.value.code == "update_blocked"
+    assert _git(work, "rev-parse", "HEAD") == head
+    assert not (work / "remote.txt").exists()
+
+
+def test_incoming_does_not_prepare_after_apply_failure(monkeypatch):
+    m = updater.UpdateManager()
+    monkeypatch.setattr(m, "check", lambda: {"plan": {"id": "a" * 32, "behind": 1, "blockers": []}})
+    def fail(operation_id):
+        raise updater.UpdateError("failed", "git_failed")
+    monkeypatch.setattr(m, "apply", fail)
+    monkeypatch.setattr(m, "prepare", lambda _: pytest.fail("prepare must not run"))
+    with pytest.raises(updater.UpdateError, match="failed"):
+        m.incoming()
+
+
 def test_check_fingerprint_detects_same_path_content_change(git_fixture):
     work = git_fixture
     app = work / "app.txt"

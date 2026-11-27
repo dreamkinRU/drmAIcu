@@ -142,6 +142,8 @@ export const initialTasks: Task[] = [
 
 // Вся документация собрана в docs/ (в корне — только README.md).
 export const mdFiles: MDFile[] = [
+  { name: 'docs/ROADMAP.md', description: 'План развития — начать здесь' },
+  { name: 'docs/HANDOFF.md', description: 'Правила передачи работы' },
   { name: 'README.md', description: 'Обзор проекта' },
   { name: 'docs/ARCHITECTURE.md', description: 'Архитектура системы' },
   { name: 'docs/USER_GUIDE.md', description: 'Руководство пользователя' },

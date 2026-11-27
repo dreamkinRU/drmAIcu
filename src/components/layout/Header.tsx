@@ -14,13 +14,15 @@ interface HeaderProps {
   ollamaModels: string[];
   version: string | null;
   setActiveTab: (tab: TabId) => void;
+  onIncomingUpdate: () => void;
+  incomingBusy: boolean;
 }
 
 export default function Header(props: HeaderProps) {
   const {
     activeTab, agents, providers, patchStats, codeIssues,
     completedTasks, taskList, projectStats, ollamaStatus, ollamaModels,
-    version, setActiveTab,
+    version, setActiveTab, onIncomingUpdate, incomingBusy,
   } = props;
 
   const onlineProviders = providers.filter(p => p.status === 'online').length;
@@ -113,12 +115,19 @@ export default function Header(props: HeaderProps) {
               </button>
             </Tooltip>
 
-            <Tooltip text="Безопасное обновление drmAIcu в три контролируемых шага" position="bottom">
-              <button onClick={() => setActiveTab('updates')} className={navBtnClass('updates')}>
-                <span>⬆</span>
-                <span>Обновление</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <Tooltip text="Открыть мастер обновления" position="bottom">
+                <button onClick={() => setActiveTab('updates')} className={navBtnClass('updates')}>
+                  <span>Обновление</span>
+                </button>
+              </Tooltip>
+              <button type="button" onClick={onIncomingUpdate} disabled={incomingBusy}
+                title="Входящая синхронизация: получить изменения GitHub, выполнить три этапа и перезапуск при необходимости"
+                aria-label="Входящая синхронизация из GitHub"
+                className="rounded-lg border border-emerald-400/60 bg-emerald-500/15 px-2 py-1.5 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>
               </button>
-            </Tooltip>
+            </div>
 
             <Tooltip text="Документация и заметки Markdown" position="bottom">
               <button onClick={() => setActiveTab('md')} className={navBtnClass('md')}>

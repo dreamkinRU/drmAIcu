@@ -85,6 +85,15 @@ def update_check(request: Request):
         return _error(exc)
 
 
+@router.post("/api/updates/incoming")
+async def update_incoming(request: Request):
+    try:
+        _check_local_browser_request(request)
+        return JSONResponse(await run_in_threadpool(manager.incoming))
+    except Exception as exc:
+        return _error(exc)
+
+
 @router.post("/api/updates/apply")
 async def update_apply(request: Request):
     try:
