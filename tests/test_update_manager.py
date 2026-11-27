@@ -365,3 +365,44 @@ def test_process_lock_excludes_another_process(git_fixture):
         assert "update_locked" in result.stderr or "Другая операция" in result.stderr
     result = subprocess.run([updater.sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_npm_lock_retry(monkeypatch):
+    calls = []
+    def run(*args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=1 if len(calls) < 3 else 0, stdout="", stderr="npm error EPERM")
+    monkeypatch.setattr(updater.subprocess, "run", run)
+    monkeypatch.setattr(updater.time, "sleep", lambda _: None)
+    assert updater._run_environment_step("npm", ["npm", "ci"]).returncode == 0
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("label,stderr,count", [("npm", "EPERM", 3), ("npm", "ERESOLVE", 1), ("python", "EPERM", 1)])
+def test_environment_retry_is_bounded(monkeypatch, label, stderr, count):
+    calls = []
+    def run(*args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=1, stdout="", stderr=stderr)
+    monkeypatch.setattr(updater.subprocess, "run", run)
+    monkeypatch.setattr(updater.time, "sleep", lambda _: None)
+    assert updater._run_environment_step(label, ["tool"]).returncode == 1
+    assert len(calls) == count
+
+
+def test_environment_repair_without_reapplying_stash(git_fixture, monkeypatch):
+    work = git_fixture
+    (work / "local-note.txt").write_text("keep", encoding="utf-8")
+    plan = updater.manager.check()["plan"]
+    journal = updater.manager.apply(plan["id"])["journal"]
+    updater.manager.prepare(plan["id"])
+    journal = updater._load_journal()
+    journal["state"] = "UPDATE_NEEDS_REPAIR"
+    journal["change_summary"]["npm_lock_changed"] = True
+    journal["environment_steps"] = [{"step": "npm", "ok": False}]
+    updater._save_journal(journal)
+    monkeypatch.setattr(updater, "_run_environment_step", lambda *a: SimpleNamespace(returncode=0, stdout="", stderr=""))
+    result = updater.manager.prepare(plan["id"])["journal"]
+    assert result["state"] == "COMPLETED"
+    assert result["environment_steps"][0]["ok"]
+    assert (work / "local-note.txt").read_text(encoding="utf-8") == "keep"

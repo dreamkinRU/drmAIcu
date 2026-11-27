@@ -49,8 +49,9 @@ export default function UpdateWizardTab() {
 
   const state = journal?.state || 'IDLE';
   const canApply = state === 'CHECKED' && !(journal?.blockers || []).length;
-  const canPrepare = state === 'CODE_UPDATED';
-  const canRecover = ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING', 'PREPARING'].includes(state);
+  const environmentRepair = state === 'UPDATE_NEEDS_REPAIR' && journal?.local_changes_restored === true;
+  const canPrepare = state === 'CODE_UPDATED' || environmentRepair;
+  const canRecover = !environmentRepair && ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING', 'PREPARING'].includes(state);
   const steps = [
     { number: 1, title: 'Проверка и план', done: ['CHECKED', 'APPLYING', 'CODE_UPDATED', 'RESTORING', 'COMPLETED', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
     { number: 2, title: 'Резервирование и обновление', done: ['CODE_UPDATED', 'RESTORING', 'COMPLETED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
@@ -178,8 +179,9 @@ export default function UpdateWizardTab() {
         </div>
         <p className="text-sm text-gray-400">Восстановление выполняется с индексом Git. Затем при необходимости обновляются Python/npm-зависимости и собирается frontend. При конфликте резервная копия остаётся нетронутой.</p>
         <button disabled={!canPrepare || busy} onClick={() => run('/api/updates/prepare', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/50 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40">
-          Выполнить шаг 3
+          {environmentRepair ? 'Повторить подготовку окружения' : 'Выполнить шаг 3'}
         </button>
+        {environmentRepair && <p className="text-sm text-amber-200">Git восстановлен. Повторяются только незавершённые шаги окружения. При EPERM остановите старый Vite/watchdog и приостановите MEGA.</p>}
         {canRecover && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-2">
             <p className="text-sm text-red-200">Требуется восстановление. Не удаляйте backup ref и не запускайте новую операцию обновления.</p>
@@ -193,7 +195,7 @@ export default function UpdateWizardTab() {
         )}
         {journal?.restart_required && state === 'RESTART_REQUIRED' && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
-            Изменён Python-код. Для загрузки новой версии требуется перезапустить drmAIcu. Если проверка не прошла, исправьте причину и повторно откройте мастер. Перезапуск не выполняется автоматически, чтобы не прервать показ результата мастера.
+            Для загрузки обновлённого ядра или статического интерфейса требуется перезапустить drmAIcu. Если проверка не прошла, исправьте причину и повторно откройте мастер. Перезапуск не выполняется автоматически, чтобы не прервать показ результата мастера.
           </div>
         )}
         {journal?.restart_verified_at && (
