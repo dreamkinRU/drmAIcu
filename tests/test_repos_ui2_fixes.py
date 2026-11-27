@@ -111,20 +111,21 @@ def test_journal_clear_issues_removes_only_warn_and_error(tmp_path):
 
 def test_clear_issues_endpoint_filters_core_log():
     """DELETE /api/issues логика: LOG чистится от error/warn, info остаётся (реальный вызов функции)."""
-    import main
-    saved = list(main.LOG)
+    from api import shared
+    saved = list(shared.LOG)
     try:
-        main.LOG[:] = [
+        shared.LOG[:] = [
             {'time': '10:00:00', 'level': 'error', 'message': 'старая ошибка', 'source': 'Т'},
             {'time': '10:00:01', 'level': 'warn', 'message': 'старое предупреждение', 'source': 'Т'},
             {'time': '10:00:02', 'level': 'info', 'message': 'обычное событие', 'source': 'Т'},
         ]
-        resp = main.s_logs_clear_issues()
+        from api.routes_system import s_logs_clear_issues
+        resp = s_logs_clear_issues()
         data = json.loads(resp.body)
         assert data['success'] is True and data['removed'] == 2
-        assert [e['level'] for e in main.LOG] == ['info']
+        assert [e['level'] for e in shared.LOG] == ['info']
     finally:
-        main.LOG[:] = saved
+        shared.LOG[:] = saved
 
 
 def test_logs_tab_has_clear_errors_button():

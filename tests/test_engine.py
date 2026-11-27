@@ -10,6 +10,12 @@ import pytest
 main = importlib.import_module("main")
 import patch_engine as engine
 import agent_engine
+import guards
+from api import shared
+from api import routes_patches as rpat
+from api import routes_project as rp
+from api import routes_providers as rprov
+from api import routes_system as rsys
 
 
 @pytest.fixture
@@ -22,12 +28,12 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setattr(engine, "PATCH_DIR", str(base / "patch"))
     monkeypatch.setattr(engine, "ARCHIVE_DIR", str(base / "patch" / "archive"))
     monkeypatch.setattr(engine, "BACKUP_DIR", str(base / "backups"))
-    monkeypatch.setattr(main, "PROJ_ARCHIVE", str(base / "project_archive"))
+    monkeypatch.setattr(rp, "PROJ_ARCHIVE", str(base / "project_archive"))
     monkeypatch.setattr(engine, "MANIFEST", str(base / "patch_manifest.json"))
     monkeypatch.setattr(engine, "JOURNAL", str(base / "patch_journal.json"))
-    monkeypatch.setattr(main, "IMPORTANT", str(base / ".project-important.json"))
-    monkeypatch.setattr(main, "PROJECT_HISTORY_FILE", str(base / ".project-history.json"))
-    monkeypatch.setattr(main, "PROJECT_HISTORY", [])
+    monkeypatch.setattr(rp, "IMPORTANT", str(base / ".project-important.json"))
+    monkeypatch.setattr(rp, "PROJECT_HISTORY_FILE", str(base / ".project-history.json"))
+    monkeypatch.setattr(rp, "PROJECT_HISTORY", [])
     return base
 
 
@@ -45,28 +51,28 @@ def read(p):
 # ---------- БАЗА: должно проходить ----------
 
 def test_OK_search_replace_crlf():
-    out = main.apply_search_replace("l1\r\nl2\r\nl3\r\n", "l2\n", "L2\n")
+    out = engine.apply_search_replace("l1\r\nl2\r\nl3\r\n", "l2\n", "L2\n")
     assert out == "l1\r\nL2\r\nl3\r\n"
 
 
 def test_OK_search_replace_ambiguous():
     with pytest.raises(ValueError):
-        main.apply_search_replace("a\na\n", "a", "b")
+        engine.apply_search_replace("a\na\n", "a", "b")
 
 
 def test_OK_diff_basic():
-    assert main.apply_diff("a\nb\nc", "@@ -1,3 +1,3 @@\n a\n-b\n+B") == "a\nB\nc"
+    assert engine.apply_diff("a\nb\nc", "@@ -1,3 +1,3 @@\n a\n-b\n+B") == "a\nB\nc"
 
 
 def test_OK_diff_idempotent():
     d = "@@ -1,3 +1,3 @@\n a\n-b\n+B"
-    once = main.apply_diff("a\nb\nc", d)
-    assert main.apply_diff(once, d) == once
+    once = engine.apply_diff("a\nb\nc", d)
+    assert engine.apply_diff(once, d) == once
 
 
 def test_OK_create_rejects_existing(box):
     put(box, "x.py", "a = 1\n")
-    _, _, _, err = main.compute_new(
+    _, _, _, err = engine.compute_new(
         {"type": "create", "target_file": "x.py", "full_file_content": "b = 2\n"}
     )
     assert err is not None
@@ -74,7 +80,7 @@ def test_OK_create_rejects_existing(box):
 
 def test_OK_phase1_blocks_everything(box):
     put(box, "good.py", "a = 1\n")
-    res = main.apply_patch({"patch_id": "T1", "operations": [
+    res = engine.apply_patch({"patch_id": "T1", "operations": [
         {"type": "full_replace", "target_file": "good.py", "full_file_content": "a = 2\n"},
         {"type": "full_replace", "target_file": "bad.py", "full_file_content": "def f(:\n"},
     ]})
@@ -86,11 +92,11 @@ def test_OK_phase1_blocks_everything(box):
 def test_OK_multi_apply_and_rollback(box):
     put(box, "a.py", "x = 1\n")
     put(box, "b.py", "y = 1\n")
-    assert main.apply_patch({"patch_id": "T2", "operations": [
+    assert engine.apply_patch({"patch_id": "T2", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
     ]})["success"]
-    assert main.rollback()["success"]
+    assert engine.rollback()["success"]
     assert read(box / "a.py") == "x = 1\n"
     assert read(box / "b.py") == "y = 1\n"
 
@@ -99,36 +105,36 @@ def test_OK_multi_apply_and_rollback(box):
 
 def test_BUG01_diff_trailing_newline():
     """B1: хвостовой \n превращается в фантомную пустую строку контекста."""
-    assert main.apply_diff("a\nb\nc", "@@ -1,3 +1,3 @@\n a\n-b\n+B\n") == "a\nB\nc"
+    assert engine.apply_diff("a\nb\nc", "@@ -1,3 +1,3 @@\n a\n-b\n+B\n") == "a\nB\nc"
 
 
 def test_BUG02_diff_crlf_injection():
     """B2: apply_diff не нормализует CRLF -> \\r остаётся в файле."""
-    out = main.apply_diff("a\nb\nc", "@@ -1,3 +1,3 @@\r\n a\r\n-b\r\n+B")
+    out = engine.apply_diff("a\nb\nc", "@@ -1,3 +1,3 @@\r\n a\r\n-b\r\n+B")
     assert "\r" not in out
 
 
 def test_BUG03_pure_insert_position():
     """B3: @@ -2,0 @@ = вставить ПОСЛЕ строки 2, а не до."""
-    assert main.apply_diff("l1\nl2\nl3", "@@ -2,0 +3,1 @@\n+INSERTED") == "l1\nl2\nINSERTED\nl3"
+    assert engine.apply_diff("l1\nl2\nl3", "@@ -2,0 +3,1 @@\n+INSERTED") == "l1\nl2\nINSERTED\nl3"
 
 
 def test_BUG04_silent_skip_unmatched_hunk():
     """B4: old не найден, new найден в другом месте -> молчаливый пропуск."""
     with pytest.raises(ValueError):
-        main.apply_diff("x\na\nb", "@@ -2,2 +2,1 @@\n a\n-ZZZ")
+        engine.apply_diff("x\na\nb", "@@ -2,2 +2,1 @@\n a\n-ZZZ")
 
 
 def test_BUG05_silent_skip_pure_delete():
     """B5: пустой new_block -> find_block возвращает hint -> пропуск всегда."""
     with pytest.raises(ValueError):
-        main.apply_diff("a\nb", "@@ -1,2 +1,0 @@\n-a\n-ZZZ")
+        engine.apply_diff("a\nb", "@@ -1,2 +1,0 @@\n-a\n-ZZZ")
 
 
 def test_BUG06_backup_basename_collision(box):
     """B6: src/App.tsx и public/App.tsx пишутся в один и тот же .bak."""
-    b1 = main.backup(str(put(box, "src/App.tsx", "SRC")))
-    b2 = main.backup(str(put(box, "public/App.tsx", "PUB")))
+    b1 = engine.backup(str(put(box, "src/App.tsx", "SRC")))
+    b2 = engine.backup(str(put(box, "public/App.tsx", "PUB")))
     assert set(b1).isdisjoint(set(b2))
 
 
@@ -136,14 +142,14 @@ def test_BUG07_failed_file_not_rolled_back(box, monkeypatch):
     """B7: файл, не прошедший SHA-проверку, отсутствует в written -> не откатывается."""
     put(box, "a.py", "x = 1\n")
     put(box, "b.py", "y = 1\n")
-    real, n = main.sha_bytes, {"i": 0}
+    real, n = engine.sha_bytes, {"i": 0}
 
     def fake(data):
         n["i"] += 1
         return "bogus" if n["i"] > 2 else real(data)
 
     monkeypatch.setattr(engine, "sha_bytes", fake)
-    res = main.apply_patch({"patch_id": "T3", "operations": [
+    res = engine.apply_patch({"patch_id": "T3", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
     ]})
@@ -153,13 +159,13 @@ def test_BUG07_failed_file_not_rolled_back(box, monkeypatch):
 
 def test_BUG08_tsx_not_validated():
     """B8: сломанный TSX проходит валидацию."""
-    ok, _ = main.validate("src/App.tsx", "const x = ((( ;")
+    ok, _ = engine.validate("src/App.tsx", "const x = ((( ;")
     assert ok is False
 
 
 def test_BUG09_path_escape(box):
     """B9: target_file выходит за пределы проекта."""
-    _, _, _, err = main.compute_new(
+    _, _, _, err = engine.compute_new(
         {"type": "create", "target_file": "../escaped.py", "full_file_content": "p = 1\n"}
     )
     assert err is not None
@@ -167,13 +173,13 @@ def test_BUG09_path_escape(box):
 
 def test_BUG10_backups_marked_critical():
     """B10: backups/ в CRIT_DIRS -> очистка никогда их не удалит."""
-    assert main.category("App.tsx_1.bak", "backups/App.tsx_1.bak", 100) == "backup"
+    assert rp.category("App.tsx_1.bak", "backups/App.tsx_1.bak", 100) == "backup"
 
 
 def test_BUG11_newline_rewrite_on_windows(box):
     """B11: LF-файл перезаписывается как CRLF, SHA-проверка это не ловит."""
     put(box, "a.py", "x = 1\ny = 2\n")
-    assert main.apply_patch({"patch_id": "T4", "operations": [
+    assert engine.apply_patch({"patch_id": "T4", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 1\ny = 3\n"},
     ]})["success"]
     assert (box / "a.py").read_bytes() == b"x = 1\ny = 3\n"
@@ -182,7 +188,7 @@ def test_BUG11_newline_rewrite_on_windows(box):
 def test_BUG18_multi_ops_same_file(box):
     """B18: two ops on one file must accumulate, not overwrite."""
     put(box, "a.py", "x = 1\ny = 1\n")
-    res = main.apply_patch({"patch_id": "T5", "operations": [
+    res = engine.apply_patch({"patch_id": "T5", "operations": [
         {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
         {"type": "search_and_replace", "target_file": "a.py", "find": "y = 1", "replace": "y = 2"},
     ]})
@@ -194,7 +200,7 @@ def test_BUG18_multi_ops_same_file(box):
 def test_BUG20_expected_sha_mismatch_rejected(box):
     """B20: expected_sha не совпал с содержимым на диске -> патч отвергнут целиком."""
     put(box, "a.py", "x = 1\n")
-    res = main.apply_patch({"patch_id": "T-B20", "operations": [
+    res = engine.apply_patch({"patch_id": "T-B20", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n",
          "expected_sha": "deadbeef"},
     ]})
@@ -206,8 +212,8 @@ def test_BUG20_expected_sha_mismatch_rejected(box):
 def test_BUG20b_expected_sha_match_applies(box):
     """B20: корректный expected_sha пропускает патч."""
     put(box, "a.py", "x = 1\n")
-    good = main.sha_bytes(b"x = 1\n")
-    res = main.apply_patch({"patch_id": "T-B20b", "operations": [
+    good = engine.sha_bytes(b"x = 1\n")
+    res = engine.apply_patch({"patch_id": "T-B20b", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n",
          "expected_sha": good},
     ]})
@@ -230,7 +236,7 @@ def test_BUG21_stale_file_aborts_patch_after_backup(box):
     monkey = __import__("pytest").MonkeyPatch()
     monkey.setattr(engine, "sha_bytes", fake)
     try:
-        res = main.apply_patch({"patch_id": "T-B21", "operations": [
+        res = engine.apply_patch({"patch_id": "T-B21", "operations": [
             {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         ]})
     finally:
@@ -243,37 +249,37 @@ def test_BUG21_stale_file_aborts_patch_after_backup(box):
 def test_BUG22_rollback_rejects_manifest_traversal(box):
     """B22: tampered-манифест с ../ в target_file -> откат запрещён, файл не удалён."""
     put(box, "victim.txt", "do not delete\n")
-    main.save_manifest({'applied': [{'patch_id': 'EVIL', 'operations': [
+    engine.save_manifest({'applied': [{'patch_id': 'EVIL', 'operations': [
         {'target_file': '../victim.txt', 'backups': []},
     ]}], 'history': [], 'rollbacks': []})
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is False
     assert (box / "victim.txt").exists()
 
 
 def test_BUG23_stats_endpoint_not_shadowed():
     """B23: /api/patches/stats файлов регистрируется ровно один раз, s_pstats жив."""
-    stats_routes = [r for r in main.app.routes if getattr(r, 'path', '') == '/api/patches/stats']
+    stats_routes = [r for router in main.app._iter_routers() for r in router.routes if getattr(r, 'path', '') == '/api/patches/stats']
     assert len(stats_routes) == 1
     handler = getattr(stats_routes[0], 'endpoint', None)
-    assert handler is main.s_pstats
+    assert handler is rpat.s_pstats
 
 
 def test_BUG24_tx_lock_serializes_toggle():
     """B24: TX_LOCK существует и является RLock (apply/rollback сериализуются)."""
     got = []
     def hold_in_subthread():
-        if main.TX_LOCK.acquire(timeout=2):
+        if engine.TX_LOCK.acquire(timeout=2):
             got.append(True)
             import time; time.sleep(0.3)
-            main.TX_LOCK.release()
+            engine.TX_LOCK.release()
     import threading as th
     t = th.Thread(target=hold_in_subthread)
     t.start()
     t.join(2)
     assert got == [True]
-    assert main.TX_LOCK.acquire(timeout=2)
-    main.TX_LOCK.release()
+    assert engine.TX_LOCK.acquire(timeout=2)
+    engine.TX_LOCK.release()
 
 
 def test_engine_module_is_ui_free():
@@ -297,7 +303,7 @@ def test_B25_patch_filename_traversal_rejected(box):
         {"type": "create", "target_file": "pwned.py", "full_file_content": "p = 1\n"}
     ]}
     (outside / "evil.json").write_text(__import__("json").dumps(payload), encoding="utf-8")
-    res = main.apply_patch({"patch_id": "EVIL25", "filename": "../../evil.json"})
+    res = engine.apply_patch({"patch_id": "EVIL25", "filename": "../../evil.json"})
     assert res.get("success") is False
     assert not (box / "pwned.py").exists()
     assert (outside / "evil.json").read_text(encoding="utf-8") == __import__("json").dumps(payload)
@@ -310,7 +316,7 @@ def test_B25b_patch_body_from_disk_still_works(box):
         "patch_id": "B25BODY",
         "operations": [{"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}]
     }), encoding="utf-8")
-    res = main.apply_patch({"patch_id": "B25BODY"})
+    res = engine.apply_patch({"patch_id": "B25BODY"})
     assert res["success"]
     assert read(box / "a.py") == "x = 2\n"
 
@@ -318,7 +324,7 @@ def test_B25b_patch_body_from_disk_still_works(box):
 def test_B26_manifest_write_crash_keeps_old_state(box, monkeypatch):
     import json as _json
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch({"patch_id": "B26-SETUP", "operations": [
+    assert engine.apply_patch({"patch_id": "B26-SETUP", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})["success"]
     before = (box / "patch_manifest.json").read_text(encoding="utf-8")
@@ -346,7 +352,7 @@ def test_B27_partial_backup_aborts_apply(box, monkeypatch):
         return real_copy2(src, dst, *a, **kw)
     monkeypatch.setattr(engine.shutil, "copy2", failing_copy2)
     put(box, "a.py", "x = 1\n")
-    res = main.apply_patch({"patch_id": "B27", "operations": [
+    res = engine.apply_patch({"patch_id": "B27", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})
     assert res["success"] is False
@@ -374,7 +380,7 @@ def test_B29_safe_path_symlink_escape(box, tmp_path):
     except (OSError, AttributeError):
         pytest.skip("symlink unavailable")
     assert engine.safe_path("leak/pwned.py") is None
-    _, _, _, err = main.compute_new({"type": "create", "target_file": "leak/pwned.py", "full_file_content": "p = 1\n"})
+    _, _, _, err = engine.compute_new({"type": "create", "target_file": "leak/pwned.py", "full_file_content": "p = 1\n"})
     assert err is not None
     assert not (outside / "pwned.py").exists()
 
@@ -385,39 +391,39 @@ def test_B32_rollback_chain_restores_each_step(box):
     put(box, "a.py", "x = 1\n")
     states = ["x = 1\n", "x = 2\n", "x = 3\n", "x = 4\n"]
     for i in (2, 3, 4):
-        assert main.apply_patch({"patch_id": f"B32-{i}", "operations": [
+        assert engine.apply_patch({"patch_id": f"B32-{i}", "operations": [
             {"type": "full_replace", "target_file": "a.py", "full_file_content": f"x = {i}\n"}
         ]})["success"]
     for expected in ("x = 3\n", "x = 2\n", "x = 1\n"):
-        assert main.rollback()["success"]
+        assert engine.rollback()["success"]
         assert read(box / "a.py") == expected
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is False
 
 
 def test_B33_rollback_removes_created_but_restores_modified(box):
     put(box, "old.py", "y = 1\n")
-    assert main.apply_patch({"patch_id": "B33-MIX", "operations": [
+    assert engine.apply_patch({"patch_id": "B33-MIX", "operations": [
         {"type": "create", "target_file": "new.py", "full_file_content": "n = 1\n"},
         {"type": "full_replace", "target_file": "old.py", "full_file_content": "y = 2\n"},
     ]})["success"]
     assert (box / "new.py").exists()
     assert read(box / "old.py") == "y = 2\n"
-    assert main.rollback()["success"]
+    assert engine.rollback()["success"]
     assert not (box / "new.py").exists()
     assert read(box / "old.py") == "y = 1\n"
 
 
 def test_B34_rollback_missing_backup_fails_cleanly(box):
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch({"patch_id": "B34", "operations": [
+    assert engine.apply_patch({"patch_id": "B34", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})["success"]
     man = engine.load_manifest()
     backup_path = engine._backup_path(man["applied"][-1]["operations"][-1]["backups"][0])
     os_import = __import__("os")
     os_import.remove(backup_path)
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is False
     assert read(box / "a.py") == "x = 2\n"
     after = engine.load_manifest()
@@ -433,7 +439,7 @@ def test_B35_rollback_legacy_manifest_entry(box):
                     "applied_at": "2026-11-23T00:00:00", "checksum": "x",
                     "backups": [str(legacy_backup)]}
     engine.save_manifest({"applied": [legacy_entry], "history": [], "rollbacks": []})
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"]
     assert read(box / "a.py") == "y = 1\n"
     man = engine.load_manifest()
@@ -443,13 +449,13 @@ def test_B35_rollback_legacy_manifest_entry(box):
 def test_B36_manifest_cap_trimming_keeps_last_working(box):
     put(box, "a.py", "x = 1\n")
     for i in range(2, 104):
-        assert main.apply_patch({"patch_id": f"B36-{i}", "operations": [
+        assert engine.apply_patch({"patch_id": f"B36-{i}", "operations": [
             {"type": "full_replace", "target_file": "a.py", "full_file_content": f"x = {i}\n"}
         ]})["success"]
     man = engine.load_manifest()
     assert len(man["applied"]) == 100
     assert man["applied"][-1]["patch_id"] == "B36-103"
-    assert main.rollback()["success"]
+    assert engine.rollback()["success"]
     assert read(box / "a.py") == "x = 102\n"
 
 
@@ -457,14 +463,14 @@ def test_B36_manifest_cap_trimming_keeps_last_working(box):
 
 def test_B40_tampered_backup_detected_on_rollback(box):
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch({"patch_id": "B40", "operations": [
+    assert engine.apply_patch({"patch_id": "B40", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})["success"]
     man = engine.load_manifest()
     backup_path = engine._backup_path(man["applied"][-1]["operations"][0]["backups"][0])
     with open(backup_path, "wb") as f:
         f.write(b"TAMPERED\n")
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is False
     assert "контрольной суммой" in res["error"]
     assert read(box / "a.py") == "x = 2\n"
@@ -473,10 +479,10 @@ def test_B40_tampered_backup_detected_on_rollback(box):
 
 def test_B40b_intact_backup_rollback_with_sha_still_works(box):
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch({"patch_id": "B40b", "operations": [
+    assert engine.apply_patch({"patch_id": "B40b", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]})["success"]
-    assert main.rollback()["success"]
+    assert engine.rollback()["success"]
     assert read(box / "a.py") == "x = 1\n"
 
 
@@ -485,8 +491,8 @@ def test_B43_duplicate_patch_id_rejected(box):
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]}
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch(payload)["success"]
-    res = main.apply_patch(payload)
+    assert engine.apply_patch(payload)["success"]
+    res = engine.apply_patch(payload)
     assert res["success"] is False
     assert "уже применён" in res["error"]
     assert read(box / "a.py") == "x = 2\n"
@@ -498,9 +504,9 @@ def test_B43b_reapply_after_rollback_allowed(box):
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"}
     ]}
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch(payload)["success"]
-    assert main.rollback()["success"]
-    assert main.apply_patch(payload)["success"]
+    assert engine.apply_patch(payload)["success"]
+    assert engine.rollback()["success"]
+    assert engine.apply_patch(payload)["success"]
     assert read(box / "a.py") == "x = 2\n"
 
 
@@ -514,7 +520,7 @@ def test_B44_apply_diff_rejects_garbage():
     }
     for diff, expected in corpus.items():
         with pytest.raises(ValueError) as ei:
-            main.apply_diff("line1\nline2\n", diff)
+            engine.apply_diff("line1\nline2\n", diff)
         assert expected in str(ei.value), f"diff={diff!r}: {ei.value}"
 
 
@@ -523,7 +529,7 @@ def test_B44_apply_diff_rejects_garbage():
 def test_B45_api_md_refuses_non_md(box):
     (box / 'settings.json').write_text('{"v": 1}', encoding='utf-8')
     for target in ('settings.json', 'main.py', 'patch_engine.py', 'agents.json'):
-        res = main.s_md_post(target, {'content': 'pwned'})
+        res = rsys.s_md_post(target, {'content': 'pwned'})
         data = json.loads(res.body)
         assert data['success'] is False, target
     assert json.loads((box / 'settings.json').read_text(encoding='utf-8')) == {'v': 1}
@@ -532,43 +538,43 @@ def test_B45_api_md_refuses_non_md(box):
 
 
 def test_B45b_api_md_guard_allows_only_doc_md():
-    assert main.is_doc_rel('README.md')
-    assert main.is_doc_rel('RELEASE_NOTES.MD')
-    assert main.is_doc_rel('docs/ARCHITECTURE.md')
-    assert not main.is_doc_rel('notes.md.bak')
-    assert not main.is_doc_rel('src/readme.md')
-    assert not main.is_doc_rel('docs/../main.md')
-    assert not main.is_doc_rel('')
-    assert not main.is_doc_rel(None)
+    assert guards.is_doc_rel('README.md')
+    assert guards.is_doc_rel('RELEASE_NOTES.MD')
+    assert guards.is_doc_rel('docs/ARCHITECTURE.md')
+    assert not guards.is_doc_rel('notes.md.bak')
+    assert not guards.is_doc_rel('src/readme.md')
+    assert not guards.is_doc_rel('docs/../main.md')
+    assert not guards.is_doc_rel('')
+    assert not guards.is_doc_rel(None)
 
 
 def test_B45c_api_md_get_refuses_non_md():
-    data = json.loads(main.s_md_get('settings.json').body)
+    data = json.loads(rsys.s_md_get('settings.json').body)
     assert data['content'] == '' and data['error']
 
 
 def test_B45d_api_md_post_still_writes_doc_md(box):
-    res = main.s_md_post('NEW.md', {'content': '# привет'})
+    res = rsys.s_md_post('NEW.md', {'content': '# привет'})
     assert json.loads(res.body)['success'] is True
     assert (box / 'NEW.md').read_text(encoding='utf-8') == '# привет'
 
 
 def test_B46_is_critical_rel_case_insensitive():
-    assert main.is_critical_rel('MAIN.PY')
-    assert main.is_critical_rel('settings.JSON')
-    assert main.is_critical_rel('SRC/app.py')
-    assert main.is_critical_rel('src\\app.tsx')
-    assert main.is_critical_rel('tests/test_engine.py')
-    assert not main.is_critical_rel('notes.txt')
-    assert not main.is_critical_rel('')
-    assert not main.is_critical_rel(None)
+    assert guards.is_critical_rel('MAIN.PY')
+    assert guards.is_critical_rel('settings.JSON')
+    assert guards.is_critical_rel('SRC/app.py')
+    assert guards.is_critical_rel('src\\app.tsx')
+    assert guards.is_critical_rel('tests/test_engine.py')
+    assert not guards.is_critical_rel('notes.txt')
+    assert not guards.is_critical_rel('')
+    assert not guards.is_critical_rel(None)
 
 
 def test_B46_bulk_delete_respects_critical_files(box):
     put(box, 'settings.json', '{}')
     put(box, 'src/core.py', 'x = 1')
     put(box, 'notes.txt', 'x')
-    res = main.s_project_bulk({'action': 'delete', 'paths': ['settings.json', 'src/core.py', 'notes.txt']})
+    res = rp.s_project_bulk({'action': 'delete', 'paths': ['settings.json', 'src/core.py', 'notes.txt']})
     data = json.loads(res.body)
     assert data['processed'] == 1
     assert data['skipped'] == 2
@@ -578,32 +584,32 @@ def test_B46_bulk_delete_respects_critical_files(box):
 
 
 def test_B46_bulk_delete_requires_backup(box, monkeypatch):
-    monkeypatch.setattr(main, 'backup', lambda p: [])
+    monkeypatch.setattr(rp, 'backup', lambda p: [])
     put(box, 'notes.txt', 'x')
-    data = json.loads(main.s_project_bulk({'action': 'delete', 'paths': ['notes.txt']}).body)
+    data = json.loads(rp.s_project_bulk({'action': 'delete', 'paths': ['notes.txt']}).body)
     assert data['processed'] == 0 and data['skipped'] == 1
     assert (box / 'notes.txt').exists()
 
 
 def test_B46_bulk_archive_requires_backup(box, monkeypatch):
-    monkeypatch.setattr(main, 'backup', lambda p: [])
+    monkeypatch.setattr(rp, 'backup', lambda p: [])
     put(box, 'notes.txt', 'x')
-    data = json.loads(main.s_project_bulk({'action': 'archive', 'paths': ['notes.txt']}).body)
+    data = json.loads(rp.s_project_bulk({'action': 'archive', 'paths': ['notes.txt']}).body)
     assert data['processed'] == 0 and data['skipped'] == 1
     assert (box / 'notes.txt').exists()
 
 
 def test_B46_bulk_archive_respects_critical_files(box):
     put(box, 'settings.json', '{}')
-    data = json.loads(main.s_project_bulk({'action': 'archive', 'paths': ['settings.json']}).body)
+    data = json.loads(rp.s_project_bulk({'action': 'archive', 'paths': ['settings.json']}).body)
     assert data['processed'] == 0 and data['skipped'] == 1
     assert (box / 'settings.json').exists()
 
 
 def test_B46_single_delete_requires_backup(box, monkeypatch):
-    monkeypatch.setattr(main, 'backup', lambda p: ())
+    monkeypatch.setattr(rp, 'backup', lambda p: ())
     put(box, 'notes.txt', 'x')
-    res = main.s_proj_del({'path': 'notes.txt'})
+    res = rp.s_proj_del({'path': 'notes.txt'})
     data = json.loads(res.body)
     assert data['success'] is False and 'резервную копию' in data['error']
     assert (box / 'notes.txt').exists()
@@ -612,37 +618,37 @@ def test_B46_single_delete_requires_backup(box, monkeypatch):
 def test_B46_single_delete_blocks_critical(box):
     put(box, 'main.py', 'x = 1')
     put(box, 'MAIN.PY', 'x = 1')
-    assert json.loads(main.s_proj_del({'path': 'main.py'}).body)['success'] is False
-    assert json.loads(main.s_proj_del({'path': 'MAIN.PY'}).body)['success'] is False
+    assert json.loads(rp.s_proj_del({'path': 'main.py'}).body)['success'] is False
+    assert json.loads(rp.s_proj_del({'path': 'MAIN.PY'}).body)['success'] is False
     assert (box / 'main.py').exists()
 
 
 def test_B47_url_guard_rejects_metadata_and_garbage():
-    assert main.validate_url('ftp://example.com/x')[0] is False
-    assert main.validate_url('http://')[0] is False
-    assert main.validate_url('')[0] is False
-    assert main.validate_url(None)[0] is False
-    assert main.validate_url('http://user:pw@localhost:11434')[0] is False
-    ok, why = main.validate_url('http://169.254.169.254/latest/meta-data')
+    assert guards.validate_url('ftp://example.com/x')[0] is False
+    assert guards.validate_url('http://')[0] is False
+    assert guards.validate_url('')[0] is False
+    assert guards.validate_url(None)[0] is False
+    assert guards.validate_url('http://user:pw@localhost:11434')[0] is False
+    ok, why = guards.validate_url('http://169.254.169.254/latest/meta-data')
     assert not ok and 'link-local' in why.lower()
-    ok, why = main.validate_url('http://[fe80::1]/')
+    ok, why = guards.validate_url('http://[fe80::1]/')
     assert not ok and 'link-local' in why.lower()
-    ok, why = main.validate_url('http://224.0.0.1/x')
+    ok, why = guards.validate_url('http://224.0.0.1/x')
     assert not ok and 'зарезервированный' in why
-    assert main.validate_url('http://10.0.0.5:8080', allowed_hosts={'api.groq.com'})[0] is False
-    assert main.validate_url('http://evil.example.com/v1', allowed_hosts={'api.groq.com'})[0] is False
+    assert guards.validate_url('http://10.0.0.5:8080', allowed_hosts={'api.groq.com'})[0] is False
+    assert guards.validate_url('http://evil.example.com/v1', allowed_hosts={'api.groq.com'})[0] is False
 
 
 def test_B47_url_guard_allows_legit():
-    assert main.validate_url('http://localhost:11434')[0]
-    assert main.validate_url('http://127.0.0.1:11434/api')[0]
-    assert main.validate_url('http://192.168.1.20:1234/v1')[0]
-    assert main.validate_url('http://10.1.2.3')[0]
-    assert main.validate_url('http://8.8.8.8')[0]
+    assert guards.validate_url('http://localhost:11434')[0]
+    assert guards.validate_url('http://127.0.0.1:11434/api')[0]
+    assert guards.validate_url('http://192.168.1.20:1234/v1')[0]
+    assert guards.validate_url('http://10.1.2.3')[0]
+    assert guards.validate_url('http://8.8.8.8')[0]
 
 
 def test_B47_ping_blocks_metadata_url():
-    st = json.loads(main.s_providers_ping({'providers': [{'id': 'ollama', 'url': 'http://169.254.169.254'}]}).body)['statuses']['ollama']
+    st = json.loads(rprov.s_providers_ping({'providers': [{'id': 'ollama', 'url': 'http://169.254.169.254'}]}).body)['statuses']['ollama']
     assert st['online'] is False and 'отклонён' in st['error']
 
 
@@ -651,28 +657,28 @@ def test_B47_ping_blocks_metadata_url():
 
 def test_B48_rollback_refuses_user_edits_after_apply(box):
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch({"patch_id": "B48", "operations": [
+    assert engine.apply_patch({"patch_id": "B48", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
     ]})["success"]
     (box / "a.py").write_bytes(b"x = USER_EDIT\n")
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is False
     assert "изменён после применения" in res["error"]
     assert read(box / "a.py") == "x = USER_EDIT\n"
     assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == ["B48"]
     (box / "a.py").write_bytes(b"x = 2\n")
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is True
     assert read(box / "a.py") == "x = 1\n"
 
 
 def test_B48b_rollback_refuses_deleted_file(box):
     put(box, "a.py", "x = 1\n")
-    assert main.apply_patch({"patch_id": "B48b", "operations": [
+    assert engine.apply_patch({"patch_id": "B48b", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
     ]})["success"]
     (box / "a.py").unlink()
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is False
     assert "исчез" in res["error"]
     assert [a["patch_id"] for a in engine.load_manifest()["applied"]] == ["B48b"]
@@ -681,7 +687,7 @@ def test_B48b_rollback_refuses_deleted_file(box):
 def test_B49_rollback_staging_interrupted_then_resumes(box, monkeypatch):
     put(box, "a.py", "x = 1\n")
     put(box, "b.py", "y = 1\n")
-    assert main.apply_patch({"patch_id": "B49", "operations": [
+    assert engine.apply_patch({"patch_id": "B49", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
     ]})["success"]
@@ -694,14 +700,14 @@ def test_B49_rollback_staging_interrupted_then_resumes(box, monkeypatch):
         return real_copy2(src, dst, *a, **kw)
 
     mp.setattr(engine.shutil, "copy2", flaky_copy2)
-    res = main.rollback()
+    res = engine.rollback()
     mp.undo()
     assert res["success"] is False
     assert res["interrupted"] is True
     assert read(box / "a.py") == "x = 2\n"
     assert read(box / "b.py") == "y = 2\n"
     assert (box / "patch_journal.json").exists()
-    res = main.rollback()
+    res = engine.rollback()
     assert res["success"] is True
     assert read(box / "a.py") == "x = 1\n"
     assert read(box / "b.py") == "y = 1\n"
@@ -732,7 +738,7 @@ def test_B50_partial_rollback_reported_not_hidden(box, monkeypatch):
     mp.setattr(engine.shutil, "copy2", counting_copy2)
     put(box, "a.py", "x = 1\n")
     put(box, "b.py", "y = 1\n")
-    res = main.apply_patch({"patch_id": "B50", "operations": [
+    res = engine.apply_patch({"patch_id": "B50", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
     ]})
@@ -759,7 +765,7 @@ def test_B51_crash_journal_recovers_apply(box, monkeypatch):
     put(box, "a.py", "x = 1\n")
     put(box, "b.py", "y = 1\n")
     with pytest.raises(KeyboardInterrupt):
-        main.apply_patch({"patch_id": "B51", "operations": [
+        engine.apply_patch({"patch_id": "B51", "operations": [
             {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
             {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
         ]})
@@ -773,7 +779,7 @@ def test_B51_crash_journal_recovers_apply(box, monkeypatch):
     assert read(box / "a.py") == "x = 1\n"
     assert read(box / "b.py") == "y = 1\n"
     assert not (box / "patch_journal.json").exists()
-    assert main.apply_patch({"patch_id": "B51", "operations": [
+    assert engine.apply_patch({"patch_id": "B51", "operations": [
         {"type": "full_replace", "target_file": "a.py", "full_file_content": "x = 2\n"},
         {"type": "full_replace", "target_file": "b.py", "full_file_content": "y = 2\n"},
     ]})["success"]
@@ -784,21 +790,21 @@ def test_B52_corrupt_manifest_blocks_engine_until_reset(box):
     (box / "patch_manifest.json").write_text('{"applied": [ BROKEN', encoding="utf-8")
     put(box, "c.py", "z = 0\n")
     try:
-        res = main.apply_patch({"patch_id": "B52", "operations": [
+        res = engine.apply_patch({"patch_id": "B52", "operations": [
             {"type": "full_replace", "target_file": "c.py", "full_file_content": "z = 1\n"},
         ]})
         assert res["success"] is False
         assert "поврежд" in res["error"]
         assert (box / "patch_manifest.json.corrupt").exists()
         assert read(box / "c.py") == "z = 0\n"
-        assert main.rollback()["success"] is False
+        assert engine.rollback()["success"] is False
         assert engine.stats()["locked"] is True
         res = engine.force_unlock_manifest()
         assert res["success"] is True
         assert engine.stats()["locked"] is False
     finally:
         engine.MANIFEST_LOCK = ""
-    assert main.apply_patch({"patch_id": "B52", "operations": [
+    assert engine.apply_patch({"patch_id": "B52", "operations": [
         {"type": "full_replace", "target_file": "c.py", "full_file_content": "z = 1\n"},
     ]})["success"]
     assert read(box / "c.py") == "z = 1\n"
@@ -809,12 +815,12 @@ def test_B52_corrupt_manifest_blocks_engine_until_reset(box):
 
 def test_B53_history_survives_restart(box, monkeypatch):
     put(box, "notes.txt", "x")
-    res = json.loads(main.s_project_bulk({"action": "delete", "paths": ["notes.txt"]}).body)
+    res = json.loads(rp.s_project_bulk({"action": "delete", "paths": ["notes.txt"]}).body)
     assert res["success"] is True and res["processed"] == 1
     assert not (box / "notes.txt").exists()
     assert (box / ".project-history.json").exists()
-    monkeypatch.setattr(main, "PROJECT_HISTORY", main._load_project_history())
-    data = json.loads(main.s_project_rollback().body)
+    monkeypatch.setattr(rp, "PROJECT_HISTORY", rp._load_project_history())
+    data = json.loads(rp.s_project_rollback().body)
     assert data["success"] is True
     assert "delete" in data["message"]
     assert read(box / "notes.txt") == "x"
@@ -822,21 +828,21 @@ def test_B53_history_survives_restart(box, monkeypatch):
 
 def test_B54_rollback_important_restores_state(box, monkeypatch):
     put(box, "notes.txt", "x")
-    res = json.loads(main.s_project_bulk({"action": "important", "paths": ["notes.txt"]}).body)
+    res = json.loads(rp.s_project_bulk({"action": "important", "paths": ["notes.txt"]}).body)
     assert res["processed"] == 1
-    assert "notes.txt" in main.load_important()
-    monkeypatch.setattr(main, "PROJECT_HISTORY", main._load_project_history())
-    data = json.loads(main.s_project_rollback().body)
+    assert "notes.txt" in rp.load_important()
+    monkeypatch.setattr(rp, "PROJECT_HISTORY", rp._load_project_history())
+    data = json.loads(rp.s_project_rollback().body)
     assert data["success"] is True
     assert "important" in data["message"]
-    assert "notes.txt" not in main.load_important()
+    assert "notes.txt" not in rp.load_important()
 
 
 def test_B55_archive_preserves_relative_path(box, monkeypatch):
-    monkeypatch.setattr(main, "BASE", str(box))
+    monkeypatch.setattr(engine, "BASE", str(box))
     put(box, "libs/utils/data.json", '{"a": 1}')
     put(box, "samples/data.json", '{"b": 2}')
-    data = json.loads(main.s_project_bulk({"action": "archive", "paths": ["libs/utils/data.json", "samples/data.json"]}).body)
+    data = json.loads(rp.s_project_bulk({"action": "archive", "paths": ["libs/utils/data.json", "samples/data.json"]}).body)
     assert data["processed"] == 2
     assert len(data["archive"]) == 2
     assert not (box / "libs" / "utils" / "data.json").exists()
@@ -848,7 +854,7 @@ def test_B55_archive_preserves_relative_path(box, monkeypatch):
     assert len(stored) == 2
     assert not (box / "data.json").exists()
     for orig, archived in data["archive"].items():
-        res = json.loads(main.s_project_restore({"archive_path": archived}).body)
+        res = json.loads(rp.s_project_restore({"archive_path": archived}).body)
         assert res["success"] is True
     assert read(box / "libs" / "utils" / "data.json") == '{"a": 1}'
     assert read(box / "samples" / "data.json") == '{"b": 2}'
@@ -857,7 +863,7 @@ def test_B55_archive_preserves_relative_path(box, monkeypatch):
 def test_B55_archive_collision_same_filename(box):
     put(box, "libs/a/data.txt", "1")
     put(box, "samples/b/data.txt", "2")
-    data = json.loads(main.s_project_bulk({"action": "archive", "paths": ["libs/a/data.txt", "samples/b/data.txt"]}).body)
+    data = json.loads(rp.s_project_bulk({"action": "archive", "paths": ["libs/a/data.txt", "samples/b/data.txt"]}).body)
     assert data["processed"] == 2
     p1 = data["archive"]["libs/a/data.txt"]
     p2 = data["archive"]["samples/b/data.txt"]
@@ -867,27 +873,28 @@ def test_B55_archive_collision_same_filename(box):
 
 
 def test_B55_restore_rejects_non_archive_and_critical(box):
-    res = json.loads(main.s_project_restore({"archive_path": "notes.txt"}).body)
+    res = json.loads(rp.s_project_restore({"archive_path": "notes.txt"}).body)
     assert res["success"] is False
     put(box, "settings.json", "{}")
     dst = box / "project_archive" / "stamp" / "settings.json"
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text("{}")
-    res = json.loads(main.s_project_restore({"archive_path": "project_archive/stamp/settings.json"}).body)
+    res = json.loads(rp.s_project_restore({"archive_path": "project_archive/stamp/settings.json"}).body)
     assert res["success"] is False and "критичн" in res["error"]
 
 
 def test_B56_providers_config_writes_settings_and_rebuilds_engine(box, monkeypatch):
-    monkeypatch.setattr(main, "CONFIG", str(box / "settings.json"))
-    main.engine_obj = {"stub": True}
+    monkeypatch.setattr(rprov, "CONFIG", str(box / "settings.json"))
+    monkeypatch.setattr(shared, "CONFIG", str(box / "settings.json"))
+    shared.engine_obj = {"stub": True}
     try:
-        res = json.loads(main.s_providers_config({"config": {"groq_api_key": "k-123"}}).body)
+        res = json.loads(rprov.s_providers_config({"config": {"groq_api_key": "k-123"}}).body)
         assert res["success"] is True and res["file"] == "settings.json"
         assert json.loads((box / "settings.json").read_text(encoding="utf-8"))["groq_api_key"] == "k-123"
-        assert not isinstance(main.engine_obj, dict)
-        assert getattr(main.engine_obj, "config", {}).get("groq_api_key") == "k-123"
+        assert not isinstance(shared.engine_obj, dict)
+        assert getattr(shared.engine_obj, "config", {}).get("groq_api_key") == "k-123"
     finally:
-        main.engine_obj = None
+        shared.engine_obj = None
 
 
 def test_B57_ollama_client_uses_configured_host():
@@ -1032,7 +1039,7 @@ def test_B61_backup_rotation_keep10(box):
 
 def test_B69_manifest_backup_paths_relative(box):
     put(box, "a.py", "x = 1\n")
-    r = main.apply_patch({"patch_id": "B69", "operations": [
+    r = engine.apply_patch({"patch_id": "B69", "operations": [
         {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
     ]})
     assert r["success"]
@@ -1047,18 +1054,18 @@ def test_B69_manifest_backup_paths_relative(box):
 
 def test_B69_rollback_with_relative_paths(box):
     put(box, "a.py", "x = 1\n")
-    r = main.apply_patch({"patch_id": "B69r", "operations": [
+    r = engine.apply_patch({"patch_id": "B69r", "operations": [
         {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
     ]})
     assert r["success"]
-    rr = main.rollback()
+    rr = engine.rollback()
     assert rr["success"], rr
     assert read(box / "a.py") == "x = 1\n"
 
 
 def test_B69_rollback_accepts_legacy_absolute_backup_paths(box):
     put(box, "a.py", "x = 1\n")
-    r = main.apply_patch({"patch_id": "B69l", "operations": [
+    r = engine.apply_patch({"patch_id": "B69l", "operations": [
         {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
     ]})
     assert r["success"]
@@ -1070,7 +1077,7 @@ def test_B69_rollback_accepts_legacy_absolute_backup_paths(box):
     entry["backups"] = [os.path.join(str(box), p.replace("/", os.sep)) if not os.path.isabs(p) else p
                         for p in entry["backups"]]
     engine.save_manifest(man)
-    rr = main.rollback()
+    rr = engine.rollback()
     assert rr["success"], rr
     assert read(box / "a.py") == "x = 1\n"
 
@@ -1089,7 +1096,7 @@ def test_B62_ts_types_error_blocks_apply(box, monkeypatch):
     monkeypatch.setattr(engine, "check_ts", lambda *a, **k: None)
     monkeypatch.setattr(engine.subprocess, "run", lambda *a, **k: _FakeR(1, "TS2322: type mismatch"))
     put(box, "src/c.ts", "const a: number = 1;\n")
-    res = main.apply_patch({"patch_id": "B62bad", "operations": [
+    res = engine.apply_patch({"patch_id": "B62bad", "operations": [
         {"type": "search_and_replace", "target_file": "src/c.ts", "find": "1", "replace": "2"},
     ]})
     assert res["success"] is False
@@ -1105,7 +1112,7 @@ def test_B62_ts_types_ok_patch_applies(box, monkeypatch):
     monkeypatch.setattr(engine, "check_ts", lambda *a, **k: None)
     monkeypatch.setattr(engine.subprocess, "run", lambda *a, **k: _FakeR(0, ""))
     put(box, "src/c.ts", "const a: number = 1;\n")
-    res = main.apply_patch({"patch_id": "B62ok", "operations": [
+    res = engine.apply_patch({"patch_id": "B62ok", "operations": [
         {"type": "search_and_replace", "target_file": "src/c.ts", "find": "1", "replace": "2"},
     ]})
     assert res["success"], res
@@ -1118,7 +1125,7 @@ def test_B62_tsc_unavailable_skips_full_check(box, monkeypatch):
     monkeypatch.setattr(engine, "_tsc_cmd", lambda: None)
     monkeypatch.setattr(engine, "check_ts", lambda *a, **k: None)
     put(box, "src/c.tsx", "const A = () => { return <b>x</b>; };\n")
-    res = main.apply_patch({"patch_id": "B62skip", "operations": [
+    res = engine.apply_patch({"patch_id": "B62skip", "operations": [
         {"type": "search_and_replace", "target_file": "src/c.tsx", "find": "x", "replace": "y"},
     ]})
     assert res["success"], res
@@ -1138,7 +1145,7 @@ def test_B63_apply_all_honest_success(box):
         ],
     }), encoding="utf-8")
     put(box, "a.py", "z = 0\n")
-    body = json.loads(main.s_pall({}).body)
+    body = json.loads(rpat.s_pall({}).body)
     assert body["success"] is False
     assert body["results"][0]["success"] is False
     assert read(box / "a.py") == "z = 0\n"
@@ -1152,14 +1159,15 @@ def test_B63_apply_all_success_when_all_good(box):
         ],
     }), encoding="utf-8")
     put(box, "a.py", "x = 1\n")
-    body = json.loads(main.s_pall({}).body)
+    body = json.loads(rpat.s_pall({}).body)
     assert body["success"] is True
     assert body["results"][0]["success"] is True
     assert read(box / "a.py") == "x = 2\n"
 
 
 def test_B64_validate_all_uses_safe_path(box, monkeypatch):
-    monkeypatch.setattr(main, "PATCH_DIR", str(box / "patch"))
+    monkeypatch.setattr(engine, "PATCH_DIR", str(box / "patch"))
+    monkeypatch.setattr(rpat, "PATCH_DIR", str(box / "patch"))
     (box / "patch" / "B64evil.json").write_text(json.dumps({
         "patch_id": "B64evil",
         "operations": [
@@ -1167,16 +1175,16 @@ def test_B64_validate_all_uses_safe_path(box, monkeypatch):
         ],
     }), encoding="utf-8")
     (tmp_out := box.parent / "outside.txt").write_text("a\n", encoding="utf-8")
-    res = main.s_pvalidate_all()
+    res = rpat.s_pvalidate_all()
     body = json.loads(res.body)
     entry = [x for x in body["patches"] if x["filename"] == "B64evil.json"][0]
     assert any("подозрительный target_file" in e for e in entry["errors"])
 
 
 def test_B72_apply_py_sets_restart_flag(box, monkeypatch):
-    monkeypatch.setattr(main, "RESTART_FLAG", str(box / "restart.flag"))
+    monkeypatch.setattr(rpat, "RESTART_FLAG", str(box / "restart.flag"))
     put(box, "a.py", "x = 1\n")
-    body = json.loads(main.s_papply({"patch_id": "B72py", "operations": [
+    body = json.loads(rpat.s_papply({"patch_id": "B72py", "operations": [
         {"type": "search_and_replace", "target_file": "a.py", "find": "x = 1", "replace": "x = 2"},
     ]}).body)
     assert body["success"] is True
@@ -1185,9 +1193,9 @@ def test_B72_apply_py_sets_restart_flag(box, monkeypatch):
 
 
 def test_B72_apply_nonpy_sets_no_restart_flag(box, monkeypatch):
-    monkeypatch.setattr(main, "RESTART_FLAG", str(box / "restart.flag"))
+    monkeypatch.setattr(rpat, "RESTART_FLAG", str(box / "restart.flag"))
     put(box, "conf.txt", "k = v\n")
-    body = json.loads(main.s_papply({"patch_id": "B72txt", "operations": [
+    body = json.loads(rpat.s_papply({"patch_id": "B72txt", "operations": [
         {"type": "search_and_replace", "target_file": "conf.txt", "find": "k = v", "replace": "k = w"},
     ]}).body)
     assert body["success"] is True
@@ -1213,8 +1221,8 @@ def test_B68_shell_version_from_api():
     assert "loadAppVersionApi" in app and "version={appVersion}" in app
     api = _io.open(os.path.join(root, "src", "services", "api.ts"), encoding="utf-8").read()
     assert "/api/version" in api
-    main_src = _io.open(os.path.join(root, "main.py"), encoding="utf-8").read()
-    assert "/api/version" in main_src and "_VER" in main_src
+    api_src = _io.open(os.path.join(root, "api", "routes_system.py"), encoding="utf-8").read()
+    assert "/api/version" in api_src and "_VER" in api_src
 
 
 # ========================= B59: Fast возвращает первое готовое ответ =========================

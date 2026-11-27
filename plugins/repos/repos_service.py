@@ -658,6 +658,7 @@ def repo_sync(path, message, expected_snapshot=None):
                     hints.add('build: обновлялся фронтенд (src/) — на Vite dev (launcher.bat) достаточно перезапуска панели; на собранной версии выполните npm run build')
                 elif lf.endswith('.py'):
                     hints.add('py: обновлялись Python-файлы — перезапустите панель (кнопка «Перезапуск» в подвале)')
+            refresh_hints = sorted(hints)
 
     merged = last_merged_pr(path)
     steps.append({'step': 'merged_pr_check', 'ok': True, 'last_merged': merged})
