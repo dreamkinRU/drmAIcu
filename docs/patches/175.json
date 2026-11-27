@@ -1,0 +1,235 @@
+{
+  "patch_id": "175",
+  "type": "multi",
+  "description": "3.19.7 — only for base 72a5237, do not apply after merge",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "patch_engine.py",
+      "find": "TX_LOCK = threading.RLock()\n\n\ndef apply_patch(raw):\n    with TX_LOCK:\n        data = resolve(raw)\n        pid = str(data.get('patch_id', 'unknown'))\n        return _apply_patch_locked(data, pid)",
+      "replace": "TX_LOCK = threading.RLock()\n# Process-local observation only; manifest and crash journal remain authoritative.\n_PATCH_ACTIVITY = {'state': 'idle'}\n\n\ndef _patch_activity(state, **fields):\n    global _PATCH_ACTIVITY\n    _PATCH_ACTIVITY = {**_PATCH_ACTIVITY, **fields, 'state': state,\n                       'updated_at': datetime.now().isoformat()}\n\n\ndef patch_progress():\n    snapshot = dict(_PATCH_ACTIVITY)\n    if snapshot.get('state') != 'running':\n        journal = load_journal()\n        if journal is not None or JOURNAL_LOCK:\n            return {'state': 'recovery_required', 'patch_id': (journal or {}).get('patch_id'),\n                    'stage': 'recovery'}\n    return snapshot\n\n\ndef apply_patch(raw):\n    with TX_LOCK:\n        data = resolve(raw)\n        pid = str(data.get('patch_id', 'unknown'))\n        _patch_activity('running', patch_id=pid, stage='validation', done=0, total=None,\n                        started_at=datetime.now().isoformat())\n        try:\n            result = _apply_patch_locked(data, pid)\n            report = result.get('report') or {}\n            state = ('warning' if report.get('archive_status') in ('failed', 'not_found', 'pending')\n                     else 'success') if result.get('success') else 'failed'\n            _patch_activity(state, stage='finished')\n            return result\n        except BaseException:\n            _patch_activity('failed', stage='interrupted')\n            raise"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "patch_engine.py",
+      "find": "    planned = []\n    for o in ops:",
+      "replace": "    _patch_activity('running', stage='backup', total=len(ops), done=0)\n    planned = []\n    for o in ops:"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "patch_engine.py",
+      "find": "        _write_journal(jrec)\n        for pl in planned:",
+      "replace": "        _write_journal(jrec)\n        _patch_activity('running', stage='write', total=len(planned), done=0)\n        for pl in planned:"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "patch_engine.py",
+      "find": "                raise ValueError('Checksum mismatch: ' + pl['tgt'])\n        # B40",
+      "replace": "                raise ValueError('Checksum mismatch: ' + pl['tgt'])\n            _patch_activity('running', stage='write', done=len(written))\n        _patch_activity('running', stage='manifest')\n        # B40"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "patch_engine.py",
+      "find": "        # Source archive is post-commit housekeeping: never roll back committed code.",
+      "replace": "        _patch_activity('running', stage='archive')\n        # Source archive is post-commit housekeeping: never roll back committed code."
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "api/routes_patches.py",
+      "find": "@router.get('/api/patches/stats')",
+      "replace": "@router.get('/api/patches/progress')\ndef s_pprogress():\n    return JSONResponse({'success': True, 'progress': _pe.patch_progress()}, headers={'Cache-Control': 'no-store'})\n\n\n@router.get('/api/patches/stats')"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/services/api.ts",
+      "find": "export interface PatchReport {",
+      "replace": "export interface PatchProgress {\n  state: string;\n  patch_id?: string;\n  stage?: string;\n  done?: number;\n  total?: number | null;\n  updated_at?: string;\n}\nexport interface PatchReport {"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "import { useState, useEffect } from 'react';",
+      "replace": "import { useState, useEffect, useRef } from 'react';"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "    setApplyingPatch(true);\n    try {\n      const data = await applyPatchApi(patch);",
+      "replace": "    if (applyGuard.current) return;\n    applyGuard.current = true;\n    setApplyingPatch(true);\n    setPatchLog(prev => [...prev, 'Начато применение #' + patch.patch_id]);\n    try {\n      const data = await applyPatchApi(patch);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "  const [applyingPatch, setApplyingPatch] = useState(false);",
+      "replace": "  const [applyingPatch, setApplyingPatch] = useState(false);\n  const applyGuard = useRef(false);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "        alert('Ошибка: ' + data.error);\n      }\n    } catch {\n      alert('Ошибка сети');\n    } finally {\n      setApplyingPatch(false);",
+      "replace": "        setPatchLog(prev => [...prev, 'Ошибка #' + patch.patch_id + ': ' + (data.error || 'Результат неизвестен')]);\n        alert('Ошибка: ' + data.error);\n      }\n    } catch {\n      setPatchLog(prev => [...prev, 'Связь потеряна — проверьте манифест перед повтором']);\n      alert('Ошибка сети');\n    } finally {\n      applyGuard.current = false;\n      setApplyingPatch(false);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "    if (!confirm('Применить все патчи (' + patchStats.pending + ' шт.)?')) return;\n    setApplyingPatch(true);",
+      "replace": "    if (applyGuard.current || !confirm('Применить все патчи (' + patchStats.pending + ' шт.)?')) return;\n    applyGuard.current = true;\n    setApplyingPatch(true);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "      if (data.success) {\n        alert('Применено: ' + data.results.filter(r => r.success).length + '\\nСписок патчей обновлен.');\n        loadPatches();\n      }",
+      "replace": "      const count = data.results.filter(r => r.success).length;\n      const message = 'Применено: ' + count + (data.success ? '' : '; пакет остановлен или результат неизвестен');\n      setPatchLog(prev => [...prev, message]);\n      alert(message);\n      setSelectedPatch(null);\n      setPatchPreview(null);\n      await loadPatches();"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/hooks/usePatches.ts",
+      "find": "    } finally {\n      setApplyingPatch(false);\n    }\n  };\n\n  useEffect",
+      "replace": "    } finally {\n      applyGuard.current = false;\n      setApplyingPatch(false);\n    }\n  };\n\n  useEffect"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "import Tooltip from '../ui/Tooltip';",
+      "replace": "import Tooltip from '../ui/Tooltip';\nimport { useEffect, useState } from 'react';\nimport type { PatchProgress } from '../../services/api';\n\nfunction statusLabel(state: string, step?: string) {\n  const labels: Record<string,string> = {\n    idle: 'Готов', running: 'Выполняется', success: 'Применён', warning: 'Внимание',\n    failed: 'Ошибка', recovery_required: 'Восстановление', IDLE: 'Готов',\n    CHECKED: 'Проверен', APPLYING: 'Обновление', CODE_UPDATED: 'Код получен',\n    RESTORING: 'Восстановление', PREPARING: 'Подготовка', RESTART_REQUIRED: 'Перезапуск',\n    COMPLETED: 'Завершено', FAILED: 'Ошибка', RECOVERY_REQUIRED: 'Восстановление',\n    UPDATE_NEEDS_REPAIR: 'Требуется ремонт',\n  };\n  const stages: Record<string,string> = {validation:'Проверка',backup:'Бэкап',write:'Запись',manifest:'Манифест',archive:'Архив',merge:'Git',restore:'Восстановление',environment:'Окружение',python:'Python',npm:'npm',frontend_build:'Сборка'};\n  return (step && stages[step]) || labels[state] || state;\n}\nfunction statusColor(state: string) {\n  if (['success','COMPLETED'].includes(state)) return 'text-emerald-300';\n  if (['failed','FAILED','RECOVERY_REQUIRED','recovery_required','UPDATE_NEEDS_REPAIR'].includes(state)) return 'text-red-300';\n  if (['running','APPLYING','RESTORING','PREPARING'].includes(state)) return 'text-cyan-300';\n  return 'text-amber-300';\n}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "  incomingBusy: boolean;",
+      "replace": "  incomingBusy: boolean;\n  applyingPatch: boolean;"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "    version, setActiveTab, onIncomingUpdate, incomingBusy,",
+      "replace": "    version, setActiveTab, onIncomingUpdate, incomingBusy, applyingPatch,"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "  const onlineProviders =",
+      "replace": "  const [patchProgress, setPatchProgress] = useState<PatchProgress | null>(null);\n  const [updateProgress, setUpdateProgress] = useState<{state?: string; active_step?: string; behind?: number; ahead?: number} | null>(null);\n  useEffect(() => {\n    let stopped = false;\n    let timer: number;\n    async function poll() {\n      const read = async (url: string) => {\n        const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) });\n        if (!response.ok) throw new Error('status unavailable');\n        const data = await response.json();\n        if (!data.success) throw new Error('status unavailable');\n        return data.progress;\n      };\n      const [patch, update] = await Promise.allSettled([read('/api/patches/progress'), read('/api/updates/progress')]);\n      if (stopped) return;\n      setPatchProgress(patch.status === 'fulfilled' ? patch.value : null);\n      setUpdateProgress(update.status === 'fulfilled' ? update.value : null);\n      timer = window.setTimeout(poll, applyingPatch || incomingBusy ? 1200 : 5000);\n    }\n    void poll();\n    return () => { stopped = true; window.clearTimeout(timer); };\n  }, [applyingPatch, incomingBusy]);\n  const patchState = applyingPatch ? 'running' : patchProgress?.state || '';\n  const updateState = updateProgress?.state || '';\n  const updateActive = incomingBusy || ['APPLYING','RESTORING','PREPARING'].includes(updateState);\n  const onlineProviders ="
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "<span className=\"text-[11px] text-yellow-400 font-mono\">{patchStats.pending || 0}</span>",
+      "replace": "<span className=\"text-[11px] text-yellow-400 font-mono\">{patchStats.pending || 0}</span>\n                <span role=\"status\" className={statusColor(patchState)}>{patchState ? statusLabel(patchState, patchState === 'running' && patchProgress?.state === 'running' ? patchProgress.stage : undefined) : 'Нет связи'}{patchProgress?.state === 'running' && patchProgress.patch_id ? ' #' + patchProgress.patch_id : ''}</span>"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "                  <span>Обновление</span>",
+      "replace": "                  <span>Обновление</span>\n                  <span role=\"status\" className={statusColor(updateActive ? 'running' : updateState)}>{updateActive ? (['APPLYING','RESTORING','PREPARING'].includes(updateState) ? statusLabel(updateState, updateProgress?.active_step) : 'Выполняется') : updateState ? statusLabel(updateState) : 'Нет данных'}</span>"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/layout/Header.tsx",
+      "find": "disabled={incomingBusy}",
+      "replace": "disabled={incomingBusy || updateActive || applyingPatch || patchProgress?.state === 'running'}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/App.tsx",
+      "find": "        incomingBusy={incomingBusy}",
+      "replace": "        incomingBusy={incomingBusy}\n        applyingPatch={applyingPatch}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/PatchesTab.tsx",
+      "find": "      {!!patchStats.reports?.length",
+      "replace": "      {(applyingPatch || patchLog.length > 0) && <section className=\"rounded-xl border border-cyan-500/40 p-4 space-y-2\">\n        <h3 className=\"font-bold text-cyan-200\">Статус применения патчей</h3>\n        {applyingPatch && <p role=\"status\" className=\"text-cyan-300\">Операция выполняется. Не запускайте повторное применение.</p>}\n        <div role=\"log\" className=\"max-h-40 overflow-auto font-mono text-xs space-y-1\">{patchLog.slice(-30).map((line, i) => <div key={i}>{line}</div>)}</div>\n        <p className=\"text-xs text-gray-400\">Сообщения текущего сеанса. Подтверждённые применения сохраняются в манифесте ниже.</p>\n      </section>}\n      {!!patchStats.reports?.length"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/PatchesTab.tsx",
+      "find": "            onClick={rollbackLastPatch}",
+      "replace": "            onClick={rollbackLastPatch}\n            disabled={applyingPatch}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "tests/test_engine.py",
+      "find": "def test_patch_txt_downloads_archive_and_persistent_report",
+      "replace": "def test_patch_progress_reports_actual_stage_and_result(box, monkeypatch):\n    monkeypatch.setattr(engine, \"DOWNLOADS_DIR\", \"\")\n    put(box, \"status.txt\", \"old\")\n    observed = []\n    original = engine.backup\n    def observe(path):\n        observed.append(engine.patch_progress())\n        return original(path)\n    monkeypatch.setattr(engine, \"backup\", observe)\n    result = engine.apply_patch({\"patch_id\": \"STATUS1\", \"operations\": [\n        {\"type\": \"full_replace\", \"target_file\": \"status.txt\", \"full_file_content\": \"new\"}]})\n    assert result[\"success\"]\n    assert observed[0][\"state\"] == \"running\"\n    assert observed[0][\"stage\"] == \"backup\"\n    assert observed[0][\"total\"] == 1\n    assert engine.patch_progress()[\"state\"] == \"warning\"\n    assert engine.patch_progress()[\"done\"] == 1\n    assert not engine.apply_patch({\"patch_id\": \"STATUS1\"})[\"success\"]\n    assert engine.patch_progress()[\"state\"] == \"failed\"\n\n\ndef test_patch_txt_downloads_archive_and_persistent_report"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "README.md",
+      "find": "**Версия 3.19.6 Model**",
+      "replace": "**Версия 3.19.7 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/USER_GUIDE.md",
+      "find": "**Версия 3.19.6 Model**",
+      "replace": "**Версия 3.19.7 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ARCHITECTURE.md",
+      "find": "**Версия 3.19.6 Model**",
+      "replace": "**Версия 3.19.7 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "version.py",
+      "find": "VERSION = '3.19.6'",
+      "replace": "VERSION = '3.19.7'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package.json",
+      "find": "\"version\": \"3.19.6\"",
+      "replace": "\"version\": \"3.19.7\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "  \"version\": \"3.19.6\",\n  \"lockfileVersion\"",
+      "replace": "  \"version\": \"3.19.7\",\n  \"lockfileVersion\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.6\",",
+      "replace": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.7\","
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/HANDOFF.md",
+      "find": "**Актуально для:** v.3.19.6 Model",
+      "replace": "**Актуально для:** v.3.19.7 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/CHANGELOG.md",
+      "find": "## v.3.19.6 Model (Текущая)",
+      "replace": "## v.3.19.7 Model (Текущая) — 27.11.2026\n\n- Статусы операций: серверный снимок этапов PATCHMASTER, индикаторы патчей и обновлений в шапке, сообщения текущего сеанса и честный итог пакетного применения, защита от повторного клика. JSON-патч 175 для исходной базы.\n\n## v.3.19.6 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "**Редакция плана:** 1.4",
+      "replace": "**Редакция плана:** 1.5"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "3.19.6 Model (кандидат)",
+      "replace": "3.19.7 Model (кандидат)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "**Следующая задача:** приёмка UPD-05 и CI-01, затем CI-03 и UPD-03.",
+      "replace": "**Следующая задача:** приёмка OBS-02, затем UPD-03 и CI-03."
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "## 11. Следующая команда новому агенту",
+      "replace": "## 11. Следующая команда новому агенту\n\nOBS-02 — REVIEW/P1: 3.19.7, база 72a5237 (владелец применил JSON 174; PR71 ещё открыт). Статусы шапки из read-only progress, этапы PATCHMASTER и счётчик подтверждённых файлов, ошибки пакетного применения. In-memory status не является постоянным журналом; манифест и crash journal остаются источником истины. JSON 175 для исходной базы, CI проверяет реальные изменения. Не применять после merge. Полная история UPD-03, блокировка между двумя подсистемами и построчный поток команд отдельно. Локальные тесты NOT RUN."
+    }
+  ]
+}

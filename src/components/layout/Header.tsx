@@ -1,4 +1,25 @@
 import Tooltip from '../ui/Tooltip';
+import { useEffect, useState } from 'react';
+import type { PatchProgress } from '../../services/api';
+
+function statusLabel(state: string, step?: string) {
+  const labels: Record<string,string> = {
+    idle: 'Готов', running: 'Выполняется', success: 'Применён', warning: 'Внимание',
+    failed: 'Ошибка', recovery_required: 'Восстановление', IDLE: 'Готов',
+    CHECKED: 'Проверен', APPLYING: 'Обновление', CODE_UPDATED: 'Код получен',
+    RESTORING: 'Восстановление', PREPARING: 'Подготовка', RESTART_REQUIRED: 'Перезапуск',
+    COMPLETED: 'Завершено', FAILED: 'Ошибка', RECOVERY_REQUIRED: 'Восстановление',
+    UPDATE_NEEDS_REPAIR: 'Требуется ремонт',
+  };
+  const stages: Record<string,string> = {validation:'Проверка',backup:'Бэкап',write:'Запись',manifest:'Манифест',archive:'Архив',merge:'Git',restore:'Восстановление',environment:'Окружение',python:'Python',npm:'npm',frontend_build:'Сборка'};
+  return (step && stages[step]) || labels[state] || state;
+}
+function statusColor(state: string) {
+  if (['success','COMPLETED'].includes(state)) return 'text-emerald-300';
+  if (['failed','FAILED','RECOVERY_REQUIRED','recovery_required','UPDATE_NEEDS_REPAIR'].includes(state)) return 'text-red-300';
+  if (['running','APPLYING','RESTORING','PREPARING'].includes(state)) return 'text-cyan-300';
+  return 'text-amber-300';
+}
 import { TabId } from '../../types';
 
 interface HeaderProps {
@@ -16,15 +37,41 @@ interface HeaderProps {
   setActiveTab: (tab: TabId) => void;
   onIncomingUpdate: () => void;
   incomingBusy: boolean;
+  applyingPatch: boolean;
 }
 
 export default function Header(props: HeaderProps) {
   const {
     activeTab, agents, providers, patchStats, codeIssues,
     completedTasks, taskList, projectStats, ollamaStatus, ollamaModels,
-    version, setActiveTab, onIncomingUpdate, incomingBusy,
+    version, setActiveTab, onIncomingUpdate, incomingBusy, applyingPatch,
   } = props;
 
+  const [patchProgress, setPatchProgress] = useState<PatchProgress | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<{state?: string; active_step?: string; behind?: number; ahead?: number} | null>(null);
+  useEffect(() => {
+    let stopped = false;
+    let timer: number;
+    async function poll() {
+      const read = async (url: string) => {
+        const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+        if (!response.ok) throw new Error('status unavailable');
+        const data = await response.json();
+        if (!data.success) throw new Error('status unavailable');
+        return data.progress;
+      };
+      const [patch, update] = await Promise.allSettled([read('/api/patches/progress'), read('/api/updates/progress')]);
+      if (stopped) return;
+      setPatchProgress(patch.status === 'fulfilled' ? patch.value : null);
+      setUpdateProgress(update.status === 'fulfilled' ? update.value : null);
+      timer = window.setTimeout(poll, applyingPatch || incomingBusy ? 1200 : 5000);
+    }
+    void poll();
+    return () => { stopped = true; window.clearTimeout(timer); };
+  }, [applyingPatch, incomingBusy]);
+  const patchState = applyingPatch ? 'running' : patchProgress?.state || '';
+  const updateState = updateProgress?.state || '';
+  const updateActive = incomingBusy || ['APPLYING','RESTORING','PREPARING'].includes(updateState);
   const onlineProviders = providers.filter(p => p.status === 'online').length;
   const activeAgents = agents.filter(a => a.enabled).length;
   const openIssues = codeIssues.filter(i => !i.fixed).length;
@@ -82,6 +129,7 @@ export default function Header(props: HeaderProps) {
                 <span>🔄</span>
                 <span>Патчи</span>
                 <span className="text-[11px] text-yellow-400 font-mono">{patchStats.pending || 0}</span>
+                <span role="status" className={statusColor(patchState)}>{patchState ? statusLabel(patchState, patchState === 'running' && patchProgress?.state === 'running' ? patchProgress.stage : undefined) : 'Нет связи'}{patchProgress?.state === 'running' && patchProgress.patch_id ? ' #' + patchProgress.patch_id : ''}</span>
               </button>
             </Tooltip>
 
@@ -119,9 +167,10 @@ export default function Header(props: HeaderProps) {
               <Tooltip text="Открыть мастер обновления" position="bottom">
                 <button onClick={() => setActiveTab('updates')} className={navBtnClass('updates')}>
                   <span>Обновление</span>
+                  <span role="status" className={statusColor(updateActive ? 'running' : updateState)}>{updateActive ? (['APPLYING','RESTORING','PREPARING'].includes(updateState) ? statusLabel(updateState, updateProgress?.active_step) : 'Выполняется') : updateState ? statusLabel(updateState) : 'Нет данных'}</span>
                 </button>
               </Tooltip>
-              <button type="button" onClick={onIncomingUpdate} disabled={incomingBusy}
+              <button type="button" onClick={onIncomingUpdate} disabled={incomingBusy || updateActive || applyingPatch || patchProgress?.state === 'running'}
                 title="Входящая синхронизация: получить изменения GitHub, выполнить три этапа и перезапуск при необходимости"
                 aria-label="Входящая синхронизация из GitHub"
                 className="rounded-lg border border-emerald-400/60 bg-emerald-500/15 px-2 py-1.5 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40">

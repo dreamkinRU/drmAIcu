@@ -45,6 +45,7 @@ export default function PatchesTab({
         <div className="flex gap-2">
           <button
             onClick={rollbackLastPatch}
+            disabled={applyingPatch}
             className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 text-sm font-bold hover:bg-red-500/30"
           >
             ↩ Откатить
@@ -82,6 +83,12 @@ export default function PatchesTab({
         </div>
       </div>
 
+      {(applyingPatch || patchLog.length > 0) && <section className="rounded-xl border border-cyan-500/40 p-4 space-y-2">
+        <h3 className="font-bold text-cyan-200">Статус применения патчей</h3>
+        {applyingPatch && <p role="status" className="text-cyan-300">Операция выполняется. Не запускайте повторное применение.</p>}
+        <div role="log" className="max-h-40 overflow-auto font-mono text-xs space-y-1">{patchLog.slice(-30).map((line, i) => <div key={i}>{line}</div>)}</div>
+        <p className="text-xs text-gray-400">Сообщения текущего сеанса. Подтверждённые применения сохраняются в манифесте ниже.</p>
+      </section>}
       {!!patchStats.reports?.length && <section className="rounded-xl border border-emerald-500/30 p-4 space-y-2">
         <h3 className="font-bold text-emerald-300">Последние применённые патчи — отчёты из манифеста</h3>
         {patchStats.reports.map((report, i) => <details key={report.patch_id + i} open={i === 0} className="rounded border border-gray-700 p-3">

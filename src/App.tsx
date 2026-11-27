@@ -208,6 +208,7 @@ export default function App() {
         version={appVersion}
         onIncomingUpdate={() => { setActiveTab('updates'); setIncomingRequest(n => n + 1); }}
         incomingBusy={incomingBusy}
+        applyingPatch={applyingPatch}
         setActiveTab={setActiveTab}
       />
 
