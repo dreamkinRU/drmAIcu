@@ -1,0 +1,265 @@
+{
+  "patch_id": "173",
+  "type": "multi",
+  "description": "drmAIcu 3.19.4 — CI, Sync preview action, MD Roadmap, version snapshot; review candidate",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": ".gitattributes",
+      "find": "*.cmd text eol=crlf",
+      "replace": "*.cmd text eol=crlf\ndocs/CHANGELOG.md text eol=crlf"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": ".github/workflows/ci.yml",
+      "find": "node-version: '20'",
+      "replace": "node-version: '22.18.0'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": ".github/workflows/ci.yml",
+      "find": "      - name: Typecheck\n",
+      "replace": "      - name: Frontend regression tests\n        run: npm run test:frontend\n      - name: Typecheck\n"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package.json",
+      "find": "  \"version\": \"3.19.3\",",
+      "replace": "  \"version\": \"3.19.4\","
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package.json",
+      "find": "    \"typecheck\": \"tsc --noEmit\"",
+      "replace": "    \"typecheck\": \"tsc --noEmit\",\n    \"test:frontend\": \"node --experimental-strip-types --test tests/update_presentation.test.mjs\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "  \"version\": \"3.19.3\",\n  \"lockfileVersion\"",
+      "replace": "  \"version\": \"3.19.4\",\n  \"lockfileVersion\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.3\",",
+      "replace": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.4\","
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "version.py",
+      "find": "VERSION = '3.19.3'",
+      "replace": "VERSION = '3.19.4'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/utils/constants.ts",
+      "find": "export const mdFiles: MDFile[] = [",
+      "replace": "export const mdFiles: MDFile[] = [\n  { name: 'docs/ROADMAP.md', description: 'План развития — начать здесь' },\n  { name: 'docs/HANDOFF.md', description: 'Правила и передача работы агентам' },"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "import { useCallback, useEffect, useState } from 'react';",
+      "replace": "import { useCallback, useEffect, useRef, useState } from 'react';"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "<OverviewSection status={status} repoPath={repoPath}",
+      "replace": "<OverviewSection key={repoPath} status={status} repoPath={repoPath}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "  const [previewAcknowledged, setPreviewAcknowledged] = useState(false);",
+      "replace": "  const [previewAcknowledged, setPreviewAcknowledged] = useState(false);\n  const syncActionRef = useRef<HTMLDivElement>(null);\n  useEffect(() => {\n    if (!syncPreview) return;\n    const node = syncActionRef.current;\n    if (!node) return;\n    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n    node.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });\n    node.focus({ preventScroll: true });\n  }, [syncPreview]);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "            <div className=\"flex items-center gap-2 flex-wrap\">\n              {/* Изменений нет",
+      "replace": "            <div ref={syncActionRef} tabIndex={-1} aria-label=\"Следующий шаг синхронизации\" className=\"relative rounded-lg border border-cyan-400/70 bg-cyan-950/30 p-3 space-y-3 scroll-mt-24 focus:outline-none focus:ring-2 focus:ring-cyan-400\">\n              <p role=\"status\" className=\"text-sm font-semibold text-cyan-200\">Предпросмотр готов. Проверьте diff выше и подтвердите синхронизацию кнопкой ниже.</p>\n              {syncPreview.changed && <label className=\"block text-xs text-gray-300\">Сообщение коммита\n                <input value={commitMsg} onChange={e => setCommitMsg(e.target.value)} disabled={busy || !!pending} className=\"mt-1 w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm\" />\n              </label>}\n              {!syncPreview.complete && !previewAcknowledged && <p className=\"text-xs text-amber-200\">Для продолжения отметьте подтверждение неполного предпросмотра выше.</p>}\n              <div className=\"flex items-center gap-2 flex-wrap\">\n              {/* Изменений нет"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}\n                  onClick={requestSyncConfirmation}\n                  className=\"px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/60 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40\"",
+      "replace": "disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged) || (syncPreview.changed && !commitMsg.trim())}\n                  onClick={requestSyncConfirmation}\n                  className=\"relative px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400 text-amber-200 hover:bg-amber-500/25 enabled:ring-2 enabled:ring-amber-400/70 enabled:ring-offset-2 enabled:ring-offset-gray-950 disabled:opacity-40\"\n                "
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "                  Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)",
+      "replace": "                  <span aria-hidden=\"true\" className=\"pointer-events-none absolute -inset-1 rounded-lg border border-amber-300 opacity-60 motion-safe:animate-pulse motion-reduce:animate-none\" />\n                  Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/RepositoriesTab.tsx",
+      "find": "                Закрыть preview\n              </button>\n            </div>\n          </div>",
+      "replace": "                Закрыть preview\n              </button>\n              </div>\n            </div>\n          </div>"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "core/updater/manager.py",
+      "find": "    def state(self):\n",
+      "replace": "    def _version_snapshot(self, journal):\n        # Live Git HEAD is independent of the immutable historical update target.\n        installed = None\n        try:\n            installed = _version_or_none(_git_ok([\"rev-parse\", \"HEAD\"]))\n        except UpdateError:\n            pass\n        return {\n            \"running\": RUNNING_VERSION,\n            \"installed\": installed,\n            \"last_checked_remote\": journal.get(\"target_version\"),\n            \"checked_at\": journal.get(\"created_at\"),\n        }\n\n    def state(self):\n"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "core/updater/manager.py",
+      "find": "                    return {\"success\": True, \"journal\": journal}\n                journal.pop(\"error\", None)",
+      "replace": "                    return {\"success\": True, \"journal\": journal, \"versions\": self._version_snapshot(journal)}\n                journal.pop(\"error\", None)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "core/updater/manager.py",
+      "find": "            return {\"success\": True, \"journal\": {**journal, \"running_version\": RUNNING_VERSION, \"installed_version\": _version_or_none(_git_ok([\"rev-parse\", \"HEAD\"])) if journal.get(\"remote_head\") else None}}",
+      "replace": "            versions = self._version_snapshot(journal)\n            return {\"success\": True, \"journal\": {**journal, \"running_version\": RUNNING_VERSION, \"installed_version\": versions[\"installed\"]}, \"versions\": versions}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "type ApiResult = { success: boolean; error?: string; code?: string; plan?: any; journal?: any };",
+      "replace": "type VersionSnapshot = { running?: string; installed?: string | null; last_checked_remote?: string | null; checked_at?: string | null };\ntype ApiResult = { success: boolean; error?: string; code?: string; plan?: any; journal?: any; versions?: VersionSnapshot };"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "export default function UpdateWizardTab() {",
+      "replace": "export default function UpdateWizardTab({ onOpenRepositories }: { onOpenRepositories?: () => void }) {\n  const [versions, setVersions] = useState<VersionSnapshot | null>(null);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "      setJournal(result.journal || null);\n      setLoaded(true);",
+      "replace": "      setJournal(result.journal || null);\n      setVersions(result.versions || null);\n      setLoaded(true);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "      setConfirmed(false);\n    } catch",
+      "replace": "      setConfirmed(false);\n      await refresh();\n    } catch"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "  const canApply = state === 'CHECKED'",
+      "replace": "  const localOnly = state === 'CHECKED' && journal?.behind === 0 && (journal?.ahead > 0 || journal?.local_files?.length > 0);\n  const canApply = state === 'CHECKED'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "<Metric label=\"Запущенная версия\" value={journal?.running_version || journal?.restart_health?.version || '—'} />",
+      "replace": "<Metric label=\"Запущенная версия\" value={versions?.running || journal?.running_version || journal?.restart_health?.version || '—'} />"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "<Metric label=\"Установленная версия (Git)\" value={journal?.installed_version || (journal?.new_head ? journal?.target_version : journal?.current_version) || '—'} />",
+      "replace": "<Metric label=\"Установленная версия (Git HEAD)\" value={versions ? versions.installed || '—' : journal?.installed_version || '—'} />"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "<Metric label=\"Доступная версия\" value={journal?.target_version || '—'} />",
+      "replace": "<Metric label=\"GitHub (последняя проверка)\" value={versions ? versions.last_checked_remote || '—' : journal?.target_version || '—'} />"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "        {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state))",
+      "replace": "        <p className=\"text-xs text-gray-400\">Последняя проверка GitHub: {formatDate(versions?.checked_at || journal?.created_at)}. Это сохранённый результат fetch, а не онлайн-статус. После Sync нажмите «Проверить обновления».</p>\n        {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state))"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "{upToDate ? 'Актуальная версия' : updateStateLabel(state)}",
+      "replace": "{localOnly ? 'Есть локальные изменения' : upToDate ? 'Актуальная версия' : updateStateLabel(state)}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "        {upToDate && <div className=\"rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-200\">Установлена последняя версия из origin/main. Новых коммитов нет.</div>}",
+      "replace": "        {upToDate && !localOnly && <div className=\"rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-200\">По последней проверке HEAD совпадает с origin/main. Новых коммитов нет.</div>}\n        {localOnly && <div className=\"rounded-lg border border-amber-500/40 p-3 text-sm text-amber-200 space-y-2\"><p>На GitHub нет входящих коммитов. Локальные изменения или коммиты не публикуются мастером обновления.</p>{onOpenRepositories && <button onClick={onOpenRepositories} className=\"rounded border border-amber-400 px-3 py-2\">Перейти в Репозитории</button>}</div>}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "Локальные изменения будут сохранены до обновления</div>",
+      "replace": "{localOnly ? 'Локальные файлы ещё не синхронизированы' : 'Локальные изменения будут сохранены до обновления'}</div>"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "Будет создан отдельный Git backup ref. Staged-состояние восстанавливается отдельно. Игнорируемые файлы не затрагиваются.</p>",
+      "replace": "{localOnly ? 'Для публикации проверьте diff и выполните Sync во вкладке Репозитории.' : 'Будет создан отдельный Git backup ref. Staged-состояние восстанавливается отдельно. Игнорируемые файлы не затрагиваются.'}</p>"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/App.tsx",
+      "find": "{activeTab === 'updates' && <UpdateWizardTab />}",
+      "replace": "{activeTab === 'updates' && <UpdateWizardTab onOpenRepositories={() => setActiveTab('repositories')} />}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "README.md",
+      "find": "**Версия 3.19.3 Model**",
+      "replace": "**Версия 3.19.4 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ARCHITECTURE.md",
+      "find": "**Версия 3.19.3 Model**",
+      "replace": "**Версия 3.19.4 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/USER_GUIDE.md",
+      "find": "**Версия 3.19.3 Model**",
+      "replace": "**Версия 3.19.4 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/HANDOFF.md",
+      "find": "**Актуально для:** v.3.19.3 Model",
+      "replace": "**Актуально для:** v.3.19.4 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/CHANGELOG.md",
+      "find": "## v.3.19.3 Model (Текущая) — 27.11.2026",
+      "replace": "## v.3.19.4 Model (Текущая) — 27.11.2026\n\n- Sync: переход к панели действия после успешного предпросмотра, заметная рамка, доступность с клавиатуры и повторное поле сообщения коммита. ROADMAP и HANDOFF доступны в MD. Update Manager: отдельный снимок версий, время последнего fetch и переход в Репозитории при локальных изменениях без входящих коммитов. CI: явный CRLF для CHANGELOG и frontend regression script.\n\n## v.3.19.3 Model — 27.11.2026"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "**Редакция плана:** 1.0 · 27.11.2026 · **Базовая версия продукта:** 3.19.3 Model",
+      "replace": "**Редакция плана:** 1.1 · 27.11.2026 · **Базовая версия продукта:** 3.19.4 Model (кандидат)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "## 11. Следующая команда новому агенту",
+      "replace": "## 11. Следующая команда новому агенту\n\n**Инкремент 173 — REVIEW:** CI-00, CI-01, UPD-01 (частично: явная свежесть вместо автоматического fetch), DOC-01 (каталог MD) и GIT-UX-01 (scroll/focus и рамка после успешного preview). База main 5a5d09e4; патч 172 подтверждён в main. Полная приёмка, Windows/MEGA и CI ещё NOT RUN. Следующий агент проверяет патч через PATCHMASTER, не помечает DONE до приёмки. UPD-03 — OPEN/P2: общий read-model истории PATCHMASTER и Update Manager, без записи патчей в журнал обновлений; старые данные не выдумывать, учитывать rollback и дубли. Автоматическая инвалидация remote snapshot после Sync остаётся в UPD-01. Не менять Git/restart/security policy."
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "| 0 | CI-00 | Устранить подтверждённое падение Ubuntu на CRLF CHANGELOG | P1 | OPEN — блокирует новые продуктовые релизы |",
+      "replace": "| 0 | CI-00 | Устранить подтверждённое падение Ubuntu на CRLF CHANGELOG | P1 | REVIEW — патч 173, CI ещё не подтверждён |"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "| 1 | UPD-01 | Разделить актуальные версии и историческую операцию обновления | P1 | OPEN |",
+      "replace": "| 1 | UPD-01 | Разделить актуальные версии и историческую операцию обновления | P1 | REVIEW — частично, автоинвалидация отдельно |"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "| 2 | CI-01 | Подключить реальные frontend regression tests к CI | P1 | OPEN |",
+      "replace": "| 2 | CI-01 | Подключить реальные frontend regression tests к CI | P1 | REVIEW — патч 173 |\n| 2a | GIT-UX-01 | Прокрутка к действию после успешного Sync preview | P2 | REVIEW — патч 173 |\n| 2b | UPD-03 | Единая история PATCHMASTER и Update Manager | P2 | OPEN |"
+    }
+  ]
+}
