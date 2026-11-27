@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PatchInfo } from '../types';
 import { POLL_INTERVALS } from '../utils/constants';
 import {
@@ -21,6 +21,7 @@ export function usePatches(addLog: (entry: any) => void) {
   const [selectedPatch, setSelectedPatch] = useState<PatchInfo | null>(null);
   const [patchPreview, setPatchPreview] = useState<any>(null);
   const [applyingPatch, setApplyingPatch] = useState(false);
+  const applyGuard = useRef(false);
   const [patchFilter, setPatchFilter] = useState<'all' | 'pending' | 'applied' | 'errors'>('all');
   const [patchLog, setPatchLog] = useState<string[]>([]);
 
@@ -44,7 +45,10 @@ export function usePatches(addLog: (entry: any) => void) {
   const applyPatch = async (patch: PatchInfo) => {
     if (applyingPatch || patch.is_applied || patches.some(p => p.patch_id === patch.patch_id && p.is_applied)) return;
     if (!confirm('Применить патч ' + patch.patch_id + '?')) return;
+    if (applyGuard.current) return;
+    applyGuard.current = true;
     setApplyingPatch(true);
+    setPatchLog(prev => [...prev, 'Начато применение #' + patch.patch_id]);
     try {
       const data = await applyPatchApi(patch);
       if (data.success) {
@@ -55,11 +59,14 @@ export function usePatches(addLog: (entry: any) => void) {
         alert(data.message + '\nСписок патчей обновлен.');
         loadPatches();
       } else {
+        setPatchLog(prev => [...prev, 'Ошибка #' + patch.patch_id + ': ' + (data.error || 'Результат неизвестен')]);
         alert('Ошибка: ' + data.error);
       }
     } catch {
+      setPatchLog(prev => [...prev, 'Связь потеряна — проверьте манифест перед повтором']);
       alert('Ошибка сети');
     } finally {
+      applyGuard.current = false;
       setApplyingPatch(false);
     }
   };
@@ -95,17 +102,22 @@ export function usePatches(addLog: (entry: any) => void) {
   };
 
   const applyAllPending = async () => {
-    if (!confirm('Применить все патчи (' + patchStats.pending + ' шт.)?')) return;
+    if (applyGuard.current || !confirm('Применить все патчи (' + patchStats.pending + ' шт.)?')) return;
+    applyGuard.current = true;
     setApplyingPatch(true);
     try {
       const data = await applyAllPendingApi();
-      if (data.success) {
-        alert('Применено: ' + data.results.filter(r => r.success).length + '\nСписок патчей обновлен.');
-        loadPatches();
-      }
+      const count = data.results.filter(r => r.success).length;
+      const message = 'Применено: ' + count + (data.success ? '' : '; пакет остановлен или результат неизвестен');
+      setPatchLog(prev => [...prev, message]);
+      alert(message);
+      setSelectedPatch(null);
+      setPatchPreview(null);
+      await loadPatches();
     } catch {
       alert('Ошибка сети');
     } finally {
+      applyGuard.current = false;
       setApplyingPatch(false);
     }
   };

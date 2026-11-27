@@ -115,6 +115,11 @@ def s_pvalidate_all():
     return JSONResponse({'patches': results})
 
 
+@router.get('/api/patches/progress')
+def s_pprogress():
+    return JSONResponse({'success': True, 'progress': _pe.patch_progress()}, headers={'Cache-Control': 'no-store'})
+
+
 @router.get('/api/patches/stats')
 def s_pstats():
     return JSONResponse({'success': True, 'stats': stats()})

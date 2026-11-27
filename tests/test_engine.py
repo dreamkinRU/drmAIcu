@@ -321,6 +321,27 @@ def test_B25b_patch_body_from_disk_still_works(box):
     assert read(box / "a.py") == "x = 2\n"
 
 
+def test_patch_progress_reports_actual_stage_and_result(box, monkeypatch):
+    monkeypatch.setattr(engine, "DOWNLOADS_DIR", "")
+    put(box, "status.txt", "old")
+    observed = []
+    original = engine.backup
+    def observe(path):
+        observed.append(engine.patch_progress())
+        return original(path)
+    monkeypatch.setattr(engine, "backup", observe)
+    result = engine.apply_patch({"patch_id": "STATUS1", "operations": [
+        {"type": "full_replace", "target_file": "status.txt", "full_file_content": "new"}]})
+    assert result["success"]
+    assert observed[0]["state"] == "running"
+    assert observed[0]["stage"] == "backup"
+    assert observed[0]["total"] == 1
+    assert engine.patch_progress()["state"] == "warning"
+    assert engine.patch_progress()["done"] == 1
+    assert not engine.apply_patch({"patch_id": "STATUS1"})["success"]
+    assert engine.patch_progress()["state"] == "failed"
+
+
 def test_patch_txt_downloads_archive_and_persistent_report(box, monkeypatch):
     downloads = box / "downloads"
     downloads.mkdir()

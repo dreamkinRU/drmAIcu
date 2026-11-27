@@ -780,13 +780,42 @@ def test_apply(raw):
 
 
 TX_LOCK = threading.RLock()
+# Process-local observation only; manifest and crash journal remain authoritative.
+_PATCH_ACTIVITY = {'state': 'idle'}
+
+
+def _patch_activity(state, **fields):
+    global _PATCH_ACTIVITY
+    _PATCH_ACTIVITY = {**_PATCH_ACTIVITY, **fields, 'state': state,
+                       'updated_at': datetime.now().isoformat()}
+
+
+def patch_progress():
+    snapshot = dict(_PATCH_ACTIVITY)
+    if snapshot.get('state') != 'running':
+        journal = load_journal()
+        if journal is not None or JOURNAL_LOCK:
+            return {'state': 'recovery_required', 'patch_id': (journal or {}).get('patch_id'),
+                    'stage': 'recovery'}
+    return snapshot
 
 
 def apply_patch(raw):
     with TX_LOCK:
         data = resolve(raw)
         pid = str(data.get('patch_id', 'unknown'))
-        return _apply_patch_locked(data, pid)
+        _patch_activity('running', patch_id=pid, stage='validation', done=0, total=None,
+                        started_at=datetime.now().isoformat())
+        try:
+            result = _apply_patch_locked(data, pid)
+            report = result.get('report') or {}
+            state = ('warning' if report.get('archive_status') in ('failed', 'not_found', 'pending')
+                     else 'success') if result.get('success') else 'failed'
+            _patch_activity(state, stage='finished')
+            return result
+        except BaseException:
+            _patch_activity('failed', stage='interrupted')
+            raise
 
 
 def _apply_patch_locked(data, pid):
@@ -826,6 +855,7 @@ def _apply_patch_locked(data, pid):
         if ts_err:
             log('Patch ' + pid + ' rejected (tsc --noEmit): ' + ts_err[:300], 'ERROR')
             return {'success': False, 'error': 'Патч отклонён tsc --noEmit (проверка типов до записи): ' + ts_err[:300]}
+    _patch_activity('running', stage='backup', total=len(ops), done=0)
     planned = []
     for o in ops:
         dir_name = os.path.dirname(o['path'])
@@ -864,6 +894,7 @@ def _apply_patch_locked(data, pid):
                       for pl in planned]}
     try:
         _write_journal(jrec)
+        _patch_activity('running', stage='write', total=len(planned), done=0)
         for pl in planned:
             tmp = pl['path'] + '.tmp'
             with open(tmp, 'wb') as f:
@@ -878,6 +909,8 @@ def _apply_patch_locked(data, pid):
                 actual = sha_bytes(f.read())
             if actual != pl['sha']:
                 raise ValueError('Checksum mismatch: ' + pl['tgt'])
+            _patch_activity('running', stage='write', done=len(written))
+        _patch_activity('running', stage='manifest')
         # B40 FIX: в манифест попадает sha контента ДО apply — верификация бэкапа при откате
         oprecs = [{'target_file': pl['tgt'], 'checksum': pl['sha'],
                    'backups': [_rel_backup(x) for x in pl['backs']],
@@ -898,6 +931,7 @@ def _apply_patch_locked(data, pid):
         save_manifest(man)
         # B51 FIX: транзакция зафиксирована в манифесте — журнал больше не нужен
         _clear_journal()
+        _patch_activity('running', stage='archive')
         # Source archive is post-commit housekeeping: never roll back committed code.
         archive_status = 'not_found'
         archive_name = None
