@@ -480,10 +480,22 @@ class UpdateManager:
                     return {"success": True, "journal": journal}
                 journal.pop("error", None)
                 journal["state"] = "COMPLETED"
+                journal["running_version"] = RUNNING_VERSION
                 journal["restart_verified_pid"] = os.getpid()
                 journal["restart_verified_at"] = _now()
                 _save_journal(journal)
-            return {"success": True, "journal": journal}
+                _archive_terminal(journal)
+            return {"success": True, "journal": {**journal, "running_version": RUNNING_VERSION, "installed_version": _version_or_none(_git_ok(["rev-parse", "HEAD"])) if journal.get("remote_head") else None}}
+
+    def request_restart(self, operation_id):
+        with _LOCK, _process_lock():
+            journal = _load_journal()
+            if journal.get("id") != operation_id or journal.get("state") != "RESTART_REQUIRED":
+                raise UpdateError("Перезапуск обновления сейчас недоступен.", "invalid_state")
+            # Supervisor consumes this flag only after successful preparation.
+            with open(os.path.join(BASE, "restart.flag"), "w", encoding="ascii") as stream:
+                stream.write("update restart")
+            return {"success": True}
 
     def check(self):
         with _LOCK, _process_lock(), _repo_lock():
@@ -628,6 +640,7 @@ class UpdateManager:
                 # A failed command can still have changed HEAD or the worktree.
                 # Preserve the intent and let recover inspect the actual repository.
                 journal["state"] = "RECOVERY_REQUIRED"
+                journal.pop("active_step", None)
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise
@@ -666,6 +679,7 @@ class UpdateManager:
                     _save_journal(journal)
 
                 journal["state"] = "PREPARING"
+                journal["active_step"] = "environment"
                 _save_journal(journal)
                 summary = journal.get("change_summary") or {}
                 commands = []
@@ -723,6 +737,8 @@ class UpdateManager:
                 else:
                     journal["state"] = "COMPLETED"
                 _save_journal(journal)
+                if journal["state"] == "COMPLETED":
+                    _archive_terminal(journal)
                 return {"success": True, "journal": journal}
             except Exception as exc:
                 journal["state"] = "UPDATE_NEEDS_REPAIR"

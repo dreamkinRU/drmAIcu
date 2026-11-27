@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 
 type ApiResult = { success: boolean; error?: string; code?: string; plan?: any; journal?: any };
 
@@ -23,11 +23,16 @@ export default function UpdateWizardTab() {
   const [activity, setActivity] = useState("");
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const running = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const result = await callUpdate('/api/updates/state');
       setJournal(result.journal || null);
+      setLoaded(true);
+      setError('');
     } catch (e: any) {
       setError(e?.message || 'Не удалось получить состояние Update Manager');
     }
@@ -42,21 +47,23 @@ export default function UpdateWizardTab() {
   }, []);
   useEffect(() => { void refresh(); void refreshHistory(); }, [refresh, refreshHistory]);
   useEffect(() => {
-    if (!busy) return;
+    if (!busy && !['APPLYING','RESTORING','PREPARING'].includes(journal?.state)) return;
     let active = true;
     const poll = async () => {
       try {
         const r = await fetch('/api/updates/progress');
         const data = await r.json();
-        if (active && r.ok) setProgress(data.progress);
+        if (active && r.ok) { setProgress(data.progress); if (!busy && data.progress?.state && !['APPLYING','RESTORING','PREPARING'].includes(data.progress.state)) void refresh(); }
       } catch { /* restart or old server */ }
     };
     void poll();
     const timer = window.setInterval(poll, 1200);
     return () => { active = false; window.clearInterval(timer); };
-  }, [busy]);
+  }, [busy, journal?.state, refresh]);
 
   const run = async (path: string, operationId?: string, manualConfirmation = false) => {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setProgress(null);
     setActivity(({check: 'Проверка Git', apply: 'Резервирование и обновление', prepare: 'Подготовка окружения', recover: 'Восстановление Git'} as Record<string,string>)[path.split('/').pop() || ''] || 'Выполнение операции');
@@ -69,21 +76,60 @@ export default function UpdateWizardTab() {
       setError(e?.message || 'Операция обновления завершилась ошибкой');
       await refresh();
     } finally {
+      running.current = false;
       setBusy(false);
       void refreshHistory();
     }
   };
 
   const state = journal?.state || 'IDLE';
+  const canCheck = loaded && ['IDLE','CHECKED','COMPLETED','FAILED'].includes(state);
+  const restart = async () => {
+    if (running.current || restarting) return;
+    setRestarting(true);
+    setError('');
+    try {
+      await callUpdate('/api/updates/restart', journal?.id);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось запросить перезапуск');
+      setRestarting(false);
+    }
+  };
+  useEffect(() => {
+    if (!restarting) return;
+    let cancelled = false;
+    const started = Date.now();
+    let timer: number;
+    const poll = async () => {
+      try {
+        const response = await fetch('/api/updates/state', {cache:'no-store', signal:AbortSignal.timeout(4000)});
+        const data = await response.json();
+        if (cancelled) return;
+        if (response.ok && data.journal?.state === 'COMPLETED') {
+          window.location.reload();
+          return;
+        }
+      } catch { /* server restarting */ }
+      if (cancelled) return;
+      if (Date.now() - started > 90000) {
+        setRestarting(false);
+        setError('Перезапуск не подтверждён. Проверьте окно watchdog и обновите страницу.');
+        return;
+      }
+      timer = window.setTimeout(poll, 1500);
+    };
+    timer = window.setTimeout(poll, 1500);
+    return () => {cancelled = true; window.clearTimeout(timer);};
+  }, [restarting]);
   const upToDate = state === 'CHECKED' && journal?.ahead === 0 && journal?.behind === 0 && !(journal?.blockers || []).filter((x: string) => x !== 'Нет входящих коммитов для обновления.').length;
   const canApply = state === 'CHECKED' && journal?.behind > 0 && !(journal?.blockers || []).length;
   const environmentRepair = state === 'UPDATE_NEEDS_REPAIR' && journal?.local_changes_restored === true;
   const canPrepare = state === 'CODE_UPDATED' || environmentRepair;
   const canRecover = !environmentRepair && ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING', 'PREPARING'].includes(state);
   const steps = [
-    { number: 1, title: 'Проверка и план', done: ['CHECKED', 'APPLYING', 'CODE_UPDATED', 'RESTORING', 'COMPLETED', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
-    { number: 2, title: 'Резервирование и обновление', done: ['CODE_UPDATED', 'RESTORING', 'COMPLETED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
-    { number: 3, title: 'Восстановление и окружение', done: state === 'COMPLETED' },
+    { number: 1, title: 'Проверка и план', done: ['CHECKED', 'APPLYING', 'CODE_UPDATED', 'RESTORING', 'PREPARING', 'RESTART_REQUIRED', 'COMPLETED', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
+    { number: 2, title: 'Резервирование и обновление', done: ['CODE_UPDATED', 'RESTORING', 'PREPARING', 'RESTART_REQUIRED', 'COMPLETED', 'UPDATE_NEEDS_REPAIR'].includes(state) },
+    { number: 3, title: 'Восстановление и окружение', done: ['RESTART_REQUIRED','COMPLETED'].includes(state) },
   ];
 
   return (
@@ -100,10 +146,10 @@ export default function UpdateWizardTab() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <Metric label="Запущенная версия" value={journal?.running_version || journal?.restart_health?.version || '—'} />
-          <Metric label="Установленная версия (Git)" value={journal?.current_version || '—'} />
+          <Metric label="Установленная версия (Git)" value={journal?.installed_version || (journal?.new_head ? journal?.target_version : journal?.current_version) || '—'} />
           <Metric label="Доступная версия" value={journal?.target_version || '—'} />
         </div>
-        {busy && <div role="status" className="space-y-2 text-sm text-cyan-200">
+        {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state)) && <div role="status" className="space-y-2 text-sm text-cyan-200">
           <div>{(({backup:'Резервирование',merge:'Fast-forward Git',restore:'Восстановление файлов',python:'Python зависимости',npm:'npm ci',frontend_build:'Сборка frontend'} as Record<string,string>)[progress?.active_step] || activity)}</div>
           <div className="h-2 overflow-hidden rounded bg-gray-800"><div className="h-full w-1/3 animate-pulse rounded bg-cyan-500" /></div>
           <div className="text-xs text-gray-400">Операция выполняется. Процент и время окончания неизвестны.</div>
@@ -138,7 +184,7 @@ export default function UpdateWizardTab() {
           <h3 className="font-bold text-white">Проверить обновления и построить план</h3>
         </div>
         <p className="text-sm text-gray-400">Выполняется fetch официального репозитория, анализ ветки, входящих коммитов и локальных изменений. Рабочие файлы не изменяются.</p>
-        <button disabled={busy} onClick={() => run('/api/updates/check')} className="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-400/50 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-40">
+        <button disabled={!canCheck || busy || restarting} onClick={() => run('/api/updates/check')} className="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-400/50 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-40">
           {busy ? 'Проверка…' : 'Проверить обновления'}
         </button>
         {journal && (
@@ -234,7 +280,7 @@ export default function UpdateWizardTab() {
         )}
         {journal?.restart_required && state === 'RESTART_REQUIRED' && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
-            Для загрузки обновлённого ядра или статического интерфейса требуется перезапустить drmAIcu. Если проверка не прошла, исправьте причину и повторно откройте мастер. Перезапуск не выполняется автоматически, чтобы не прервать показ результата мастера.
+            Для загрузки обновлённого ядра или статического интерфейса требуется перезапустить drmAIcu. Если проверка не прошла, исправьте причину и повторно откройте мастер. <div className="mt-3"><button disabled={busy || restarting} onClick={() => void restart()} className="rounded-lg border border-amber-400 px-4 py-2 disabled:opacity-40">{restarting ? 'Ожидаем перезапуск…' : 'Перезапустить drmAIcu'}</button></div>
           </div>
         )}
         {journal?.restart_verified_at && (
