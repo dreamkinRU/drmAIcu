@@ -127,3 +127,21 @@ async def update_recover(request: Request):
         ))
     except Exception as exc:
         return _error(exc)
+
+
+@router.get("/api/updates/history")
+def update_history(request: Request):
+    try:
+        _check_local_browser_request(request, require_origin=False)
+        return JSONResponse(manager.history())
+    except Exception as exc:
+        return _error(exc)
+
+
+@router.get("/api/updates/progress")
+def update_progress(request: Request):
+    try:
+        _check_local_browser_request(request, require_origin=False)
+        return JSONResponse(manager.progress())
+    except Exception as exc:
+        return _error(exc)

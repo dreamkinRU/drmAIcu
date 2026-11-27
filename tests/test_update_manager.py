@@ -406,3 +406,30 @@ def test_environment_repair_without_reapplying_stash(git_fixture, monkeypatch):
     assert result["state"] == "COMPLETED"
     assert result["environment_steps"][0]["ok"]
     assert (work / "local-note.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_no_update_is_not_blocker(git_fixture):
+    plan = updater.manager.check()["plan"]
+    updater.manager.apply(plan["id"])
+    updater.manager.prepare(plan["id"])
+    plan = updater.manager.check()["plan"]
+    assert plan["up_to_date"] is True
+    assert not plan["blockers"]
+    with pytest.raises(updater.UpdateError) as exc:
+        updater.manager.apply(plan["id"])
+    assert exc.value.code == "no_update"
+    assert updater.manager.history()["history"][0]["state"] == "COMPLETED"
+
+
+def test_progress_reads_during_operation_lock(git_fixture):
+    updater._save_journal({"schema": 1, "id": "a" * 32, "state": "PREPARING", "active_step": "npm"})
+    with updater._process_lock():
+        assert updater.manager.progress()["progress"]["active_step"] == "npm"
+
+
+def test_history_does_not_store_command_output(git_fixture):
+    updater._archive_terminal({"id": "a" * 32, "state": "FAILED", "updated_at": "2026-11-27",
+                               "error": "private", "environment_steps": [{"step": "npm", "ok": False, "stderr": "private"}]})
+    record = updater.manager.history()["history"][0]
+    assert "error" not in record
+    assert "stderr" not in record["environment_steps"][0]

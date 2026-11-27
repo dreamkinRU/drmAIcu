@@ -18,6 +18,9 @@ async function callUpdate(path: string, operationId?: string, manualConfirmation
 export default function UpdateWizardTab() {
   const [journal, setJournal] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [progress, setProgress] = useState<any>(null);
+  const [activity, setActivity] = useState("");
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
 
@@ -30,10 +33,33 @@ export default function UpdateWizardTab() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  const refreshHistory = useCallback(async () => {
+    try {
+      const r = await fetch('/api/updates/history');
+      const data = await r.json();
+      if (r.ok && Array.isArray(data.history)) setHistory(data.history);
+    } catch { /* old server or restart; keep existing records */ }
+  }, []);
+  useEffect(() => { void refresh(); void refreshHistory(); }, [refresh, refreshHistory]);
+  useEffect(() => {
+    if (!busy) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/updates/progress');
+        const data = await r.json();
+        if (active && r.ok) setProgress(data.progress);
+      } catch { /* restart or old server */ }
+    };
+    void poll();
+    const timer = window.setInterval(poll, 1200);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [busy]);
 
   const run = async (path: string, operationId?: string, manualConfirmation = false) => {
     setBusy(true);
+    setProgress(null);
+    setActivity(({check: 'Проверка Git', apply: 'Резервирование и обновление', prepare: 'Подготовка окружения', recover: 'Восстановление Git'} as Record<string,string>)[path.split('/').pop() || ''] || 'Выполнение операции');
     setError('');
     try {
       const result = await callUpdate(path, operationId, manualConfirmation);
@@ -44,11 +70,13 @@ export default function UpdateWizardTab() {
       await refresh();
     } finally {
       setBusy(false);
+      void refreshHistory();
     }
   };
 
   const state = journal?.state || 'IDLE';
-  const canApply = state === 'CHECKED' && !(journal?.blockers || []).length;
+  const upToDate = state === 'CHECKED' && journal?.ahead === 0 && journal?.behind === 0 && !(journal?.blockers || []).filter((x: string) => x !== 'Нет входящих коммитов для обновления.').length;
+  const canApply = state === 'CHECKED' && journal?.behind > 0 && !(journal?.blockers || []).length;
   const environmentRepair = state === 'UPDATE_NEEDS_REPAIR' && journal?.local_changes_restored === true;
   const canPrepare = state === 'CODE_UPDATED' || environmentRepair;
   const canRecover = !environmentRepair && ['APPLYING', 'RECOVERY_REQUIRED', 'UPDATE_NEEDS_REPAIR', 'RESTORING', 'PREPARING'].includes(state);
@@ -67,9 +95,20 @@ export default function UpdateWizardTab() {
             <p className="text-sm text-gray-400 mt-1">Три шага. Каждый этап запускается отдельно и только после подтверждения.</p>
           </div>
           <span className={`text-xs px-3 py-1.5 rounded-full border ${state === 'COMPLETED' ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10' : canRecover ? 'border-red-500/50 text-red-300 bg-red-500/10' : 'border-gray-700 text-gray-300 bg-gray-800'}`}>
-            {state}
+            {upToDate ? 'Актуальная версия' : state}
           </span>
         </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <Metric label="Запущенная версия" value={journal?.running_version || journal?.restart_health?.version || '—'} />
+          <Metric label="Установленная версия (Git)" value={journal?.current_version || '—'} />
+          <Metric label="Доступная версия" value={journal?.target_version || '—'} />
+        </div>
+        {busy && <div role="status" className="space-y-2 text-sm text-cyan-200">
+          <div>{(({backup:'Резервирование',merge:'Fast-forward Git',restore:'Восстановление файлов',python:'Python зависимости',npm:'npm ci',frontend_build:'Сборка frontend'} as Record<string,string>)[progress?.active_step] || activity)}</div>
+          <div className="h-2 overflow-hidden rounded bg-gray-800"><div className="h-full w-1/3 animate-pulse rounded bg-cyan-500" /></div>
+          <div className="text-xs text-gray-400">Операция выполняется. Процент и время окончания неизвестны.</div>
+        </div>}
+        {upToDate && <div className="rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-200">Установлена последняя версия из origin/main. Новых коммитов нет.</div>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {steps.map(step => (
             <div key={step.number} className={`rounded-xl border p-3 ${step.done ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-gray-700 bg-gray-900/70'}`}>
@@ -142,7 +181,7 @@ export default function UpdateWizardTab() {
             <ul className="list-disc ml-5 mt-1">{journal.migration_files.map((file: string) => <li key={file}>{file}</li>)}</ul>
           </div>
         )}
-        {journal?.blockers?.length > 0 && (
+        {!upToDate && journal?.blockers?.length > 0 && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-200">
             <b>Обновление заблокировано:</b>
             <ul className="list-disc ml-5 mt-1">{journal.blockers.map((item: string) => <li key={item}>{item}</li>)}</ul>
@@ -211,6 +250,15 @@ export default function UpdateWizardTab() {
         ))}
       </section>
 
+      <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-2">
+        <h3 className="font-bold text-white">История обновлений</h3>
+        {!history.length && <p className="text-sm text-gray-400">Архив пока пуст. Завершённые операции сохраняются перед следующей проверкой.</p>}
+        {history.map(item => <div key={item.id} className="flex flex-wrap justify-between gap-2 border-t border-gray-800 py-2 text-sm">
+          <span className="text-gray-300">{item.current_version || '—'} → {item.target_version || item.remote_head?.slice(0,8) || '—'}</span>
+          <span className={item.state === 'COMPLETED' ? 'text-emerald-300' : 'text-amber-300'}>{item.state}</span>
+          <span className="text-gray-400">{item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}</span>
+        </div>)}
+      </section>
       <p className="text-xs text-gray-600">Безопасность: обновление разрешено только из официального HTTPS-репозитория drmAIcu. Журнал хранится локально в data/updater. Резервные refs намеренно не удаляются автоматически.</p>
     </div>
   );
