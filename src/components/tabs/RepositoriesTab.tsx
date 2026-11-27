@@ -4,7 +4,6 @@ import type { LogEntry, PluginInfo,
   RepoBranches,
   RepoCommit,
   RepoDiff,
-  RepoFileContent,
   RepoRemote,
   RepoLog,
   RepoStatus,
@@ -28,7 +27,6 @@ import {
   reposLog,
   reposPull,
   reposPush,
-  reposReadFile,
   reposRemote,
   reposStatus,
   reposSync,
@@ -282,7 +280,7 @@ function SettingsModal({
   );
 }
 
-// ==== Обзор: Sync (замена sync.bat) + удалённые репозитории + просмотр файла ====
+// ==== Обзор: Sync (замена sync.bat) — единая точка получения и отправки коммитов ====
 
 function OverviewSection({
   status, repoPath, setNotice, reload,
@@ -301,8 +299,6 @@ function OverviewSection({
   const [syncPreview, setSyncPreview] = useState<RepoSyncPreview | null>(null);
   const [previewAcknowledged, setPreviewAcknowledged] = useState(false);
   const [rebaseState, setRebaseState] = useState<{ ok: boolean; active: boolean; conflicts: string[] } | null>(null);
-  const [fileRel, setFileRel] = useState('');
-  const [fileView, setFileView] = useState<RepoFileContent | null>(null);
 
   // Диагностика незавершённого rebase (после конфликта при pull --rebase): READ-запрос
   // при открытии вкладки Обзор и после каждой операции — баннер предлагает rebase --continue/--abort.
@@ -426,16 +422,6 @@ function OverviewSection({
     } else {
       setNotice({ kind: 'err', text: label + ': сервер вернул неожиданный статус' });
     }
-  };
-
-  const viewFile = async () => {
-    setBusy(true);
-    const r = await reposReadFile(repoPath, fileRel);
-    setBusy(false);
-    if (r.status === 'done') {
-      setFileView(r.result.ok ? r.result : null);
-      if (!r.result.ok) setNotice({ kind: 'err', text: r.result.error || 'файл не прочитан' });
-    } else if (r.status === 'error') setNotice({ kind: 'err', text: r.error });
   };
 
   return (
@@ -689,33 +675,6 @@ function OverviewSection({
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-        <h3 className="font-bold text-white">🛠 Отдельные операции (каждая с подтверждением WRITE)</h3>
-        <div className="flex items-center gap-2 flex-wrap">
-          <OpBtn busy={busy} label="fetch" onClick={() => runWrite('fetch', t => reposFetch(repoPath, t))} />
-          <OpBtn busy={busy} label="pull --rebase" onClick={() => runWrite('pull --rebase', t => reposPull(repoPath, true, t))} />
-          <OpBtn busy={busy} label="push" onClick={() => runWrite('push', t => reposPush(repoPath, t))} disabled={!status.changed && !status.ahead} />
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-        <h3 className="font-bold text-white">📄 Просмотр файла</h3>
-        <div className="flex items-center gap-2">
-          <input
-            value={fileRel}
-            onChange={e => setFileRel(e.target.value)}
-            placeholder="src/App.tsx — путь внутри репозитория"
-            className="flex-1 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono text-gray-200 outline-none focus:border-cyan-500/60"
-          />
-          <button onClick={viewFile} className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 border border-gray-700 text-gray-300 hover:border-gray-500">
-            Прочитать
-          </button>
-        </div>
-        {fileView && (
-          <pre className="max-h-96 overflow-auto rounded-lg bg-gray-950 border border-gray-800 p-3 text-xs text-gray-300 whitespace-pre-wrap">{fileView.content}</pre>
         )}
       </div>
     </div>

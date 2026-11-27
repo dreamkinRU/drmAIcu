@@ -470,9 +470,9 @@ def test_recent_issues_returns_plugin_errors_and_warnings(manager):
 
 def test_recent_issues_updates_api_logs_contract():
     """main.py /api/logs объединяет LOG ядра с manager.recent_issues — проверяем контракт кода."""
-    src = open(os.path.join(BASE, 'main.py'), encoding='utf-8').read()
+    src = open(os.path.join(BASE, 'api', 'routes_system.py'), encoding='utf-8').read()
     assert "mgr.recent_issues(limit=60)" in src
-    assert "@app.post('/api/logs')" in src
+    assert "@router.post('/api/logs')" in src
 
 
 def test_manual_plugin_executes_in_separate_worker_process(env, manager):

@@ -1,8 +1,18 @@
 # Новые возможности drmAIcu
 
-**Версия 3.6.1 Model** · Обновлено: 23.11.2026 · PR #10–#19 и патчи 144–160
+**Версия 3.17.0 Model** · Обновлено: 27.11.2026 · PR #10–#60 и патчи 144–162
 
-Все описанные ниже механизмы сверены с кодом (`patch_engine.py`, `agent_engine.py`, `main.py`, фронтенд и тесты). Тест-бейзлайн: `python -m pytest tests -q` → **88 passed**.
+Ниже сохранена историческая хронология возможностей. Тестовый результат 88 passed относится к старому состоянию v3.6.1; текущий результат проверяется в GitHub Actions для конкретного коммита и не фиксируется здесь.
+
+## 3.17.0 Model (27.11.2026, консолидация PR #54 и PR #59)
+
+### Architecture hardening: PATCHMASTER, Repos Sync, Plugin API и Worker Runtime
+- TypeScript/JavaScript validation теперь fail-closed: PASS только после успешного запуска validator; отсутствие Node.js/скрипта, timeout и launch error возвращают UNAVAILABLE и блокируют запись.
+- Повреждённый crash journal и orphan journal.tmp блокируют новые apply/rollback и сохраняются для диагностики; multi-file transaction документирована как crash-recoverable, но не atomic visibility для внешних читателей.
+- Repos Sync сериализован под advisory lock всего flow; staged tree сверяется перед commit и после commit; при mismatch push запрещён. Git output проходит credential redaction.
+- Plugin API проверяет browser Origin/Sec-Fetch-Site и loopback Host для mutating-запросов; это CSRF/DNS-rebinding mitigation, не user authentication.
+- PluginResourceGovernor ограничивает до 8 worker-процессов и 16 одновременных RPC; worker lifecycle и завершение process tree усилены. Hard CPU/RAM quotas и полноценная OS sandbox остаются вне этого изменения.
+- Добавлены регрессионные тесты на corrupt journal, unavailable validator, API origin guard, resource limits, Git secret redaction и staged-tree race.
 
 ## 3.6.1 Model (23.11.2026, патчи 144–160)
 
@@ -78,7 +88,8 @@
 - **Ротация манифеста** (B14): последние 100 записей `applied` / 500 `history` вместо бесконечного роста.
 - **1 бэкап + ротация 10** (B16): имя по относительному пути с микросекундами (`src__App.tsx_<ts>.bak`) вместо тройного бэкапа.
 - **Накопление операций** (B18): `compute_ops` складывает последовательные операции в кэше — 20 операций над одним файлом дают 1 запись и 1 бэкап.
-- **Диф-движок** (B1–B5): хвостовой ` ` не создаёт фантомную пустую строку; CRLF не внедряет ``; вставка `-N,0` вставляет после строки; тихий пропуск ханков заменён ошибкой.
+- **Диф-движок** (B1–B5): хвостовой ` ` не создаёт фантомную пустую строку; CRLF не внедряет `
+`; вставка `-N,0` вставляет после строки; тихий пропуск ханков заменён ошибкой.
 - **Валидация перед записью** (B8): `ast.parse` для Python, `json.loads` для JSON, `tsc` (`tscheck.cjs`) для TS/TSX.
 - **Песочница путей** (B9): `../` и абсолютные пути отклоняются. **Байтовый SHA-256 и сохранение переносов строк** (B11).
 
@@ -86,7 +97,7 @@
 
 ```bash
 python -m pytest tests -v
-# 88 passed: 47 в tests/test_engine.py + 41 в tests/test_patching_hardcore.py
+# Исторический результат на v3.6.1: 88 passed (47 в tests/test_engine.py + 41 в tests/test_patching_hardcore.py)
 ```
 
 - Тесты работают в `tmp_path` и не трогают реальный репозиторий.

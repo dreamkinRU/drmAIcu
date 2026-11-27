@@ -1,5 +1,5 @@
 # patch_engine.py
-# Patch engine HARDENED: atomic two-phase commits, no UI dependencies (версия — version.py)
+# Patch engine HARDENED: journaled crash-recoverable multi-file transactions (версия — version.py)
 from version import VERSION as _ENGINE_VERSION
 import json, os, re, ast, shutil, hashlib, threading, subprocess
 from datetime import datetime
@@ -12,6 +12,7 @@ DOWNLOADS_DIR = os.path.join(os.path.expanduser('~'), 'Downloads')
 MANIFEST = os.path.join(BASE, 'patch_manifest.json')
 JOURNAL = os.path.join(BASE, 'patch_journal.json')
 MANIFEST_LOCK = ''
+JOURNAL_LOCK = ''
 LOG = []
 
 for d in (PATCH_DIR, ARCHIVE_DIR, BACKUP_DIR):
@@ -78,18 +79,29 @@ def to_bytes(text, nl):
 
 
 def check_ts(name, code):
+    """None означает PASS; строка описывает FAIL или UNAVAILABLE."""
     root = os.path.dirname(os.path.abspath(__file__))
     script = os.path.join(root, 'tools', 'tscheck.cjs')
-    if not os.path.exists(script):
-        return None
+    if not os.path.isfile(script):
+        return 'UNAVAILABLE: tools/tscheck.cjs отсутствует'
+    node = shutil.which('node')
+    if not node:
+        return 'UNAVAILABLE: Node.js не найден в PATH'
     try:
-        r = subprocess.run(['node', script, name], input=code.encode('utf-8'),
-                           capture_output=True, timeout=30, cwd=root)
-    except Exception:
+        result = subprocess.run(
+            [node, script, name], input=code.encode('utf-8'),
+            capture_output=True, timeout=30, cwd=root,
+        )
+    except subprocess.TimeoutExpired:
+        return 'UNAVAILABLE: проверка Node.js превысила timeout 30s'
+    except OSError as exc:
+        return 'UNAVAILABLE: не удалось запустить Node.js: %s' % exc
+    except Exception as exc:
+        return 'UNAVAILABLE: ошибка запуска валидатора: %s' % exc
+    if result.returncode == 0:
         return None
-    if r.returncode == 0:
-        return None
-    return (r.stdout or r.stderr).decode('utf-8', 'replace').strip()[:300]
+    output = (result.stdout or result.stderr).decode('utf-8', 'replace').strip()
+    return output[:500] or 'FAIL: TypeScript validator exited with code %s' % result.returncode
 
 
 def load_manifest():
@@ -146,19 +158,58 @@ def _write_journal(j):
 
 
 def load_journal():
+    """Повреждение/неоднозначность журнала блокируют новые операции записи."""
+    global JOURNAL_LOCK
+    if not os.path.exists(JOURNAL):
+        if os.path.exists(JOURNAL + '.tmp'):
+            JOURNAL_LOCK = 'обнаружен незавершённый временный crash-журнал: ' + JOURNAL + '.tmp'
+            return None
+        JOURNAL_LOCK = ''
+        return None
     try:
         with open(JOURNAL, 'r', encoding='utf-8') as f:
-            j = json.load(f)
-        return j if isinstance(j, dict) else None
-    except Exception:
+            journal = json.load(f)
+        if not isinstance(journal, dict):
+            raise ValueError('journal root must be an object')
+        if journal.get('op') not in ('apply', 'rollback'):
+            raise ValueError('unknown journal operation')
+        if not isinstance(journal.get('steps'), list) or not journal['steps']:
+            raise ValueError('journal steps must be a non-empty list')
+        for index, step in enumerate(journal['steps']):
+            if not isinstance(step, dict) or not isinstance(step.get('tgt'), str):
+                raise ValueError('invalid journal step %s' % index)
+            if not isinstance(step.get('done', False), bool):
+                raise ValueError('invalid journal done flag at step %s' % index)
+        JOURNAL_LOCK = ''
+        return journal
+    except Exception as exc:
+        corrupt_copy = JOURNAL + '.corrupt'
+        try:
+            if not os.path.exists(corrupt_copy):
+                shutil.copy2(JOURNAL, corrupt_copy)
+        except OSError:
+            pass
+        JOURNAL_LOCK = 'crash-журнал повреждён или недоступен (%s); файл сохранён для ручного восстановления' % str(exc)[:160]
+        log('JOURNAL CORRUPT: ' + JOURNAL_LOCK, 'ERROR')
         return None
 
 
 def _clear_journal():
+    global JOURNAL_LOCK
     try:
         os.remove(JOURNAL)
-    except OSError:
+    except FileNotFoundError:
         pass
+    except OSError as exc:
+        JOURNAL_LOCK = 'не удалось удалить crash-журнал: %s' % exc
+        return
+    try:
+        if os.path.exists(JOURNAL + '.tmp'):
+            os.remove(JOURNAL + '.tmp')
+    except OSError as exc:
+        JOURNAL_LOCK = 'не удалось удалить временный crash-журнал: %s' % exc
+        return
+    JOURNAL_LOCK = ''
 
 
 def _pick_backup(backs):
@@ -731,6 +782,11 @@ def apply_patch(raw):
 def _apply_patch_locked(data, pid):
     patch_fname = data.get('filename', '') if isinstance(data, dict) else ''
     # B52 FIX: повреждённый манифест → любые изменения движка запрещены
+    journal0 = load_journal()
+    if JOURNAL_LOCK:
+        return {'success': False, 'error': 'Движок заблокирован: ' + JOURNAL_LOCK}
+    if journal0 is not None:
+        return {'success': False, 'error': 'Движок ожидает восстановления незавершённой транзакции. Сначала выполните recover_journal().'}
     man0 = load_manifest()
     if MANIFEST_LOCK:
         log('Patch ' + pid + ' rejected: манифест заблокирован (повреждён)', 'ERROR')
@@ -790,7 +846,8 @@ def _apply_patch_locked(data, pid):
     # восстанавливает старое состояние всех файлов (в том числе записанных до сбоя)
     jrec = {'op': 'apply', 'patch_id': pid,
             'steps': [{'path': pl['path'], 'tgt': pl['tgt'], 'existed': pl['existed'],
-                       'backs': pl['backs'], 'done': False} for pl in planned]}
+                       'backs': pl['backs'], 'backup_sha': pl['old_sha'], 'done': False}
+                      for pl in planned]}
     try:
         _write_journal(jrec)
         for pl in planned:
@@ -836,7 +893,7 @@ def _apply_patch_locked(data, pid):
                 log('Patch ' + pid + ' auto-archived to ' + os.path.basename(dst_patch), 'INFO')
             except Exception as arch_err:
                 log('Auto-archive failed for ' + pid + ': ' + str(arch_err), 'WARN')
-        log('Patch ' + pid + ' applied atomically to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
+        log('Patch ' + pid + ' applied with journaled recovery to ' + str(len(planned)) + ' file(s)', 'SUCCESS')
         return {'success': True, 'message': 'Патч ' + pid + ' применён к ' + str(len(planned)) + ' файл(ам) и перемещён в архив', 'backups': allb}
     except Exception as e:
         rollback_failed = []
@@ -897,10 +954,21 @@ def _verify_current_for_rollback(op, path):
     return None
 
 
-def _rollback_locked():
+def _rollback_locked(resume_journal=False):
+    journal = load_journal()
+    if JOURNAL_LOCK:
+        return {'success': False, 'error': 'Движок заблокирован: ' + JOURNAL_LOCK}
     man = load_manifest()
     if MANIFEST_LOCK:
         return {'success': False, 'error': 'Движок заблокирован: ' + MANIFEST_LOCK}
+    if journal is not None and not resume_journal:
+        if journal.get('op') != 'rollback':
+            return {'success': False, 'error': 'Незавершённый apply требует recover_journal() перед откатом.'}
+        applied = man.get('applied') or []
+        last_applied = applied[-1] if applied else None
+        if not last_applied or str(last_applied.get('patch_id')) != str(journal.get('patch_id')):
+            return {'success': False, 'error': 'Rollback-журнал не соответствует последнему применённому патчу; требуется ручная диагностика.'}
+        # Повторный вызов rollback безопасно возобновляет ранее прерванный rollback.
     if not man.get('applied'):
         return {'success': False, 'error': 'Нет патчей для отката'}
     last = man['applied'][-1]
@@ -1022,10 +1090,11 @@ def _rollback_locked():
 
 
 def _recover_apply(j):
-    # B51 FIX (P1-04): восстановление старого состояния всех файлов журнальной записи apply
+    # Восстановление старого состояния всех целей; отсутствие/подмена backup не считается успехом.
     steps = j.get('steps') or []
     recovered = []
     failed = []
+    backup_root = os.path.realpath(BACKUP_DIR)
     for st in steps:
         tgt = st.get('tgt', '')
         sp = safe_path(tgt)
@@ -1033,39 +1102,66 @@ def _recover_apply(j):
             failed.append(str(tgt) + ': bad path')
             continue
         for suffix in ('.tmp', '.rbk.tmp'):
-            t = sp + suffix
-            if os.path.exists(t):
+            temp_path = sp + suffix
+            if os.path.exists(temp_path):
                 try:
-                    os.remove(t)
+                    os.remove(temp_path)
                 except OSError:
                     pass
         try:
-            src = _backup_path(_pick_backup(st.get('backs') or []))
-            if st.get('existed') and src and os.path.exists(src):
-                shutil.copy2(src, sp)
+            if st.get('existed'):
+                backup_ref = _pick_backup(st.get('backs') or [])
+                src = _backup_path(backup_ref)
+                if not src or not os.path.isfile(src):
+                    raise FileNotFoundError('backup missing for previously existing target')
+                resolved_src = os.path.realpath(src)
+                try:
+                    if os.path.normcase(os.path.commonpath([backup_root, resolved_src])) != os.path.normcase(backup_root):
+                        raise ValueError('backup path escapes BACKUP_DIR')
+                except ValueError:
+                    raise ValueError('backup path escapes BACKUP_DIR')
+                expected_backup_sha = st.get('backup_sha')
+                if expected_backup_sha is not None:
+                    with open(resolved_src, 'rb') as backup_file:
+                        actual_backup_sha = sha_bytes(backup_file.read())
+                    if actual_backup_sha != expected_backup_sha:
+                        raise ValueError('backup checksum mismatch')
+                shutil.copy2(resolved_src, sp)
+                if expected_backup_sha is not None:
+                    with open(sp, 'rb') as restored_file:
+                        actual_restored_sha = sha_bytes(restored_file.read())
+                    if actual_restored_sha != expected_backup_sha:
+                        raise ValueError('restored file checksum mismatch')
                 recovered.append(str(tgt))
-            elif not st.get('existed') and os.path.exists(sp):
+            elif os.path.exists(sp):
                 os.remove(sp)
                 recovered.append(str(tgt))
-        except Exception as e2:
-            failed.append(str(tgt) + ': ' + str(e2))
+        except Exception as exc:
+            failed.append(str(tgt) + ': ' + str(exc))
     if failed:
         log('CRASH RECOVERY (apply): неполное восстановление — ' + '; '.join(failed), 'ERROR')
         return {'action': 'apply-revert-incomplete', 'patch_id': j.get('patch_id'),
                 'recovered': recovered, 'failed': failed}
     _clear_journal()
+    if JOURNAL_LOCK:
+        return {'action': 'blocked', 'patch_id': j.get('patch_id'),
+                'error': JOURNAL_LOCK, 'recovered': recovered}
     log('CRASH RECOVERY (apply): состояние до патча ' + str(j.get('patch_id')) + ' восстановлено (' + str(len(recovered)) + ' файл(ов))', 'WARNING')
     return {'action': 'apply-reverted', 'patch_id': j.get('patch_id'), 'files': recovered}
 
 
 def recover_journal():
-    # B51 FIX (P1-04): вызывается на старте процесса (main.py __main__) —
-    # завершает незавершённую транзакцию, оставленную аварийным завершением предыдущего процесса
+    global JOURNAL_LOCK
+    # Crash recovery выполняется до любых новых операций записи.
     j = load_journal()
+    if JOURNAL_LOCK:
+        return {'action': 'blocked', 'error': JOURNAL_LOCK}
     if j is None:
         return None
     with TX_LOCK:
         j = load_journal()
+        if JOURNAL_LOCK:
+            return {'action': 'blocked', 'error': JOURNAL_LOCK}
         if j is None:
             return None
         op = j.get('op')
@@ -1085,10 +1181,10 @@ def recover_journal():
                 _clear_journal()
                 return {'action': 'rollback-stale', 'patch_id': pid}
             log('CRASH RECOVERY: незавершённый rollback патча ' + pid + ' — завершаю восстановление', 'WARNING')
-            return _rollback_locked()
-        _clear_journal()
-        log('CRASH RECOVERY: неизвестный тип журнала (' + str(op) + ') — журнал удалён', 'WARNING')
-        return None
+            return _rollback_locked(resume_journal=True)
+        JOURNAL_LOCK = 'неизвестная операция crash-журнала: ' + str(op)
+        log('CRASH RECOVERY: неизвестный тип журнала (' + str(op) + ') — новые записи заблокированы', 'ERROR')
+        return {'action': 'blocked', 'patch_id': pid, 'error': JOURNAL_LOCK}
 
 
 def force_unlock_manifest():
@@ -1110,10 +1206,18 @@ def stats():
     ps = list_patches()
     man = load_manifest()
     ap = len([p for p in ps if p['is_applied']])
+    journal = load_journal()
+    journal_pending = journal is not None
+    journal_reason = JOURNAL_LOCK or (
+        'незавершённая транзакция требует recover_journal()' if journal_pending else ''
+    )
     return {'total': len(ps), 'applied': ap, 'pending': len(ps) - ap, 'version': _ENGINE_VERSION,
             'errors': len([p for p in ps if p.get('error')]),
             'multi_count': len([p for p in ps if p.get('multi')]),
             'history_count': len(man.get('history', [])),
             'rollbacks_count': len(man.get('rollbacks', [])),
             'backups_count': len(os.listdir(BACKUP_DIR)),
-            'locked': bool(MANIFEST_LOCK)}
+            'locked': bool(MANIFEST_LOCK or journal_reason),
+            'journal_locked': bool(journal_reason),
+            'journal_pending': journal_pending,
+            'journal_lock_reason': journal_reason}

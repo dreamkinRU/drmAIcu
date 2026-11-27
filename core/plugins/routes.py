@@ -1,7 +1,8 @@
 """REST-маршруты Plugin System (§10.2 контракта). Монтируется в main.py одной строкой."""
 import os
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends, HTTPException
+from urllib.parse import urlsplit
 from fastapi.responses import JSONResponse
 
 from .api import GatewayBlocked, PendingConfirmation
@@ -9,7 +10,42 @@ from .confirmations import ConfirmationError
 from .manager import PluginInstallError, PluginManager, PluginNotRunningError
 from .models import PLUGIN_API_VERSION
 
-plugin_router = APIRouter(prefix='/api/plugins')
+def validate_local_browser_origin(request: Request):
+    """Блокирует cross-origin browser mutations и DNS-rebinding Host names.
+
+    Отсутствующий Origin остаётся допустимым для локальных CLI/API-клиентов.
+    Это CSRF/origin guard, а не аутентификация пользователя или OS sandbox.
+    """
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return
+    origin = request.headers.get('origin')
+    if not origin:
+        return
+    try:
+        parsed = urlsplit(origin)
+        origin_host = (parsed.hostname or '').lower()
+        origin_port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+        request_host = (request.url.hostname or '').lower()
+        request_port = request.url.port or (443 if request.url.scheme == 'https' else 80)
+    except ValueError:
+        raise HTTPException(status_code=403, detail='Invalid Origin header')
+    allowed_hosts = {'localhost', '127.0.0.1', '::1'}
+    allowed_ports = {5173, 8080}
+    fetch_site = request.headers.get('sec-fetch-site', '').lower()
+    if (parsed.username or parsed.password or parsed.path not in ('', '/') or parsed.query or parsed.fragment
+            or parsed.scheme not in ('http', 'https')
+            or origin_host not in allowed_hosts
+            or request_host not in allowed_hosts
+            or origin_port not in allowed_ports
+            or request_port not in allowed_ports
+            or fetch_site == 'cross-site'):
+        raise HTTPException(status_code=403, detail='Cross-origin plugin mutation rejected')
+    # UI dev server (:5173) and local backend (:8080) are the only browser origins.
+    if origin_host != request_host and not ({origin_host, request_host} <= allowed_hosts):
+        raise HTTPException(status_code=403, detail='Origin host mismatch')
+
+
+plugin_router = APIRouter(prefix='/api/plugins', dependencies=[Depends(validate_local_browser_origin)])
 
 _manager = None
 

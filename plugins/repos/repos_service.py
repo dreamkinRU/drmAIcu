@@ -251,7 +251,10 @@ def _repo_patch_status_locked(path):
                        'files': [str(st.get('tgt', '')) for st in (journal.get('steps') or [])
                                  if isinstance(st, dict) and st.get('tgt')]}
 
-    engine_blocked = bool(getattr(pe, 'MANIFEST_LOCK', ''))
+    journal_lock_reason = str(getattr(pe, 'JOURNAL_LOCK', '') or '')
+    if journal is not None and not journal_lock_reason:
+        journal_lock_reason = 'незавершённая транзакция требует recover_journal()'
+    engine_blocked = bool(getattr(pe, 'MANIFEST_LOCK', '') or journal_lock_reason or journal is not None)
 
     # Файлы патчей, ещё не закоммиченные в ЭТОМ репозитории (только если
     # path — корень drmAIcu: патчи применяются к самому проекту).
@@ -270,6 +273,7 @@ def _repo_patch_status_locked(path):
 
     return {'ok': True, 'path': path,
             'engine_blocked': engine_blocked,
+            'journal_lock_reason': journal_lock_reason,
             'applied': applied,
             'in_progress': in_progress,
             'unsynced_files': unsynced,
@@ -578,6 +582,13 @@ def repo_checkout(path, branch, create=False):
 
 
 def repo_sync(path, message, expected_snapshot=None):
+    """Одна sync-сессия под общей блокировкой drmAIcu; внешние Git CLI не обязаны её соблюдать."""
+    validate(path)
+    with git_service.repo_operation_lock(path):
+        return _repo_sync_locked(path, message, expected_snapshot)
+
+
+def _repo_sync_locked(path, message, expected_snapshot=None):
     """Sync выполняется только если рабочие файлы совпадают с подтверждённым snapshot."""
     validate(path)
     steps = []
@@ -610,10 +621,24 @@ def repo_sync(path, message, expected_snapshot=None):
             return {'ok': False,
                     'error': 'содержимое изменилось во время git add. Коммит и push отменены; проверьте staged changes и повторите Sync.',
                     'snapshot_changed': True, 'steps': steps}
+        staged_tree = _r(['write-tree'], path)
+        if not staged_tree.get('ok'):
+            return {'ok': False, 'error': staged_tree.get('stderr', '').strip() or 'cannot snapshot staged Git tree', 'steps': steps}
+        expected_tree = staged_tree.get('stdout', '').strip()
+        precommit_tree = _r(['write-tree'], path)
+        if not precommit_tree.get('ok') or precommit_tree.get('stdout', '').strip() != expected_tree:
+            return {'ok': False,
+                    'error': 'Git index изменился перед commit. Коммит и push отменены; повторите Sync после обновления preview.',
+                    'snapshot_changed': True, 'steps': steps}
         rc = repo_commit(path, msg)
         steps.append({'step': 'commit', **{k: v for k, v in rc.items() if k in ('ok', 'sha', 'error')}})
         if not rc.get('ok'):
             return {'ok': False, 'error': rc.get('error', 'git commit failed'), 'steps': steps}
+        committed_tree = _r(['rev-parse', 'HEAD^{tree}'], path)
+        if not committed_tree.get('ok') or committed_tree.get('stdout', '').strip() != expected_tree:
+            return {'ok': False,
+                    'error': 'Commit создан, но его tree не совпадает с подтверждённым staged tree. Push заблокирован; проверьте локальный commit и повторите preview.',
+                    'commit_tree_mismatch': True, 'steps': steps}
     else:
         steps.append({'step': 'add', 'ok': True, 'skipped': True, 'note': 'изменений нет'})
 
@@ -658,6 +683,7 @@ def repo_sync(path, message, expected_snapshot=None):
                     hints.add('build: обновлялся фронтенд (src/) — на Vite dev (launcher.bat) достаточно перезапуска панели; на собранной версии выполните npm run build')
                 elif lf.endswith('.py'):
                     hints.add('py: обновлялись Python-файлы — перезапустите панель (кнопка «Перезапуск» в подвале)')
+            refresh_hints = sorted(hints)
 
     merged = last_merged_pr(path)
     steps.append({'step': 'merged_pr_check', 'ok': True, 'last_merged': merged})

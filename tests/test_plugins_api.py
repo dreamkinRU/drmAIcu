@@ -37,7 +37,7 @@ def client(tmp_path):
     routes.set_manager(mgr)
     app = FastAPI()
     app.include_router(routes.plugin_router)
-    return TestClient(app)
+    return TestClient(app, base_url='http://localhost:8080')
 
 
 def test_list_and_catalog(client):
@@ -193,3 +193,32 @@ def test_secret_delete_and_journals(client):
     assert r.status_code == 422 and r.json()['code'] == 'invalid_secrets'
     r = client.delete('/api/plugins/nope/secrets/api_key')
     assert r.json()['code'] == 'not_found'
+
+
+def test_browser_mutations_reject_cross_origin(client):
+    response = client.post(
+        '/api/plugins/install',
+        json={'source': 'builtin:demo'},
+        headers={'Origin': 'https://attacker.example', 'Sec-Fetch-Site': 'cross-site'},
+    )
+    assert response.status_code == 403
+    assert 'Cross-origin' in response.json()['detail']
+
+
+def test_browser_mutations_allow_local_ui_origins(client):
+    response = client.post(
+        '/api/plugins/install',
+        json={'source': 'builtin:demo'},
+        headers={'Origin': 'http://localhost:5173', 'Sec-Fetch-Site': 'same-site'},
+    )
+    assert response.status_code == 200
+    assert response.json()['success'] is True
+
+
+def test_browser_mutations_reject_dns_rebinding_host(client):
+    response = client.post(
+        '/api/plugins/install',
+        json={'source': 'builtin:demo'},
+        headers={'Origin': 'http://evil.example:8080', 'Host': 'evil.example:8080'},
+    )
+    assert response.status_code == 403

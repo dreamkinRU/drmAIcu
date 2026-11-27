@@ -23,6 +23,7 @@ from .permissions import PermissionLevel, PermissionManager, permission_level
 from .secrets import SecretManager
 from .settings import SettingsManager, SettingsValidationError
 from .worker_process import PluginWorker, PluginWorkerError
+from .resource_governor import PluginResourceGovernor
 
 
 class PluginInstallError(Exception):
@@ -57,6 +58,7 @@ class PluginManager:
         self._apis = {}
         self._hooks = {}
         self._lock = threading.RLock()
+        self.resource_governor = PluginResourceGovernor(max_workers=8, max_concurrent_calls=16)
 
     # ------------------------------------------------------------------ catalog
 

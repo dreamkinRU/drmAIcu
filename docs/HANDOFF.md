@@ -1,6 +1,6 @@
 # HANDOFF — передача работы над drmAIcu (для нового исполнителя)
 
-**Актуально для:** v.3.16.0 Model · 26.11.2026 · PR #10–#53 смержены · открытых PR нет · этот документ — точка входа нового исполнителя (человека или AI-ассистента).
+**Актуально для:** v.3.17.0 Model · 27.11.2026 · PR #10–#60 смержены · открытых PR нет · этот документ — точка входа нового исполнителя (человека или AI-ассистента).
 
 **Изменение политики (решение заказчика, 26.11.2026):** repos.sync — auto, Sync выполняется одной кнопкой без подтверждения WRITE (allowlist AUTO_CONFIRMED_CAPABILITIES в core/plugins/api.py); остальные WRITE — по-прежнему confirm.
 
@@ -15,7 +15,7 @@
 ## 2. Как запустить и проверить
 
 - Полный запуск: `launcher.bat` (watchdog: Python Core на :8080 + Vite dev на :5173 + браузер). Только бэкенд: `python main.py`.
-- Тесты бэкенда: `python -m pytest tests -q` (на 3.14.0 — 300 passed, 1 skipped).
+- Тесты бэкенда: `python -m pytest tests -q` (на 3.17.0 — 335 passed, 1 skipped).
 - Фронтенд: `npx tsc --noEmit` (typecheck), `npm run build` (сборка). CI гоняет pytest на ubuntu-latest **и** windows-latest + typecheck/build — см. `.github/workflows/ci.yml`.
 - Версия в шапке UI приходит из `GET /api/version` (значение `version.py`); после обновления у заказчика **обязателен** `npm run build`, иначе он видит старую сборку.
 
@@ -38,6 +38,8 @@
 
 ## 5. Текущее состояние (26.11.2026)
 
+- 3.17.0: консолидация незаложенного security-hardening (PATCHMASTER crash-journal recovery, Repos Sync advisory-блокировки и redaction credentials, Plugin Resource Governor + lifecycle worker + browser-origin guard, STORAGE_CONTRACT.md) из PR #54 и UI-клинап Обзора из PR #59; починены тесты после REST-рефакторинга api/; fix: refresh_hints терялись после Sync.
+- 3.16.1: из Обзора вкладки Репозитории убраны блоки «Отдельные операции» и «Просмотр файла» (решение заказчика; backend-capabilities не тронуты).
 - 3.16.0: Sync без подтверждения WRITE (решение заказчика): allowlist AUTO_CONFIRMED_CAPABILITIES в core/plugins/api.py — только (repos, repos.sync); UI-тексты и тесты обновлены (test_sync_no_confirmation.py).
 - 3.15.0: repos.sync возвращает refresh_hints и pulled_files — панель «✅ Актуально» честно подсказывает, что sync.bat раньше делал сам: npm install при изменении package.json/package-lock.json, npm run build/перезапуск при изменениях src/, перезапуск панели при .py; команды автоматически не запускаются (замороженная политика WRITE-only-through-gateway), тесты tests/test_sync_refresh_hints.py.
 - v.3.14.0: REST-слой `main.py` декомпозирован в `api/` — `routes_system` (статус/версия/логи/ресурсы/md/рестарт), `routes_agents` (task/agents/pipelines/context), `routes_providers` (модели/ping/config), `routes_patches` (обёртка PATCHMASTER), `routes_project` (скан/очистка/архив/история), общие зависимости — `api/shared.py`. `main.py` — точка сборки (CORS, монтаж роутеров, UI); `/api/patches/verify-108` теперь проверяет конвейер и в `api/routes_patches.py`. Поведение эндпоинтов не менялось (код перенесён 1:1); попутно исправлен паттерн classify_file для одноразовых `*_*.py`-скриптов и цифры тестов в README/ARCHITECTURE (88 → 300+).
