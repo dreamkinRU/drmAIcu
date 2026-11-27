@@ -377,6 +377,21 @@ def _restart_health(journal):
     return {"version": RUNNING_VERSION, "head": head, "api": "responding"}
 
 
+def _run_environment_step(label, argv):
+    """Retry only transient npm sharing failures; never kill unrelated processes."""
+    for attempt in range(3):
+        proc = subprocess.run(
+            argv, cwd=BASE, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=900,
+            shell=False, env={**os.environ, "CI": "1", "GIT_TERMINAL_PROMPT": "0"},
+        )
+        output = ((proc.stderr or "") + "\n" + (proc.stdout or "")).upper()
+        locked = label == "npm" and any(code in output for code in ("EPERM", "EBUSY"))
+        if proc.returncode == 0 or not locked or attempt == 2:
+            return proc
+        time.sleep(2 ** attempt)
+
+
 def _read_update_diff(old_head, new_head):
     result = _run_git(["diff", "--name-only", "-z", old_head, new_head], 30)
     if not result["ok"]:
@@ -387,7 +402,7 @@ def _read_update_diff(old_head, new_head):
         "python_changed": any(name.endswith(".py") for name in files),
         "requirements_changed": "requirements.txt" in files,
         "npm_lock_changed": "package-lock.json" in files,
-        "frontend_changed": any(name.startswith("src/") or name in ("vite.config.js", "package.json", "package-lock.json", "index.html") for name in files),
+        "frontend_changed": any(name.startswith("src/") or name in ("vite.config.js", "package.json", "package-lock.json", "index.html", "vite-rollback-plugin.js") for name in files),
     }
 
 
@@ -552,7 +567,7 @@ class UpdateManager:
     def prepare(self, operation_id):
         with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
-            if journal.get("id") != operation_id or journal.get("state") != "CODE_UPDATED":
+            if journal.get("id") != operation_id or (journal.get("state") != "CODE_UPDATED" and not (journal.get("state") == "UPDATE_NEEDS_REPAIR" and journal.get("local_changes_restored") is True)):
                 raise UpdateError("Шаг 2 ещё не завершён или операция устарела.", "invalid_state")
             if _git_ok(["rev-parse", "HEAD"]) != journal.get("remote_head") or _git_operation_in_progress() or _git_ok(["ls-files", "-u"]):
                 raise UpdateError("HEAD или состояние Git изменилось; подготовка остановлена.", "head_unknown", 423)
@@ -598,11 +613,7 @@ class UpdateManager:
                     if any(item.get("step") == label and item.get("ok") for item in results):
                         continue
                     try:
-                        proc = subprocess.run(
-                            argv, cwd=BASE, capture_output=True, text=True,
-                            encoding="utf-8", errors="replace", timeout=900,
-                            shell=False, env={**os.environ, "CI": "1", "GIT_TERMINAL_PROMPT": "0"},
-                        )
+                        proc = _run_environment_step(label, argv)
                         step_result = {
                             "step": label, "ok": proc.returncode == 0,
                             "code": proc.returncode,
@@ -613,6 +624,8 @@ class UpdateManager:
                         journal["environment_steps"] = results
                         _save_journal(journal)
                         if proc.returncode != 0:
+                            if label == "npm" and any(code in ((proc.stderr or "") + (proc.stdout or "")).upper() for code in ("EPERM", "EBUSY")):
+                                raise UpdateError("npm: файлы заблокированы. Путь исправления: закройте старый Vite/watchdog, приостановите MEGA и повторите подготовку окружения. Git backup сохранён.", "npm_files_locked", 423)
                             raise UpdateError("%s завершился с кодом %s" % (label, proc.returncode), "environment_failed")
                     except subprocess.TimeoutExpired:
                         results = [item for item in results if item.get("step") != label] + [
@@ -629,7 +642,8 @@ class UpdateManager:
                         _save_journal(journal)
                         raise UpdateError("%s: не удалось запустить команду: %s" % (label, exc), "environment_launch_failed", 503)
                 journal["environment_steps"] = results
-                journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed"))
+                journal.pop("error", None)
+                journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed") or summary.get("frontend_changed"))
                 if journal["restart_required"]:
                     journal["target_version"] = _target_version(journal["remote_head"])
                     journal["process_pid"] = os.getpid()

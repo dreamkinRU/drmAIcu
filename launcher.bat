@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal enabledelayedexpansion
+cd /d "%~dp0"
 title drmAIcu Launcher [WATCHDOG]
 color 0A
 
@@ -23,17 +24,20 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-if not exist "node_modules" (
-    echo [INFO] Installing dependencies, first run...
-    call npm install
+if not exist "dist\index.html" (
+    echo [INFO] Building production frontend...
+    call npm ci --no-audit --no-fund
     if !errorlevel! neq 0 (
-        echo [ERROR] npm install failed. Check Node.js: node --version, npm --version
+        echo [ERROR] npm ci failed. Stop other drmAIcu instances and pause cloud sync.
         pause
         exit /b 1
     )
-) else (
-    echo [INFO] Syncing dependencies with package-lock.json...
-    call npm install --no-audit --no-fund
+    call npm run build
+    if !errorlevel! neq 0 (
+        echo [ERROR] Frontend build failed.
+        pause
+        exit /b 1
+    )
 )
 if not exist "patch" mkdir "patch"
 if not exist "logs" mkdir "logs"
@@ -56,7 +60,7 @@ start "drmAIcu Core" /MIN cmd /c "python main.py"
 timeout /t 3 /nobreak >nul
 
 echo [%time%] Starting React UI...
-start "drmAIcu UI" /MIN cmd /c "npm run dev -- --port 5173 --strictPort"
+start "drmAIcu UI" /MIN cmd /c "python frontend_server.py"
 timeout /t 4 /nobreak >nul
 
 if "%BROWSER_OPENED%"=="0" (
