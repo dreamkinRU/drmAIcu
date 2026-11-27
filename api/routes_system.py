@@ -233,12 +233,7 @@ def s_restart():
     log('RESTART via panel', 'WARNING')
     with open(RESTART_FLAG, 'w') as f:
         f.write('restart')
-    for title in ('drmAIcu Core', 'drmAIcu UI'):
-        try:
-            subprocess.run(['taskkill', '/F', '/FI', 'WINDOWTITLE eq ' + title], capture_output=True)
-        except Exception:
-            pass
-
+    # The launcher owns its children and handles restart.flag; never kill by title.
     def bye():
         time.sleep(1.5)
         os._exit(0)

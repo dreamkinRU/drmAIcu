@@ -157,6 +157,53 @@ def _save_journal(data):
         os.fsync(stream.fileno())
     _replace_journal(temp, _JOURNAL_PATH)
 
+def _archive_terminal(journal):
+    if journal.get("state") not in ("COMPLETED", "FAILED"):
+        return
+    operation_id = journal.get("id", "")
+    if not re.fullmatch(r"[0-9a-f]{32}", operation_id):
+        return
+    directory = os.path.join(_JOURNAL_DIR, "history")
+    os.makedirs(directory, exist_ok=True)
+    destination = os.path.join(directory, operation_id + ".json")
+    record = {key: journal.get(key) for key in (
+        "id", "state", "created_at", "updated_at", "old_head", "remote_head",
+        "current_version", "target_version", "backup_ref")}
+    record["environment_steps"] = [
+        {"step": item.get("step"), "ok": item.get("ok"), "code": item.get("code")}
+        for item in journal.get("environment_steps", [])]
+    with open(destination + ".tmp", "w", encoding="utf-8") as stream:
+        json.dump(record, stream, ensure_ascii=False)
+        stream.flush()
+        os.fsync(stream.fileno())
+    _replace_journal(destination + ".tmp", destination)
+
+
+def _history():
+    directory = os.path.join(_JOURNAL_DIR, "history")
+    if not os.path.isdir(directory):
+        return []
+    records = []
+    for name in os.listdir(directory):
+        if not re.fullmatch(r"[0-9a-f]{32}\.json", name):
+            continue
+        try:
+            with open(os.path.join(directory, name), encoding="utf-8") as stream:
+                record = json.load(stream)
+            if isinstance(record, dict):
+                records.append(record)
+        except (OSError, ValueError):
+            continue
+    return sorted(records, key=lambda item: str(item.get("updated_at") or ""), reverse=True)[:50]
+
+
+def _version_or_none(head):
+    try:
+        return _target_version(head)
+    except UpdateError:
+        return None
+
+
 def _create_backup_bundle(operation_id, backup_ref, backup_oid):
     """Экспортирует backup ref в отдельный bundle вне .git и проверяет его."""
     backup_dir = os.path.join(_JOURNAL_DIR, "backups")
@@ -409,6 +456,18 @@ def _read_update_diff(old_head, new_head):
 class UpdateManager:
     """Трёхэтапный процесс с устойчивым журналом и явными барьерами подтверждения."""
 
+    def history(self):
+        return {"success": True, "history": _history()}
+
+    def progress(self):
+        # Atomic journal replacement makes this a read-only snapshot without waiting for npm.
+        try:
+            with open(_JOURNAL_PATH, encoding="utf-8") as stream:
+                record = json.load(stream)
+            return {"success": True, "progress": {key: record.get(key) for key in ("id", "state", "active_step", "updated_at")}}
+        except (OSError, ValueError, AttributeError):
+            return {"success": True, "progress": {}}
+
     def state(self):
         with _LOCK, _process_lock():
             journal = _load_journal()
@@ -478,8 +537,10 @@ class UpdateManager:
                 plan["blockers"].append("Автообновление поддерживается только для main, отслеживающей официальный origin/main.")
             if ahead:
                 plan["blockers"].append("Локальная ветка содержит собственные коммиты (ahead=%s)." % ahead)
-            if not behind:
-                plan["blockers"].append("Нет входящих коммитов для обновления.")
+            plan["up_to_date"] = not ahead and not behind
+            plan["current_version"] = _version_or_none(old_head)
+            plan["target_version"] = _version_or_none(remote_head)
+            plan["running_version"] = RUNNING_VERSION
             if any(line.startswith("1 ") and len(line.split(" ", 3)) > 2
                    and line.split(" ", 3)[2].startswith("S")
                    for line in before_status.splitlines()):
@@ -499,6 +560,7 @@ class UpdateManager:
             plan["migration_files"] = migrations
             if migrations:
                 plan["blockers"].append("Обнаружены файлы миграций БД; требуется отдельная проверка миграций до обновления.")
+            _archive_terminal(journal)
             journal = plan
             _save_journal(journal)
             return {"success": True, "plan": journal}
@@ -508,6 +570,8 @@ class UpdateManager:
             journal = _load_journal()
             if journal.get("state") != "CHECKED" or journal.get("id") != operation_id:
                 raise UpdateError("План устарел или отсутствует. Выполните повторную проверку.", "plan_stale")
+            if journal.get("behind", 0) <= 0:
+                raise UpdateError("Нет входящих коммитов для обновления.", "no_update")
             if journal.get("blockers"):
                 raise UpdateError("Обновление заблокировано: " + " ".join(journal["blockers"]), "update_blocked")
             branch, upstream, remote, remote_branch = _branch_and_upstream()
@@ -521,6 +585,7 @@ class UpdateManager:
                 raise UpdateError("Рабочее дерево или содержимое локальных файлов изменилось после проверки. Повторите шаг 1.", "working_tree_changed")
 
             journal["state"] = "APPLYING"
+            journal["active_step"] = "backup" if journal.get("local_changes") else "merge"
             journal["backup_ref"] = None
             _save_journal(journal)
             try:
@@ -547,6 +612,8 @@ class UpdateManager:
                         raise UpdateError("После резервирования рабочее дерево не стало чистым", "backup_incomplete")
                     journal["backup_verified"] = True
                     _save_journal(journal)
+                journal["active_step"] = "merge"
+                _save_journal(journal)
                 _git_ok(["merge", "--ff-only", journal["remote_head"]], _TIMEOUT)
                 new_head = _git_ok(["rev-parse", "HEAD"])
                 if new_head != journal["remote_head"]:
@@ -554,6 +621,7 @@ class UpdateManager:
                 journal["new_head"] = new_head
                 journal["change_summary"] = journal.get("change_summary") or _read_update_diff(journal["old_head"], new_head)
                 journal["state"] = "CODE_UPDATED"
+                journal.pop("active_step", None)
                 _save_journal(journal)
                 return {"success": True, "journal": journal}
             except Exception as exc:
@@ -572,6 +640,7 @@ class UpdateManager:
             if _git_ok(["rev-parse", "HEAD"]) != journal.get("remote_head") or _git_operation_in_progress() or _git_ok(["ls-files", "-u"]):
                 raise UpdateError("HEAD или состояние Git изменилось; подготовка остановлена.", "head_unknown", 423)
             journal["state"] = "RESTORING"
+            journal["active_step"] = "restore"
             _save_journal(journal)
             try:
                 if journal.get("backup_ref") and not journal.get("local_changes_restored"):
@@ -612,6 +681,8 @@ class UpdateManager:
                 for label, argv in commands:
                     if any(item.get("step") == label and item.get("ok") for item in results):
                         continue
+                    journal["active_step"] = label
+                    _save_journal(journal)
                     try:
                         proc = _run_environment_step(label, argv)
                         step_result = {
@@ -643,6 +714,7 @@ class UpdateManager:
                         raise UpdateError("%s: не удалось запустить команду: %s" % (label, exc), "environment_launch_failed", 503)
                 journal["environment_steps"] = results
                 journal.pop("error", None)
+                journal.pop("active_step", None)
                 journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed") or summary.get("frontend_changed"))
                 if journal["restart_required"]:
                     journal["target_version"] = _target_version(journal["remote_head"])
@@ -654,6 +726,7 @@ class UpdateManager:
                 return {"success": True, "journal": journal}
             except Exception as exc:
                 journal["state"] = "UPDATE_NEEDS_REPAIR"
+                journal.pop("active_step", None)
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise
