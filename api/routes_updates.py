@@ -145,3 +145,16 @@ def update_progress(request: Request):
         return JSONResponse(manager.progress())
     except Exception as exc:
         return _error(exc)
+
+
+@router.post("/api/updates/restart")
+async def update_restart(request: Request):
+    try:
+        _check_local_browser_request(request)
+        body = await request.json()
+        operation_id = body.get("operation_id") if isinstance(body, dict) else None
+        if not isinstance(operation_id, str) or len(operation_id) != 32:
+            raise UpdateError("Некорректный идентификатор операции.", "invalid_operation_id", 422)
+        return JSONResponse(await run_in_threadpool(manager.request_restart, operation_id))
+    except Exception as exc:
+        return _error(exc)

@@ -137,4 +137,4 @@ if __name__ in {'__main__', '__mp_main__'}:
             pass
     get_engine()
     create_ui()
-    ui.run(title='drmAIcu Core', port=8080, reload=False, show=False)
+    ui.run(title='drmAIcu Core', host='127.0.0.1', port=8080, reload=False, show=False, access_log=False, use_colors=False)

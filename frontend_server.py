@@ -1,5 +1,5 @@
 """Loopback production frontend: static snapshot plus streaming API proxy."""
-import os
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -41,7 +41,10 @@ def create_app(directory):
         try:
             session, response = await run_in_threadpool(send)
         except requests.RequestException:
+            logging.getLogger(__name__).warning("Core unavailable")
             return Response('{"success":false,"error":"Core unavailable"}', status_code=503, media_type="application/json")
+        if response.status_code >= 400:
+            logging.getLogger(__name__).warning("API request failed: %s %s (%s)", request.method, path, response.status_code)
         def chunks():
             try:
                 yield from response.raw.stream(8192, decode_content=False)
@@ -60,4 +63,4 @@ if __name__ == "__main__":
     # An immutable per-process snapshot keeps the active UI available during rebuild.
     with tempfile.TemporaryDirectory(prefix="drmaicu-ui-") as temp:
         shutil.copytree(ROOT / "dist", Path(temp) / "dist")
-        uvicorn.run(create_app(Path(temp) / "dist"), host="127.0.0.1", port=5173)
+        uvicorn.run(create_app(Path(temp) / "dist"), host="127.0.0.1", port=5173, access_log=False, use_colors=False)

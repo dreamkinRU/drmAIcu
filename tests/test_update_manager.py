@@ -433,3 +433,19 @@ def test_history_does_not_store_command_output(git_fixture):
     record = updater.manager.history()["history"][0]
     assert "error" not in record
     assert "stderr" not in record["environment_steps"][0]
+
+
+def test_restart_request_only_for_prepared_operation(git_fixture):
+    with pytest.raises(updater.UpdateError):
+        updater.manager.request_restart("a" * 32)
+    assert not (git_fixture / "restart.flag").exists()
+    updater._save_journal({"schema": 1, "id": "a" * 32, "state": "RESTART_REQUIRED"})
+    assert updater.manager.request_restart("a" * 32)["success"]
+    assert (git_fixture / "restart.flag").read_text() == "update restart"
+
+
+def test_restart_rejects_wrong_operation_id(git_fixture):
+    updater._save_journal({"schema": 1, "id": "a" * 32, "state": "RESTART_REQUIRED"})
+    with pytest.raises(updater.UpdateError):
+        updater.manager.request_restart("b" * 32)
+    assert not (git_fixture / "restart.flag").exists()
