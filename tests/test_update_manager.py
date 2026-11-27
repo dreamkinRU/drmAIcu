@@ -251,3 +251,59 @@ def test_restart_required_completes_only_after_new_process(git_fixture, monkeypa
     assert state["state"] == "COMPLETED"
     assert state["restart_verified_pid"] == 54321
     assert state["restart_verified_at"]
+
+
+def test_journal_replace_retries_transient_permission_error(git_fixture, monkeypatch):
+    original = updater.os.replace
+    calls = []
+
+    def flaky(source, target):
+        calls.append(target)
+        if len(calls) < 3:
+            raise PermissionError("simulated cloud lock")
+        return original(source, target)
+
+    monkeypatch.setattr(updater.os, "replace", flaky)
+    monkeypatch.setattr(updater.time, "sleep", lambda _: None)
+    updater._save_journal({"schema": 1, "state": "IDLE"})
+    assert len(calls) == 3
+    assert updater._load_journal()["state"] == "IDLE"
+
+
+def test_journal_permanent_permission_error_preserves_temp(git_fixture, monkeypatch):
+    def blocked(*args):
+        raise PermissionError("simulated cloud lock")
+
+    monkeypatch.setattr(updater.os, "replace", blocked)
+    monkeypatch.setattr(updater.time, "sleep", lambda _: None)
+    with pytest.raises(updater.UpdateError) as error:
+        updater._save_journal({"schema": 1, "state": "IDLE"})
+    assert error.value.code == "journal_write_blocked"
+    assert os.path.isfile(updater._JOURNAL_PATH + ".tmp")
+
+
+def test_process_lock_released_after_exception(git_fixture):
+    with pytest.raises(RuntimeError):
+        with updater._process_lock():
+            raise RuntimeError("failure")
+    with updater._process_lock():
+        pass
+
+
+def test_failure_after_merge_requires_recovery(git_fixture, monkeypatch):
+    plan = updater.manager.check()["plan"]
+    original = updater._git_ok
+
+    def interrupted(args, timeout=30):
+        result = original(args, timeout)
+        if args[:2] == ["merge", "--ff-only"]:
+            raise updater.UpdateError("simulated interruption")
+        return result
+
+    monkeypatch.setattr(updater, "_git_ok", interrupted)
+    with pytest.raises(updater.UpdateError):
+        updater.manager.apply(plan["id"])
+    assert updater.manager.state()["journal"]["state"] == "RECOVERY_REQUIRED"
+    recovered = updater.manager.recover(plan["id"])["journal"]
+    assert recovered["state"] == "CODE_UPDATED"
+    assert recovered["new_head"] == plan["remote_head"]

@@ -13,6 +13,8 @@ import subprocess
 import stat
 import sys
 import threading
+import time
+from contextlib import contextmanager
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -92,6 +94,47 @@ def _load_journal():
         )
 
 
+@contextmanager
+def _process_lock():
+    """OS-owned lock; released automatically on process exit. Never unlink lock file."""
+    os.makedirs(_JOURNAL_DIR, exist_ok=True)
+    path = os.path.join(_JOURNAL_DIR, "operation.lock")
+    with open(path, "a+b") as stream:
+        if os.fstat(stream.fileno()).st_size == 0:
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise UpdateError("Другая операция обновления или блокировка файла. Путь исправления: завершите другую операцию и повторите запрос.", "update_locked", 423) from exc
+        try:
+            yield
+        finally:
+            stream.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def _replace_journal(temp, destination):
+    # Cloud clients and antivirus can transiently hold the destination on Windows.
+    for attempt in range(5):
+        try:
+            os.replace(temp, destination)
+            return
+        except PermissionError as exc:
+            if attempt == 4:
+                raise UpdateError("Журнал заблокирован. Путь исправления: приостановите облачную синхронизацию и проверьте сохранённый временный журнал.", "journal_write_blocked", 423) from exc
+            time.sleep(0.1 * (2 ** attempt))
+
+
 def _save_journal(data):
     os.makedirs(_JOURNAL_DIR, exist_ok=True)
     data["updated_at"] = _now()
@@ -101,7 +144,7 @@ def _save_journal(data):
         stream.write(payload)
         stream.flush()
         os.fsync(stream.fileno())
-    os.replace(temp, _JOURNAL_PATH)
+    _replace_journal(temp, _JOURNAL_PATH)
 
 def _create_backup_bundle(operation_id, backup_ref, backup_oid):
     """Экспортирует backup ref в отдельный bundle вне .git и проверяет его."""
@@ -311,7 +354,7 @@ class UpdateManager:
     """Трёхэтапный процесс с устойчивым журналом и явными барьерами подтверждения."""
 
     def state(self):
-        with _LOCK:
+        with _LOCK, _process_lock():
             journal = _load_journal()
             if journal.get("state") == "RESTART_REQUIRED" and journal.get("process_pid") != os.getpid():
                 journal["state"] = "COMPLETED"
@@ -321,7 +364,7 @@ class UpdateManager:
             return {"success": True, "journal": journal}
 
     def check(self):
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("state") in ("APPLYING", "CODE_UPDATED", "RESTORING", "PREPARING", "RESTART_REQUIRED", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR"):
                 raise UpdateError(
@@ -398,7 +441,7 @@ class UpdateManager:
             return {"success": True, "plan": journal}
 
     def apply(self, operation_id):
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("state") != "CHECKED" or journal.get("id") != operation_id:
                 raise UpdateError("План устарел или отсутствует. Выполните повторную проверку.", "plan_stale")
@@ -453,18 +496,15 @@ class UpdateManager:
                     if latest.get("ok"):
                         subject = _run_git(["log", "-1", "--format=%s", latest["stdout"].strip()])
                         backup_created = subject.get("ok") and subject["stdout"].rstrip("\r\n") == journal.get("backup_message")
-                if not backup_created:
-                    journal.pop("backup_ref", None)
-                    journal.pop("backup_message", None)
-                    journal["state"] = "FAILED"
-                else:
-                    journal["state"] = "RECOVERY_REQUIRED"
+                # A failed command can still have changed HEAD or the worktree.
+                # Preserve the intent and let recover inspect the actual repository.
+                journal["state"] = "RECOVERY_REQUIRED"
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise
 
     def prepare(self, operation_id):
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("id") != operation_id or journal.get("state") != "CODE_UPDATED":
                 raise UpdateError("Шаг 2 ещё не завершён или операция устарела.", "invalid_state")
@@ -478,6 +518,7 @@ class UpdateManager:
                             "Автоматическое восстановление остановлено, резервная копия сохранена.",
                             "restore_worktree_dirty",
                         )
+                    _ensure_backup_ref(journal)
                     result = _run_git(["stash", "apply", "--index", journal["backup_ref"]], _TIMEOUT)
                     if not result["ok"]:
                         raise UpdateError(
@@ -556,7 +597,7 @@ class UpdateManager:
 
     def recover(self, operation_id, manual_confirmation=False):
         """Повторная попытка или подтверждение ручного восстановления локальных изменений."""
-        with _LOCK, _repo_lock():
+        with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()
             if journal.get("id") != operation_id or journal.get("state") not in (
                 "APPLYING", "RECOVERY_REQUIRED", "UPDATE_NEEDS_REPAIR", "RESTORING", "PREPARING"
