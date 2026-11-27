@@ -1,5 +1,17 @@
 # drmAIcu — История изменений
 
+## v.3.17.0 Model (Текущая) — 27.11.2026
+
+### Консолидация: security-hardening из #54 + UI-клинап Обзора из #59 + починка CI
+
+- PATCHMASTER: fail-closed TS/JS-валидатор (PASS только при успешном Node-validator; UNAVAILABLE не маскируется), recovery barrier для незавершённого crash-журнала, возобновление прерванного rollback, проверка целостности backup при recovery apply, pending journal как recovery lock.
+- Repos Sync: advisory-блокировка межпоток/межпроцесс, сверка staged tree до commit и tree созданного commit до push, redaction Git credentials из stdout/stderr, lock registry на WeakValueDictionary.
+- Plugin Runtime: browser-origin guard для mutating /api/plugins/* (cross-site Origin и не-loopback Host отклоняются), PluginResourceGovernor (макс. 8 worker-процессов, 16 RPC), lifecycle worker-процессов с завершением process group (POSIX) / taskkill /T (Windows); STORAGE_CONTRACT.md.
+- UI Обзора (решение заказчика): убраны блоки «Отдельные операции» и «Просмотр файла» — дублировали Sync и PATCHMASTER; backend-capabilities сохранены.
+- Починены тесты после REST-рефакторинга api/ (3.14.0): main.* → engine./guards./api-роутеры; тесты LOG//api/logs → api/routes_system; repos.sync-тесты получают snapshot через repos.sync_preview. До фикса CI падал и на main (97 errors, 42 failed).
+- Fix: refresh_hints вычислялись, но не возвращались из repo_sync — панель «✅ Актуально» всегда была пустой.
+- Версия 3.16.1 → 3.17.0 (version.py + package.json + package-lock); README/ARCHITECTURE/USER_GUIDE/HANDOFF/NEW_FEATURES актуализированы. Итог: 335 passed, 1 skipped.
+
 ## v.3.16.1 Model (Текущая) — 26.11.2026
 
 ### Обзор репозитория: убраны мёртвые блоки UI
