@@ -149,6 +149,15 @@ def _replace_journal(temp, destination):
 def _save_journal(data):
     os.makedirs(_JOURNAL_DIR, exist_ok=True)
     data["updated_at"] = _now()
+    # Keep a bounded structured audit trail, not arbitrary subprocess output/secrets.
+    if data.get("id"):
+        events = data.setdefault("events", [])
+        event = {"at": data["updated_at"], "state": data.get("state"), "step": data.get("active_step")}
+        if data.get("error_code"):
+            event["code"] = data["error_code"]
+        if not events or any(events[-1].get(k) != event.get(k) for k in ("state", "step", "code")):
+            events.append(event)
+            data["events"] = events[-200:]
     temp = _JOURNAL_PATH + ".tmp"
     payload = json.dumps(data, ensure_ascii=False, indent=2)
     with open(temp, "w", encoding="utf-8", newline="\n") as stream:
@@ -169,8 +178,29 @@ def _archive_terminal(journal):
     record = {key: journal.get(key) for key in (
         "id", "state", "created_at", "updated_at", "old_head", "remote_head",
         "current_version", "target_version", "backup_ref")}
+    record["report_schema"] = 2
+    for key in ("current_version", "target_version"):
+        if not record.get(key):
+            head = record.get("old_head" if key == "current_version" else "remote_head")
+            if head:
+                record[key] = _version_or_none(head)
+    for key in ("new_head", "local_changes", "local_changes_restored", "backup_verified",
+                "restart_required", "restart_verified_at", "restart_health", "started_at", "error_code"):
+        record[key] = journal.get(key)
+    summary = journal.get("change_summary") or {}
+    record["change_summary"] = {key: summary[key] for key in
+        ("requirements_changed", "npm_lock_changed", "frontend_changed") if key in summary}
+    record["events"] = [{key: event.get(key) for key in ("at", "state", "step", "code")}
+                        for event in journal.get("events", [])[-200:]]
+    record["finished_at"] = journal.get("updated_at")
+    try:
+        record["duration_seconds"] = max(0, int((datetime.fromisoformat(record["finished_at"]) -
+                                                  datetime.fromisoformat(record["started_at"])).total_seconds()))
+    except (TypeError, ValueError):
+        record["duration_seconds"] = None
     record["environment_steps"] = [
-        {"step": item.get("step"), "ok": item.get("ok"), "code": item.get("code")}
+        {"step": item.get("step"), "ok": item.get("ok"), "code": item.get("code"), "at": item.get("at"),
+         "diagnostic": item.get("diagnostic")}
         for item in journal.get("environment_steps", [])]
     with open(destination + ".tmp", "w", encoding="utf-8") as stream:
         json.dump(record, stream, ensure_ascii=False)
@@ -457,7 +487,14 @@ class UpdateManager:
     """Трёхэтапный процесс с устойчивым журналом и явными барьерами подтверждения."""
 
     def history(self):
-        return {"success": True, "history": _history()}
+        records = _history()
+        # Enrich old archives without inventing missing execution evidence.
+        for record in records:
+            for key, head_key in (("current_version", "old_head"), ("target_version", "remote_head")):
+                head = record.get(head_key)
+                if not record.get(key) and isinstance(head, str) and re.fullmatch(r"[0-9a-f]{40,64}", head):
+                    record[key] = _version_or_none(head)
+        return {"success": True, "history": records}
 
     def progress(self):
         # Atomic journal replacement makes this a read-only snapshot without waiting for npm.
@@ -479,6 +516,7 @@ class UpdateManager:
                     _save_journal(journal)
                     return {"success": True, "journal": journal}
                 journal.pop("error", None)
+                journal.pop("error_code", None)
                 journal["state"] = "COMPLETED"
                 journal["running_version"] = RUNNING_VERSION
                 journal["restart_verified_pid"] = os.getpid()
@@ -596,6 +634,7 @@ class UpdateManager:
             if current_status != journal.get("status_fingerprint"):
                 raise UpdateError("Рабочее дерево или содержимое локальных файлов изменилось после проверки. Повторите шаг 1.", "working_tree_changed")
 
+            journal["started_at"] = _now()
             journal["state"] = "APPLYING"
             journal["active_step"] = "backup" if journal.get("local_changes") else "merge"
             journal["backup_ref"] = None
@@ -641,6 +680,7 @@ class UpdateManager:
                 # Preserve the intent and let recover inspect the actual repository.
                 journal["state"] = "RECOVERY_REQUIRED"
                 journal.pop("active_step", None)
+                journal["error_code"] = exc.code if isinstance(exc, UpdateError) else "internal_error"
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise
@@ -702,6 +742,8 @@ class UpdateManager:
                         step_result = {
                             "step": label, "ok": proc.returncode == 0,
                             "code": proc.returncode,
+                            "at": _now(),
+                            "diagnostic": next((code for code in ("EPERM", "EBUSY", "ERESOLVE", "ENOSPC", "ETIMEDOUT", "EACCES") if code in ((proc.stderr or "") + (proc.stdout or "")).upper()), None) if proc.returncode else None,
                             "stdout": (proc.stdout or "")[-8000:],
                             "stderr": (proc.stderr or "")[-8000:],
                         }
@@ -728,6 +770,7 @@ class UpdateManager:
                         raise UpdateError("%s: не удалось запустить команду: %s" % (label, exc), "environment_launch_failed", 503)
                 journal["environment_steps"] = results
                 journal.pop("error", None)
+                journal.pop("error_code", None)
                 journal.pop("active_step", None)
                 journal["restart_required"] = bool(summary.get("python_changed") or summary.get("requirements_changed") or summary.get("frontend_changed"))
                 if journal["restart_required"]:
@@ -743,6 +786,7 @@ class UpdateManager:
             except Exception as exc:
                 journal["state"] = "UPDATE_NEEDS_REPAIR"
                 journal.pop("active_step", None)
+                journal["error_code"] = exc.code if isinstance(exc, UpdateError) else "internal_error"
                 journal["error"] = str(exc)[:3000]
                 _save_journal(journal)
                 raise

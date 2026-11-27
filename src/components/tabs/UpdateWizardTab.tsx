@@ -25,6 +25,7 @@ export default function UpdateWizardTab() {
   const [confirmed, setConfirmed] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('');
   const running = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -121,6 +122,7 @@ export default function UpdateWizardTab() {
     timer = window.setTimeout(poll, 1500);
     return () => {cancelled = true; window.clearTimeout(timer);};
   }, [restarting]);
+  const latestReport = state === 'COMPLETED' ? journal : history.find(item => item.state === 'COMPLETED');
   const upToDate = state === 'CHECKED' && journal?.ahead === 0 && journal?.behind === 0 && !(journal?.blockers || []).filter((x: string) => x !== 'Нет входящих коммитов для обновления.').length;
   const canApply = state === 'CHECKED' && journal?.behind > 0 && !(journal?.blockers || []).length;
   const environmentRepair = state === 'UPDATE_NEEDS_REPAIR' && journal?.local_changes_restored === true;
@@ -166,6 +168,10 @@ export default function UpdateWizardTab() {
         </div>
       </div>
 
+      {latestReport && <section className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4 space-y-2">
+        <h3 className="text-lg font-bold text-emerald-300">{state === 'COMPLETED' ? 'Обновление успешно завершено' : 'Последнее успешное обновление'}</h3>
+        <UpdateReport item={latestReport} />
+      </section>}
       {error && (
         <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200 whitespace-pre-wrap">
           <b>Операция не завершена:</b> {error}<div className="mt-2">Путь исправления: устраните указанную причину. При повреждённом журнале сохраните journal.json и journal.json.tmp для диагностики; не удаляйте резервные ссылки.</div>
@@ -263,9 +269,11 @@ export default function UpdateWizardTab() {
           <h3 className="font-bold text-white">Восстановить изменения и подготовить окружение</h3>
         </div>
         <p className="text-sm text-gray-400">Восстановление выполняется с индексом Git. Затем при необходимости обновляются Python/npm-зависимости и собирается frontend. При конфликте резервная копия остаётся нетронутой.</p>
-        <button disabled={!canPrepare || busy} onClick={() => run('/api/updates/prepare', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/50 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40">
+        {!upToDate && state !== 'COMPLETED' && state !== 'RESTART_REQUIRED' && <button disabled={!canPrepare || busy} onClick={() => run('/api/updates/prepare', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/50 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40">
           {environmentRepair ? 'Повторить подготовку окружения' : 'Выполнить шаг 3'}
-        </button>
+        </button>}
+        {upToDate && <p className="text-sm text-emerald-300">Новых обновлений нет. Подготовка окружения не требуется.</p>}
+        {state === 'COMPLETED' && <p className="text-sm text-emerald-300">Все обязательные этапы завершены. Отчёт сохранён в истории.</p>}
         {environmentRepair && <p className="text-sm text-amber-200">Git восстановлен. Повторяются только незавершённые шаги окружения. При EPERM остановите старый Vite/watchdog и приостановите MEGA.</p>}
         {canRecover && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-2">
@@ -291,7 +299,7 @@ export default function UpdateWizardTab() {
         {journal?.environment_steps?.map((item: any) => (
           <div key={item.step} className="rounded-lg border border-gray-800 bg-gray-950/70 p-3">
             <div className="flex justify-between text-sm"><b className="text-gray-200">{item.step}</b><span className={item.ok ? 'text-emerald-300' : 'text-red-300'}>{item.ok ? 'PASS' : 'FAIL'}</span></div>
-            {(item.stderr || item.stdout) && <pre className="mt-2 text-xs text-gray-500 whitespace-pre-wrap max-h-36 overflow-auto">{item.stderr || item.stdout}</pre>}
+            {(item.stderr || item.stdout) && <details className="mt-2 text-xs text-gray-400"><summary>Вывод команды</summary><pre className="whitespace-pre-wrap max-h-48 overflow-auto">{[item.stdout,item.stderr].filter(Boolean).join("\\n")}</pre></details>}
           </div>
         ))}
       </section>
@@ -299,11 +307,15 @@ export default function UpdateWizardTab() {
       <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-2">
         <h3 className="font-bold text-white">История обновлений</h3>
         {!history.length && <p className="text-sm text-gray-400">Архив пока пуст. Завершённые операции сохраняются перед следующей проверкой.</p>}
-        {history.map(item => <div key={item.id} className="flex flex-wrap justify-between gap-2 border-t border-gray-800 py-2 text-sm">
-          <span className="text-gray-300">{item.current_version || '—'} → {item.target_version || item.remote_head?.slice(0,8) || '—'}</span>
-          <span className={item.state === 'COMPLETED' ? 'text-emerald-300' : 'text-amber-300'}>{item.state}</span>
-          <span className="text-gray-400">{item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}</span>
-        </div>)}
+        {history.map(item => <details key={item.id} className="rounded-lg border border-gray-800 p-3 text-sm">
+          <summary className="cursor-pointer text-gray-200">{item.current_version || '—'} → {item.target_version || item.remote_head?.slice(0,8) || '—'} · {item.state === 'COMPLETED' ? 'Завершено' : item.state} · {formatDate(item.finished_at || item.updated_at)}</summary>
+          <div className="mt-3"><UpdateReport item={item} /></div>
+          <button className="mt-3 rounded border border-gray-600 px-3 py-1" onClick={async () => {
+            try { await navigator.clipboard.writeText(JSON.stringify(item, null, 2)); setCopyStatus('Диагностический отчёт скопирован'); }
+            catch { setCopyStatus('Не удалось скопировать отчёт'); }
+          }}>Копировать отчёт</button>
+        </details>)}
+        {copyStatus && <p role="status" className="text-sm text-gray-300">{copyStatus}</p>}
       </section>
       <p className="text-xs text-gray-600">Безопасность: обновление разрешено только из официального HTTPS-репозитория drmAIcu. Журнал хранится локально в data/updater. Резервные refs намеренно не удаляются автоматически.</p>
     </div>
@@ -317,4 +329,44 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="font-mono text-sm text-gray-200 mt-1 break-all">{value}</div>
     </div>
   );
+}
+
+
+function formatDate(value?: string) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+}
+
+function UpdateReport({ item }: { item: any }) {
+  const summary = item.change_summary || {};
+  const env = (step: string, required: boolean | undefined) => {
+    const result = item.environment_steps?.find((x: any) => x.step === step);
+    if (result) return result.ok ? 'Выполнен' : 'Ошибка';
+    if (required === false) return 'Не требуется';
+    return 'Нет данных';
+  };
+  const rows = [
+    ['Обновление исходников', item.new_head && item.new_head === item.remote_head ? 'Выполнен' : 'Нет данных'],
+    ['Резервирование', item.backup_verified ? 'Выполнен' : item.local_changes === false ? 'Не требуется' : 'Нет данных'],
+    ['Восстановление Git', item.local_changes === false ? 'Не требуется' : item.local_changes_restored ? 'Выполнен' : 'Нет данных'],
+    ['Python', env('python', summary.requirements_changed)],
+    ['npm', env('npm', summary.npm_lock_changed)],
+    ['Сборка frontend', env('frontend_build', summary.frontend_changed)],
+    ['Перезапуск', item.restart_verified_at ? 'Выполнен' : item.restart_required === false ? 'Не требуется' : 'Нет данных'],
+  ];
+  return <div className="space-y-2 text-sm text-gray-300">
+    <div className="font-mono">{item.current_version || '—'} → {item.target_version || '—'} · {item.state}</div>
+    <div>Начало: {formatDate(item.started_at)} · Окончание: {formatDate(item.finished_at || item.updated_at)}</div>
+    <div>Продолжительность: {typeof item.duration_seconds === 'number' ? item.duration_seconds + ' сек.' : 'Нет данных'}</div>
+    {rows.map(([label,status]) => <div key={label} className="flex justify-between gap-2 border-t border-gray-800 pt-1"><span>{label}</span><span className={status === 'Выполнен' ? 'text-emerald-300' : status === 'Ошибка' ? 'text-red-300' : 'text-gray-400'}>{status}</span></div>)}
+    <details><summary className="cursor-pointer text-cyan-300">Журнал этапов и коды завершения</summary>
+      <div className="mt-2 max-h-64 overflow-auto space-y-1 font-mono text-xs">
+        {(item.events || []).map((e: any,i: number) => <div key={i}>{formatDate(e.at)} · {e.state} {e.step || ''} {e.code || ''}</div>)}
+        {(item.environment_steps || []).map((e: any) => <div key={e.step}>{e.step}: {e.ok ? 'PASS' : 'FAIL'} · exit {e.code ?? '—'} {e.diagnostic || ''}</div>)}
+        {!item.events?.length && <div>Подробные события старой операции не сохранены.</div>}
+      </div>
+    </details>
+    <div className="text-xs text-gray-500">Архив содержит структурированную диагностику, без необработанного вывода команд.</div>
+  </div>;
 }
