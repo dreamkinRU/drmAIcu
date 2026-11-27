@@ -1,17 +1,6 @@
 {
   "applied": [
     {
-      "patch_id": "019",
-      "target_file": "main.py",
-      "applied_at": "2026-11-18T18:00:40.703368",
-      "checksum": "39db3d080f0e69c17be553e502edb6a5b9e0a5328cf5293f14d3035d22e7b1e6",
-      "backups": [
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261118_180040.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_20261118_180040_verified.bak",
-        "G:\\Mega\\git\\drmAIcu\\backups\\main.py_LATEST.bak"
-      ]
-    },
-    {
       "patch_id": "020",
       "target_file": "src/App.tsx",
       "applied_at": "2026-11-18T18:01:00.093105",
@@ -4245,6 +4234,172 @@
         "backups/docs__ARCHITECTURE.md_20261127_204919_341796.bak",
         "backups/docs__ARCHITECTURE.md_LATEST.bak"
       ]
+    },
+    {
+      "patch_id": "174",
+      "target_file": "core/updater/manager.py+src/components/tabs/UpdateWizardTab.tsx+tests/test_update_manager.py+.github/workflows/ci.yml+package.json+package-lock.json+version.py+README.md+docs/USER_GUIDE.md+docs/ARCHITECTURE.md+docs/HANDOFF.md+docs/CHANGELOG.md+docs/ROADMAP.md+docs/UPDATE_MANAGER.md",
+      "operations": [
+        {
+          "target_file": "core/updater/manager.py",
+          "checksum": "4a433c5e0107ca597584f3c98c1756e571675c812cbe97997e4e7c7f1dbd674f",
+          "backups": [
+            "backups/core__updater__manager.py_20261127_214621_119302.bak",
+            "backups/core__updater__manager.py_LATEST.bak"
+          ],
+          "backup_sha": "f33135d92825f79a6ebd8fad327ba49597bc27fe57c7dddf8c8ac070c741ba6d"
+        },
+        {
+          "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+          "checksum": "57a06b660e0393bbc80c859b4153f3972c291c03f30c41a581967355cdbb521c",
+          "backups": [
+            "backups/src__components__tabs__UpdateWizardTab.tsx_20261127_214621_125302.bak",
+            "backups/src__components__tabs__UpdateWizardTab.tsx_LATEST.bak"
+          ],
+          "backup_sha": "ea19b435ff63d967e0b653e2379bb97f321bddfa9c640e71f1c4b41f90c3554f"
+        },
+        {
+          "target_file": "tests/test_update_manager.py",
+          "checksum": "19bc057f80fe8cf5997b708062ddceac3b0b18a8e07aa7e137f72e69b74ac08f",
+          "backups": [
+            "backups/tests__test_update_manager.py_20261127_214621_127400.bak",
+            "backups/tests__test_update_manager.py_LATEST.bak"
+          ],
+          "backup_sha": "760885c97ed42ee557ef249e695e52398f79f384a82d0635a3b23640d612376c"
+        },
+        {
+          "target_file": ".github/workflows/ci.yml",
+          "checksum": "e970aa2d6689e0235271e3eff3fc3493a275e02b18fd0849e6a88f3644b5d9ee",
+          "backups": [
+            "backups/.github__workflows__ci.yml_20261127_214621_130349.bak",
+            "backups/.github__workflows__ci.yml_LATEST.bak"
+          ],
+          "backup_sha": "0fc6a0b3ae0bad4f91a7045f1946aee034ddc815c4711156612e99e0b3900c96"
+        },
+        {
+          "target_file": "package.json",
+          "checksum": "3a192977b4b45cf0b968003c57fd38581f573d60d5c87a6d486a0fc4393afad8",
+          "backups": [
+            "backups/package.json_20261127_214621_132387.bak",
+            "backups/package.json_LATEST.bak"
+          ],
+          "backup_sha": "71912b250349058bcaf6a101b7e3e5473eaceb547ac4505ab5d73c49cd3d67bf"
+        },
+        {
+          "target_file": "package-lock.json",
+          "checksum": "bb45e33ae77d4371ef04425781f931c3d7d31c42d6d473448de9b1b5be9d6468",
+          "backups": [
+            "backups/package-lock.json_20261127_214621_133990.bak",
+            "backups/package-lock.json_LATEST.bak"
+          ],
+          "backup_sha": "96d086d16085ebf0ee746b7e85666d757bae12e9398b880a67317b5db6c09d7e"
+        },
+        {
+          "target_file": "version.py",
+          "checksum": "17b14c5dccbf80b039808589c7ba2261a162133a9a2e9420900b5f07fdf2c5be",
+          "backups": [
+            "backups/version.py_20261127_214621_136902.bak",
+            "backups/version.py_LATEST.bak"
+          ],
+          "backup_sha": "0e6a47cd1bd89270f3ca9f46f71c6fe60d64d4fbaedab065f27c3801d92c3b82"
+        },
+        {
+          "target_file": "README.md",
+          "checksum": "c4178091aac99823fba0a6a24f20bf1fc21edd927a14a0173170aa51a8ca12b7",
+          "backups": [
+            "backups/README.md_20261127_214621_138413.bak",
+            "backups/README.md_LATEST.bak"
+          ],
+          "backup_sha": "11d0d6bb1a3070cc0cf70e866ce9f588354664f043e412ea044b285a934a9a81"
+        },
+        {
+          "target_file": "docs/USER_GUIDE.md",
+          "checksum": "3fbc47b1b9ea6a40b0e365c222477cdb69a236e2630004608a8add17313a7b49",
+          "backups": [
+            "backups/docs__USER_GUIDE.md_20261127_214621_139414.bak",
+            "backups/docs__USER_GUIDE.md_LATEST.bak"
+          ],
+          "backup_sha": "196301772a0741ce9d00f0f7fad19e6f5540e9b2ce9e433a546430686b195324"
+        },
+        {
+          "target_file": "docs/ARCHITECTURE.md",
+          "checksum": "40e04b8cbc703e547cf848679c23eaf72e74b20cf498726b3bad461e454bdcd5",
+          "backups": [
+            "backups/docs__ARCHITECTURE.md_20261127_214621_141947.bak",
+            "backups/docs__ARCHITECTURE.md_LATEST.bak"
+          ],
+          "backup_sha": "6664e8b984168621d309727c40ccc0519c699160a511eb31c0aefe43e2b8ad1c"
+        },
+        {
+          "target_file": "docs/HANDOFF.md",
+          "checksum": "27bdd10737fbae6ca21582f72ea2b92d03a127cae56252fd0db47dde5d76afe8",
+          "backups": [
+            "backups/docs__HANDOFF.md_20261127_214621_143458.bak",
+            "backups/docs__HANDOFF.md_LATEST.bak"
+          ],
+          "backup_sha": "069ed40fb65a0ec77c4c2ebde6496966615ecb766aa80c8af195e3b48a7cb82c"
+        },
+        {
+          "target_file": "docs/CHANGELOG.md",
+          "checksum": "9c23cfd7e786094a334b997a6590e47301cf2dfea812b42bc804da735e06aff8",
+          "backups": [
+            "backups/docs__CHANGELOG.md_20261127_214621_144458.bak",
+            "backups/docs__CHANGELOG.md_LATEST.bak"
+          ],
+          "backup_sha": "edc0869b475b85463db74230c2b211e7dac57fdb87590601f966c221173ef9fb"
+        },
+        {
+          "target_file": "docs/ROADMAP.md",
+          "checksum": "9ff05b2aedae8c1bd065af9cc464cef1a28070f8ecfd427ef5e2892ea6b6e869",
+          "backups": [
+            "backups/docs__ROADMAP.md_20261127_214621_147525.bak",
+            "backups/docs__ROADMAP.md_LATEST.bak"
+          ],
+          "backup_sha": "5726d1c0d2039495f8d553e0301b6472c6324dbe8701ebd03c16604cd46cfebb"
+        },
+        {
+          "target_file": "docs/UPDATE_MANAGER.md",
+          "checksum": "c2433f8aefc157f9ed86df0731f2101764ee2b0f016b501c64ca8041e0e95e00",
+          "backups": [
+            "backups/docs__UPDATE_MANAGER.md_20261127_214621_149484.bak",
+            "backups/docs__UPDATE_MANAGER.md_LATEST.bak"
+          ],
+          "backup_sha": "d730d19f27c715b95dd51a833157e0eb54c815666319b690926dfa3d0eb5a272"
+        }
+      ],
+      "applied_at": "2026-11-27T21:46:21.819854",
+      "checksum": "3f794ec26fd36b12cbfdb40510f16278ec24910d26e26d78be7a163608a9da33",
+      "backups": [
+        "backups/core__updater__manager.py_20261127_214621_119302.bak",
+        "backups/core__updater__manager.py_LATEST.bak",
+        "backups/src__components__tabs__UpdateWizardTab.tsx_20261127_214621_125302.bak",
+        "backups/src__components__tabs__UpdateWizardTab.tsx_LATEST.bak",
+        "backups/tests__test_update_manager.py_20261127_214621_127400.bak",
+        "backups/tests__test_update_manager.py_LATEST.bak",
+        "backups/.github__workflows__ci.yml_20261127_214621_130349.bak",
+        "backups/.github__workflows__ci.yml_LATEST.bak",
+        "backups/package.json_20261127_214621_132387.bak",
+        "backups/package.json_LATEST.bak",
+        "backups/package-lock.json_20261127_214621_133990.bak",
+        "backups/package-lock.json_LATEST.bak",
+        "backups/version.py_20261127_214621_136902.bak",
+        "backups/version.py_LATEST.bak",
+        "backups/README.md_20261127_214621_138413.bak",
+        "backups/README.md_LATEST.bak",
+        "backups/docs__USER_GUIDE.md_20261127_214621_139414.bak",
+        "backups/docs__USER_GUIDE.md_LATEST.bak",
+        "backups/docs__ARCHITECTURE.md_20261127_214621_141947.bak",
+        "backups/docs__ARCHITECTURE.md_LATEST.bak",
+        "backups/docs__HANDOFF.md_20261127_214621_143458.bak",
+        "backups/docs__HANDOFF.md_LATEST.bak",
+        "backups/docs__CHANGELOG.md_20261127_214621_144458.bak",
+        "backups/docs__CHANGELOG.md_LATEST.bak",
+        "backups/docs__ROADMAP.md_20261127_214621_147525.bak",
+        "backups/docs__ROADMAP.md_LATEST.bak",
+        "backups/docs__UPDATE_MANAGER.md_20261127_214621_149484.bak",
+        "backups/docs__UPDATE_MANAGER.md_LATEST.bak"
+      ],
+      "archive_status": "archived",
+      "archive_name": "174.txt"
     }
   ],
   "history": [
@@ -5402,6 +5557,27 @@
         "docs/ARCHITECTURE.md"
       ],
       "timestamp": "2026-11-27T20:49:19.555936"
+    },
+    {
+      "action": "apply",
+      "patch_id": "174",
+      "files": [
+        "core/updater/manager.py",
+        "src/components/tabs/UpdateWizardTab.tsx",
+        "tests/test_update_manager.py",
+        ".github/workflows/ci.yml",
+        "package.json",
+        "package-lock.json",
+        "version.py",
+        "README.md",
+        "docs/USER_GUIDE.md",
+        "docs/ARCHITECTURE.md",
+        "docs/HANDOFF.md",
+        "docs/CHANGELOG.md",
+        "docs/ROADMAP.md",
+        "docs/UPDATE_MANAGER.md"
+      ],
+      "timestamp": "2026-11-27T21:46:21.819854"
     }
   ],
   "rollbacks": [

@@ -1,12 +1,13 @@
 {
   "name": "drmaicu",
-  "version": "3.19.5",
+  "version": "3.19.6",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:frontend": "node --experimental-strip-types --test tests/update_presentation.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

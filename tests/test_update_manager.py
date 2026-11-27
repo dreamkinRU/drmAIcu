@@ -464,6 +464,17 @@ def test_progress_reads_during_operation_lock(git_fixture):
         assert updater.manager.progress()["progress"]["active_step"] == "npm"
 
 
+def test_progress_contains_structured_events_without_command_output(git_fixture):
+    updater._save_journal({"schema": 1, "id": "a" * 32, "state": "PREPARING",
+                           "active_step": "npm", "environment_steps": [
+                               {"step": "python", "ok": True, "code": 0, "stdout": "private"}]})
+    with updater._process_lock():
+        progress = updater.manager.progress()["progress"]
+    assert progress["events"][-1]["step"] == "npm"
+    assert progress["environment_steps"][0]["ok"] is True
+    assert "stdout" not in progress["environment_steps"][0]
+
+
 def test_history_does_not_store_command_output(git_fixture):
     updater._archive_terminal({"id": "a" * 32, "state": "FAILED", "updated_at": "2026-11-27",
                                "error": "private", "environment_steps": [{"step": "npm", "ok": False, "stderr": "private"}]})

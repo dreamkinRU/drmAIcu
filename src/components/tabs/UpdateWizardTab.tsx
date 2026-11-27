@@ -28,6 +28,7 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
   const [loaded, setLoaded] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
   const running = useRef(false);
+  const requestStarted = useRef(0);
   const consumedRequest = useRef(0);
   const restartId = useRef<string | null>(null);
 
@@ -51,26 +52,32 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
   useEffect(() => { if (visible && !running.current && !restarting && incomingRequest === consumedRequest.current) { void refresh(); void refreshHistory(); } }, [visible, refresh, refreshHistory]);
   useEffect(() => { onBusyChange(busy || restarting); }, [busy, restarting, onBusyChange]);
   useEffect(() => {
-    if (!busy && !['APPLYING','RESTORING','PREPARING'].includes(journal?.state)) return;
+    if (!busy && !restarting && !['APPLYING','RESTORING','PREPARING'].includes(journal?.state)) return;
     let active = true;
     const poll = async () => {
       try {
         const r = await fetch('/api/updates/progress');
         const data = await r.json();
-        if (active && r.ok) { setProgress(data.progress); if (!busy && data.progress?.state && !['APPLYING','RESTORING','PREPARING'].includes(data.progress.state)) void refresh(); }
+        if (active && r.ok && data.progress?.id) {
+          const snapshot = data.progress;
+          const fresh = Date.parse(snapshot.updated_at || '') >= requestStarted.current - 1000;
+          if (!busy || fresh) setProgress(snapshot);
+          if (!busy && !restarting && snapshot.state && !['APPLYING','RESTORING','PREPARING'].includes(snapshot.state)) void refresh();
+        }
       } catch { /* restart or old server */ }
     };
     void poll();
     const timer = window.setInterval(poll, 1200);
     return () => { active = false; window.clearInterval(timer); };
-  }, [busy, journal?.state, refresh]);
+  }, [busy, restarting, journal?.state, refresh]);
 
   const run = async (path: string, operationId?: string, manualConfirmation = false) => {
     if (running.current || restarting) return;
     running.current = true;
+    requestStarted.current = Date.now();
     setBusy(true);
     setProgress(null);
-    setActivity(({check: 'Проверка Git', apply: 'Резервирование и обновление', prepare: 'Подготовка окружения', recover: 'Восстановление Git'} as Record<string,string>)[path.split('/').pop() || ''] || 'Выполнение операции');
+    setActivity(({incoming: 'Получение актуального плана GitHub (fetch)', check: 'Проверка Git', apply: 'Резервирование и обновление', prepare: 'Подготовка окружения', recover: 'Восстановление Git'} as Record<string,string>)[path.split('/').pop() || ''] || 'Выполнение операции');
     setError('');
     try {
       const result = await callUpdate(path, operationId, manualConfirmation);
@@ -97,7 +104,8 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
     if (!running.current && !restarting) void run('/api/updates/incoming');
   }, [incomingRequest]);
 
-  const state = journal?.state || 'IDLE';
+  const live = busy ? (progress?.id ? progress : null) : restarting ? (progress?.id ? progress : journal) : journal;
+  const state = live?.state || 'IDLE';
   const canCheck = loaded && ['IDLE','CHECKED','COMPLETED','FAILED'].includes(state);
   const restart = async () => {
     if (running.current || restarting) return;
@@ -137,7 +145,7 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
     timer = window.setTimeout(poll, 1500);
     return () => {cancelled = true; window.clearTimeout(timer);};
   }, [restarting]);
-  const latestReport = state === 'COMPLETED' ? journal : history.find(item => item.state === 'COMPLETED');
+  const latestReport = journal?.state === 'COMPLETED' ? journal : history.find(item => item.state === 'COMPLETED');
   const upToDate = state === 'CHECKED' && journal?.ahead === 0 && journal?.behind === 0 && !(journal?.blockers || []).filter((x: string) => x !== 'Нет входящих коммитов для обновления.').length;
   const localOnly = state === 'CHECKED' && journal?.behind === 0 && (journal?.ahead > 0 || journal?.local_files?.length > 0);
   const canApply = state === 'CHECKED' && journal?.behind > 0 && !(journal?.blockers || []).length;
@@ -186,6 +194,21 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
         </div>
       </div>
 
+      <section className="rounded-xl border border-cyan-500/40 bg-gray-950 p-4 space-y-2" aria-label="Журнал событий обновления">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-bold text-cyan-200">Журнал событий обновления</h3>
+          <span className="text-xs text-gray-400">{busy || restarting ? 'Обновляется автоматически' : 'Последняя операция'}</span>
+        </div>
+        {(busy || restarting) && <p className="text-sm text-cyan-300">{restarting ? 'Ожидание подтверждения перезапуска API' : activity}</p>}
+        <div className="max-h-72 overflow-auto space-y-1 font-mono text-xs" role="log" aria-live="polite">
+          {(live?.events || []).map((event: any, i: number) => <div key={i} className="border-b border-gray-800 py-1 text-gray-200">
+            <span className="text-gray-500">{formatDate(event.at)} · </span>{updateStateLabel(event.state)} {event.step ? '· ' + event.step : ''} {event.code ? '· ' + event.code : ''}
+          </div>)}
+          {(live?.environment_steps || []).map((step: any) => <div key={step.step} className={step.ok ? 'text-emerald-300' : 'text-red-300'}>{step.step} · {step.ok ? 'PASS' : 'FAIL'} · exit {step.code ?? '—'} {step.diagnostic || ''}</div>)}
+          {!live?.events?.length && <p className="text-gray-400">{busy ? 'Ожидание первого события сервера…' : 'Нет записанных событий.'}</p>}
+        </div>
+        <p className="text-xs text-gray-500">События сервера, не имитация вывода команд. Полный вывод доступен после завершения команды.</p>
+      </section>
       {latestReport && <section className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4 space-y-2">
         <h3 className="text-lg font-bold text-emerald-300">{state === 'COMPLETED' ? 'Обновление успешно завершено' : 'Последнее успешное обновление'}</h3>
         <UpdateReport item={latestReport} />
@@ -269,7 +292,7 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
           <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} disabled={!canApply || busy} className="mt-1" />
           Я проверил план и подтверждаю резервирование локальных изменений и обновление исходников.
         </label>
-        <button disabled={!canApply || !confirmed || busy} onClick={() => run('/api/updates/apply', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/50 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40">
+        <button disabled={!canApply || !confirmed || busy || restarting} onClick={() => run('/api/updates/apply', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/50 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40">
           Выполнить шаг 2
         </button>
         {journal?.backup_ref && <p className="text-xs text-emerald-300">Backup: <code>{journal.backup_ref}</code> {journal.backup_verified ? '· проверен' : '· проверка не завершена'}</p>}
@@ -287,7 +310,7 @@ export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange
           <h3 className="font-bold text-white">Восстановить изменения и подготовить окружение</h3>
         </div>
         <p className="text-sm text-gray-400">Восстановление выполняется с индексом Git. Затем при необходимости обновляются Python/npm-зависимости и собирается frontend. При конфликте резервная копия остаётся нетронутой.</p>
-        {!upToDate && state !== 'COMPLETED' && state !== 'RESTART_REQUIRED' && <button disabled={!canPrepare || busy} onClick={() => run('/api/updates/prepare', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/50 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40">
+        {!upToDate && state !== 'COMPLETED' && state !== 'RESTART_REQUIRED' && <button disabled={!canPrepare || busy || restarting} onClick={() => run('/api/updates/prepare', journal?.id)} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 border border-emerald-400/50 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40">
           {environmentRepair ? 'Повторить подготовку окружения' : 'Выполнить шаг 3'}
         </button>}
         {upToDate && <p className="text-sm text-emerald-300">Новых обновлений нет. Подготовка окружения не требуется.</p>}
