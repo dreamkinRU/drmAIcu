@@ -1,0 +1,211 @@
+{
+  "patch_id": "174",
+  "type": "multi",
+  "description": "3.19.6 — only for base 611b71a, do not apply after merge",
+  "operations": [
+    {
+      "type": "search_and_replace",
+      "target_file": "core/updater/manager.py",
+      "find": "            return {\"success\": True, \"progress\": {key: record.get(key) for key in (\"id\", \"state\", \"active_step\", \"updated_at\")}}",
+      "replace": "            progress = {key: record.get(key) for key in (\"id\", \"state\", \"active_step\", \"updated_at\", \"created_at\", \"ahead\", \"behind\")}\n            progress[\"events\"] = [{key: event.get(key) for key in (\"at\", \"state\", \"step\", \"code\")}\n                                  for event in record.get(\"events\", [])[-200:]]\n            progress[\"environment_steps\"] = [{key: step.get(key) for key in (\"step\", \"ok\", \"code\", \"at\", \"diagnostic\")}\n                                             for step in record.get(\"environment_steps\", [])]\n            return {\"success\": True, \"progress\": progress}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "core/updater/manager.py",
+      "find": "if journal.get(\"remote_head\") else None}}",
+      "replace": "}}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "  const running = useRef(false);",
+      "replace": "  const running = useRef(false);\n  const requestStarted = useRef(0);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "    if (!busy && !['APPLYING','RESTORING','PREPARING'].includes(journal?.state)) return;",
+      "replace": "    if (!busy && !restarting && !['APPLYING','RESTORING','PREPARING'].includes(journal?.state)) return;"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "        if (active && r.ok) { setProgress(data.progress); if (!busy && data.progress?.state && !['APPLYING','RESTORING','PREPARING'].includes(data.progress.state)) void refresh(); }",
+      "replace": "        if (active && r.ok && data.progress?.id) {\n          const snapshot = data.progress;\n          const fresh = Date.parse(snapshot.updated_at || '') >= requestStarted.current - 1000;\n          if (!busy || fresh) setProgress(snapshot);\n          if (!busy && !restarting && snapshot.state && !['APPLYING','RESTORING','PREPARING'].includes(snapshot.state)) void refresh();\n        }"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "  }, [busy, journal?.state, refresh]);",
+      "replace": "  }, [busy, restarting, journal?.state, refresh]);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "    running.current = true;\n    setBusy(true);",
+      "replace": "    running.current = true;\n    requestStarted.current = Date.now();\n    setBusy(true);"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "({check: 'Проверка Git', apply:",
+      "replace": "({incoming: 'Получение актуального плана GitHub (fetch)', check: 'Проверка Git', apply:"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "  const state = journal?.state || 'IDLE';",
+      "replace": "  const live = (busy || restarting) && progress?.id ? progress : journal;\n  const state = live?.state || 'IDLE';"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "      {latestReport && <section",
+      "replace": "      <section className=\"rounded-xl border border-cyan-500/40 bg-gray-950 p-4 space-y-2\" aria-label=\"Журнал событий обновления\">\n        <div className=\"flex items-center justify-between gap-2\">\n          <h3 className=\"font-bold text-cyan-200\">Журнал событий обновления</h3>\n          <span className=\"text-xs text-gray-400\">{busy || restarting ? 'Обновляется автоматически' : 'Последняя операция'}</span>\n        </div>\n        {(busy || restarting) && <p className=\"text-sm text-cyan-300\">{restarting ? 'Ожидание подтверждения перезапуска API' : activity}</p>}\n        <div className=\"max-h-72 overflow-auto space-y-1 font-mono text-xs\" role=\"log\" aria-live=\"polite\">\n          {(live?.events || []).map((event: any, i: number) => <div key={i} className=\"border-b border-gray-800 py-1 text-gray-200\">\n            <span className=\"text-gray-500\">{formatDate(event.at)} · </span>{updateStateLabel(event.state)} {event.step ? '· ' + event.step : ''} {event.code ? '· ' + event.code : ''}\n          </div>)}\n          {(live?.environment_steps || []).map((step: any) => <div key={step.step} className={step.ok ? 'text-emerald-300' : 'text-red-300'}>{step.step} · {step.ok ? 'PASS' : 'FAIL'} · exit {step.code ?? '—'} {step.diagnostic || ''}</div>)}\n          {!live?.events?.length && <p className=\"text-gray-400\">{busy ? 'Ожидание первого события сервера…' : 'Нет записанных событий.'}</p>}\n        </div>\n        <p className=\"text-xs text-gray-500\">События сервера, не имитация вывода команд. Полный вывод доступен после завершения команды.</p>\n      </section>\n      {latestReport && <section"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "const live = (busy || restarting) && progress?.id ? progress : journal;",
+      "replace": "const live = busy ? (progress?.id ? progress : null) : restarting ? (progress?.id ? progress : journal) : journal;"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "  const latestReport = state === 'COMPLETED' ? journal",
+      "replace": "  const latestReport = journal?.state === 'COMPLETED' ? journal"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "disabled={!canApply || !confirmed || busy}",
+      "replace": "disabled={!canApply || !confirmed || busy || restarting}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "src/components/tabs/UpdateWizardTab.tsx",
+      "find": "disabled={!canPrepare || busy}",
+      "replace": "disabled={!canPrepare || busy || restarting}"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "tests/test_update_manager.py",
+      "find": "def test_history_does_not_store_command_output(git_fixture):",
+      "replace": "def test_progress_contains_structured_events_without_command_output(git_fixture):\n    updater._save_journal({\"schema\": 1, \"id\": \"a\" * 32, \"state\": \"PREPARING\",\n                           \"active_step\": \"npm\", \"environment_steps\": [\n                               {\"step\": \"python\", \"ok\": True, \"code\": 0, \"stdout\": \"private\"}]})\n    with updater._process_lock():\n        progress = updater.manager.progress()[\"progress\"]\n    assert progress[\"events\"][-1][\"step\"] == \"npm\"\n    assert progress[\"environment_steps\"][0][\"ok\"] is True\n    assert \"stdout\" not in progress[\"environment_steps\"][0]\n\n\ndef test_history_does_not_store_command_output(git_fixture):"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": ".github/workflows/ci.yml",
+      "find": "jobs:\n",
+      "replace": "concurrency:\n  group: ci-${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\njobs:\n"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": ".github/workflows/ci.yml",
+      "find": "node-version: '20'",
+      "replace": "node-version: '22.18.0'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": ".github/workflows/ci.yml",
+      "find": "      - name: Typecheck",
+      "replace": "      - name: Frontend regression tests\n        run: npm run test:frontend\n      - name: Typecheck"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package.json",
+      "find": "    \"typecheck\": \"tsc --noEmit\"",
+      "replace": "    \"typecheck\": \"tsc --noEmit\",\n    \"test:frontend\": \"node --experimental-strip-types --test tests/update_presentation.test.mjs\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package.json",
+      "find": "\"version\": \"3.19.5\"",
+      "replace": "\"version\": \"3.19.6\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "  \"version\": \"3.19.5\",\n  \"lockfileVersion\"",
+      "replace": "  \"version\": \"3.19.6\",\n  \"lockfileVersion\""
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "package-lock.json",
+      "find": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.5\",",
+      "replace": "      \"name\": \"drmaicu\",\n      \"version\": \"3.19.6\","
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "version.py",
+      "find": "VERSION = '3.19.5'",
+      "replace": "VERSION = '3.19.6'"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "README.md",
+      "find": "**Версия 3.19.5 Model**",
+      "replace": "**Версия 3.19.6 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/USER_GUIDE.md",
+      "find": "**Версия 3.19.5 Model**",
+      "replace": "**Версия 3.19.6 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ARCHITECTURE.md",
+      "find": "**Версия 3.19.5 Model**",
+      "replace": "**Версия 3.19.6 Model**"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/HANDOFF.md",
+      "find": "**Актуально для:** v.3.19.5 Model",
+      "replace": "**Актуально для:** v.3.19.6 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/CHANGELOG.md",
+      "find": "## v.3.19.5 Model (Текущая)",
+      "replace": "## v.3.19.6 Model (Текущая) — 27.11.2026\n\n- Update Manager: живой структурированный журнал этапов и результатов команд, опрос во время входящей синхронизации и перезапуска; CI: frontend regression tests и отмена устаревших запусков. JSON-патч сопровождает реальные изменения PR.\n\n## v.3.19.5 Model"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "**Редакция плана:** 1.3",
+      "replace": "**Редакция плана:** 1.4"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "3.19.5 Model (кандидат)",
+      "replace": "3.19.6 Model (кандидат)"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "**Следующая задача:** приёмка PATCH-03/04/05/06, затем CI-03.",
+      "replace": "**Следующая задача:** приёмка UPD-05 и CI-01, затем CI-03 и UPD-03."
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "| 0h | CI-03 | Adaptive CI, полный gate перед merge | P2 | OPEN |",
+      "replace": "| 0h | CI-03 | Adaptive CI, полный gate перед merge | P2 | REVIEW — отмена старых запусков; выбор тестов отдельно |\n| 0j | UPD-05 | Живой журнал входящей синхронизации | P1 | REVIEW |"
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/ROADMAP.md",
+      "find": "## 11. Следующая команда новому агенту",
+      "replace": "## 11. Следующая команда новому агенту\n\n3.19.6: UPD-05 и CI-01 REVIEW, CI-03 частично (concurrency). PR70 merged; локальная приёмка PATCHMASTER ещё требуется. JSON-патч 174 сопровождает реальные изменения ветки и предназначен только для исходной базы 611b71a; после merge не применять повторно. Полный stdout/stderr по-прежнему доступен после команды, live streaming отдельно. Все проверки CI остаются обязательными; не заявлять PASS до результата."
+    },
+    {
+      "type": "search_and_replace",
+      "target_file": "docs/UPDATE_MANAGER.md",
+      "find": "## Входящая синхронизация одним нажатием",
+      "replace": "## Живой журнал событий (3.19.6)\n\nRead-only progress отдаёт ограниченный структурированный журнал этапов и коды результатов окружения без stdout/stderr. Интерфейс показывает события во время входящего обновления и перезапуска. Это не построчный поток subprocess; полный вывод доступен после завершения команды. Не ослабляет Git и Origin guards.\n\n## Входящая синхронизация одним нажатием"
+    }
+  ]
+}

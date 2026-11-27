@@ -501,7 +501,12 @@ class UpdateManager:
         try:
             with open(_JOURNAL_PATH, encoding="utf-8") as stream:
                 record = json.load(stream)
-            return {"success": True, "progress": {key: record.get(key) for key in ("id", "state", "active_step", "updated_at")}}
+            progress = {key: record.get(key) for key in ("id", "state", "active_step", "updated_at", "created_at", "ahead", "behind")}
+            progress["events"] = [{key: event.get(key) for key in ("at", "state", "step", "code")}
+                                  for event in record.get("events", [])[-200:]]
+            progress["environment_steps"] = [{key: step.get(key) for key in ("step", "ok", "code", "at", "diagnostic")}
+                                             for step in record.get("environment_steps", [])]
+            return {"success": True, "progress": progress}
         except (OSError, ValueError, AttributeError):
             return {"success": True, "progress": {}}
 
@@ -523,7 +528,7 @@ class UpdateManager:
                 journal["restart_verified_at"] = _now()
                 _save_journal(journal)
                 _archive_terminal(journal)
-            return {"success": True, "journal": {**journal, "running_version": RUNNING_VERSION, "installed_version": _version_or_none(_git_ok(["rev-parse", "HEAD"])) if journal.get("remote_head") else None}}
+            return {"success": True, "journal": {**journal, "running_version": RUNNING_VERSION, "installed_version": _version_or_none(_git_ok(["rev-parse", "HEAD"])) }}
 
     def request_restart(self, operation_id):
         with _LOCK, _process_lock():
