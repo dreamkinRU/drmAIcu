@@ -449,3 +449,28 @@ def test_restart_rejects_wrong_operation_id(git_fixture):
     with pytest.raises(updater.UpdateError):
         updater.manager.request_restart("b" * 32)
     assert not (git_fixture / "restart.flag").exists()
+
+
+def test_report_survives_next_check(git_fixture):
+    plan = updater.manager.check()["plan"]
+    updater.manager.apply(plan["id"])
+    updater.manager.prepare(plan["id"])
+    updater.manager.check()
+    report = next(x for x in updater.manager.history()["history"] if x["id"] == plan["id"])
+    assert report["state"] == "COMPLETED"
+    assert report["report_schema"] == 2
+    assert report["duration_seconds"] >= 0
+    assert report["new_head"] == plan["remote_head"]
+    assert report["local_changes_restored"] is True
+    assert any(e["state"] == "APPLYING" for e in report["events"])
+    assert report["events"][-1]["state"] == "COMPLETED"
+
+
+def test_report_preserves_structured_diagnostic_not_raw_output(git_fixture):
+    updater._archive_terminal({"id": "c" * 32, "state": "FAILED", "updated_at": "2026-11-27",
+                               "environment_steps": [{"step": "npm", "ok": False, "code": 1,
+                                                      "diagnostic": "EPERM", "stderr": "private"}]})
+    item = updater.manager.history()["history"][0]["environment_steps"][0]
+    assert item["diagnostic"] == "EPERM"
+    assert item["code"] == 1
+    assert "stderr" not in item
