@@ -615,6 +615,23 @@ class UpdateManager:
             _save_journal(journal)
             return {"success": True, "plan": journal}
 
+    def incoming(self):
+        """Explicit one-click import; each existing stage retains its own guards."""
+        with _LOCK:
+            plan = self.check()["plan"]
+            if plan.get("blockers"):
+                raise UpdateError("Обновление заблокировано: " + " ".join(plan["blockers"]), "update_blocked")
+            if plan["behind"] == 0:
+                return {"success": True, "plan": plan}
+            operation_id = plan["id"]
+            applied = self.apply(operation_id)["journal"]
+            if applied.get("state") != "CODE_UPDATED" or applied.get("id") != operation_id:
+                raise UpdateError("Шаг 2 не завершён.", "invalid_state")
+            prepared = self.prepare(operation_id)["journal"]
+            if prepared.get("id") != operation_id or prepared.get("state") not in ("COMPLETED", "RESTART_REQUIRED"):
+                raise UpdateError("Шаг 3 не завершён.", "invalid_state")
+            return {"success": True, "journal": prepared}
+
     def apply(self, operation_id):
         with _LOCK, _process_lock(), _repo_lock():
             journal = _load_journal()

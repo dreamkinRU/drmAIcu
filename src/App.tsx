@@ -35,6 +35,8 @@ export default function App() {
   const { logs, addLog, clearIssues } = useLogs();
   // Версия оболочки — из /api/version (единый источник version.py), без хардкода в UI.
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [incomingRequest, setIncomingRequest] = useState(0);
+  const [incomingBusy, setIncomingBusy] = useState(false);
   useEffect(() => { void loadAppVersionApi().then(v => setAppVersion(v)); }, []);
   const pluginCtl = usePlugins();
   const { codeIssues, fixCodeIssue, fixAll } = useCodeIssues();
@@ -204,6 +206,8 @@ export default function App() {
         ollamaStatus={ollamaStatus}
         ollamaModels={ollamaModels}
         version={appVersion}
+        onIncomingUpdate={() => { setActiveTab('updates'); setIncomingRequest(n => n + 1); }}
+        incomingBusy={incomingBusy}
         setActiveTab={setActiveTab}
       />
 
@@ -408,7 +412,9 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'updates' && <UpdateWizardTab />}
+        <div hidden={activeTab !== 'updates'}>
+          <UpdateWizardTab visible={activeTab === 'updates'} incomingRequest={incomingRequest} onBusyChange={setIncomingBusy} onOpenRepositories={() => setActiveTab('repositories')} />
+        </div>
 
         {activeTab === 'tasks' && (
           <TasksTab

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LogEntry, PluginInfo,
   RepoBranches,
@@ -298,6 +298,14 @@ function OverviewSection({
   const [patchStatus, setPatchStatus] = useState<RepoPatchStatus | null>(null);
   const [syncPreview, setSyncPreview] = useState<RepoSyncPreview | null>(null);
   const [previewAcknowledged, setPreviewAcknowledged] = useState(false);
+  const syncActionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!syncPreview) return;
+    const node = syncActionRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+    node.focus({ preventScroll: true });
+  }, [syncPreview]);
   const [rebaseState, setRebaseState] = useState<{ ok: boolean; active: boolean; conflicts: string[] } | null>(null);
 
   // Диагностика незавершённого rebase (после конфликта при pull --rebase): READ-запрос
@@ -576,7 +584,9 @@ function OverviewSection({
               </label>
             )}
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div ref={syncActionRef} tabIndex={-1} aria-label="Действие после предпросмотра" className="flex items-center gap-2 flex-wrap rounded-lg border border-cyan-500/60 p-3 focus:ring-2 focus:ring-cyan-400">
+              <p className="w-full text-sm text-cyan-200">Предпросмотр готов. Проверьте diff выше и выполните Sync.</p>
+              {syncPreview.changed && <input aria-label="Сообщение коммита" placeholder="Сообщение коммита" value={commitMsg} onChange={e => setCommitMsg(e.target.value)} disabled={busy || !!pending} className="w-full rounded border border-gray-600 bg-gray-900 p-2 text-sm" />}
               {/* Изменений нет → нет и коммита; Sync выполнит только pull --rebase → push.
                   Обе кнопки выполняют Sync сразу, без подтверждения WRITE (решение
                   заказчика 26.11.2026): preview diff остаётся этапом осознанности. */}
@@ -592,7 +602,7 @@ function OverviewSection({
                 <button
                   disabled={busy || !!pending || (!syncPreview.complete && !previewAcknowledged)}
                   onClick={requestSyncConfirmation}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border border-amber-400/60 text-amber-200 hover:bg-amber-500/25 disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500/15 border-2 border-amber-400 text-amber-200 hover:bg-amber-500/25 enabled:ring-2 enabled:ring-amber-400/50 motion-safe:enabled:animate-pulse disabled:opacity-40"
                 >
                   Синхронизировать (add -A → commit → pull --rebase → push, без подтверждения)
                 </button>

@@ -16,7 +16,7 @@ async function callUpdate(path: string, operationId?: string, manualConfirmation
   return data;
 }
 
-export default function UpdateWizardTab() {
+export default function UpdateWizardTab({ visible, incomingRequest, onBusyChange, onOpenRepositories }: { visible: boolean; incomingRequest: number; onBusyChange: (busy: boolean) => void; onOpenRepositories: () => void }) {
   const [journal, setJournal] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
@@ -28,13 +28,14 @@ export default function UpdateWizardTab() {
   const [loaded, setLoaded] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
   const running = useRef(false);
+  const consumedRequest = useRef(0);
+  const restartId = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const result = await callUpdate('/api/updates/state');
       setJournal(result.journal || null);
       setLoaded(true);
-      setError('');
     } catch (e: any) {
       setError(e?.message || 'Не удалось получить состояние Update Manager');
     }
@@ -47,7 +48,8 @@ export default function UpdateWizardTab() {
       if (r.ok && Array.isArray(data.history)) setHistory(data.history);
     } catch { /* old server or restart; keep existing records */ }
   }, []);
-  useEffect(() => { void refresh(); void refreshHistory(); }, [refresh, refreshHistory]);
+  useEffect(() => { if (visible && !running.current && !restarting && incomingRequest === consumedRequest.current) { void refresh(); void refreshHistory(); } }, [visible, refresh, refreshHistory]);
+  useEffect(() => { onBusyChange(busy || restarting); }, [busy, restarting, onBusyChange]);
   useEffect(() => {
     if (!busy && !['APPLYING','RESTORING','PREPARING'].includes(journal?.state)) return;
     let active = true;
@@ -64,7 +66,7 @@ export default function UpdateWizardTab() {
   }, [busy, journal?.state, refresh]);
 
   const run = async (path: string, operationId?: string, manualConfirmation = false) => {
-    if (running.current) return;
+    if (running.current || restarting) return;
     running.current = true;
     setBusy(true);
     setProgress(null);
@@ -74,9 +76,14 @@ export default function UpdateWizardTab() {
       const result = await callUpdate(path, operationId, manualConfirmation);
       setJournal(result.plan || result.journal || null);
       setConfirmed(false);
+      if (path.endsWith('/incoming') && result.journal?.state === 'RESTART_REQUIRED') {
+        restartId.current = result.journal.id;
+        await callUpdate('/api/updates/restart', result.journal.id);
+        setRestarting(true);
+      }
     } catch (e: any) {
-      setError(e?.message || 'Операция обновления завершилась ошибкой');
       await refresh();
+      setError(e?.message || 'Операция обновления завершилась ошибкой');
     } finally {
       running.current = false;
       setBusy(false);
@@ -84,10 +91,17 @@ export default function UpdateWizardTab() {
     }
   };
 
+  useEffect(() => {
+    if (incomingRequest <= consumedRequest.current) return;
+    consumedRequest.current = incomingRequest;
+    if (!running.current && !restarting) void run('/api/updates/incoming');
+  }, [incomingRequest]);
+
   const state = journal?.state || 'IDLE';
   const canCheck = loaded && ['IDLE','CHECKED','COMPLETED','FAILED'].includes(state);
   const restart = async () => {
     if (running.current || restarting) return;
+    restartId.current = journal?.id || null;
     setRestarting(true);
     setError('');
     try {
@@ -107,7 +121,7 @@ export default function UpdateWizardTab() {
         const response = await fetch('/api/updates/state', {cache:'no-store', signal:AbortSignal.timeout(4000)});
         const data = await response.json();
         if (cancelled) return;
-        if (response.ok && data.journal?.state === 'COMPLETED') {
+        if (response.ok && restartId.current && data.journal?.id === restartId.current && data.journal?.state === 'COMPLETED') {
           window.location.reload();
           return;
         }
@@ -125,6 +139,7 @@ export default function UpdateWizardTab() {
   }, [restarting]);
   const latestReport = state === 'COMPLETED' ? journal : history.find(item => item.state === 'COMPLETED');
   const upToDate = state === 'CHECKED' && journal?.ahead === 0 && journal?.behind === 0 && !(journal?.blockers || []).filter((x: string) => x !== 'Нет входящих коммитов для обновления.').length;
+  const localOnly = state === 'CHECKED' && journal?.behind === 0 && (journal?.ahead > 0 || journal?.local_files?.length > 0);
   const canApply = state === 'CHECKED' && journal?.behind > 0 && !(journal?.blockers || []).length;
   const environmentRepair = state === 'UPDATE_NEEDS_REPAIR' && journal?.local_changes_restored === true;
   const canPrepare = state === 'CODE_UPDATED' || environmentRepair;
@@ -141,23 +156,25 @@ export default function UpdateWizardTab() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold text-white">🔄 Мастер обновления drmAIcu</h2>
-            <p className="text-sm text-gray-400 mt-1">Три шага. Каждый этап запускается отдельно и только после подтверждения.</p>
+            <p className="text-sm text-gray-400 mt-1">Ручной мастер или входящая синхронизация одним нажатием на зелёную иконку в шапке. При ошибке процесс останавливается.</p>
           </div>
           <span className={`text-xs px-3 py-1.5 rounded-full border ${state === 'COMPLETED' ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10' : canRecover ? 'border-red-500/50 text-red-300 bg-red-500/10' : 'border-gray-700 text-gray-300 bg-gray-800'}`}>
-            {upToDate ? 'Актуальная версия' : updateStateLabel(state)}
+            {localOnly ? 'Локальные изменения' : upToDate ? 'Актуальная версия' : updateStateLabel(state)}
           </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <Metric label="Запущенная версия" value={journal?.running_version || journal?.restart_health?.version || '—'} />
           <Metric label="Установленная версия (Git)" value={journal?.installed_version || (journal?.new_head ? journal?.target_version : journal?.current_version) || '—'} />
-          <Metric label="Доступная версия" value={journal?.target_version || '—'} />
+          <Metric label="GitHub (последняя проверка)" value={journal?.target_version || '—'} />
         </div>
+        <p className="text-xs text-gray-400">Последняя проверка GitHub: {formatDate(journal?.created_at)}. Нажмите входящую синхронизацию для нового fetch.</p>
         {(busy || ['APPLYING','RESTORING','PREPARING'].includes(state)) && <div role="status" className="space-y-2 text-sm text-cyan-200">
           <div>{(({backup:'Резервирование',merge:'Fast-forward Git',restore:'Восстановление файлов',python:'Python зависимости',npm:'npm ci',frontend_build:'Сборка frontend'} as Record<string,string>)[progress?.active_step] || activity)}</div>
           <div className="h-2 overflow-hidden rounded bg-gray-800"><div className="h-full w-1/3 animate-pulse rounded bg-cyan-500" /></div>
           <div className="text-xs text-gray-400">Операция выполняется. Процент и время окончания неизвестны.</div>
         </div>}
-        {upToDate && <div className="rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-200">Установлена последняя версия из origin/main. Новых коммитов нет.</div>}
+        {upToDate && !localOnly && <div className="rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-200">По последней проверке новых входящих коммитов нет.</div>}
+        {localOnly && <div className="rounded-lg border border-amber-500/40 p-3 text-sm text-amber-200">Нет входящих коммитов. Для публикации локальных изменений используйте <button onClick={onOpenRepositories} className="underline">Репозитории</button>.</div>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {steps.map(step => (
             <div key={step.number} className={`rounded-xl border p-3 ${step.done ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-gray-700 bg-gray-900/70'}`}>
